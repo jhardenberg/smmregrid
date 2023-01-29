@@ -13,6 +13,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+# Modified slightly by Jost von Hardenberg <jost.hardenberg@polito.it>
+
 """Dask-aware regridding
 
 To apply a regridding you will need a set of weights mapping from the source
@@ -30,11 +33,8 @@ matrix multiply, maintaining chunking in dimensions other than lat and lon.
 multiple datasets.
 """
 
-from .dimension import remove_degenerate_axes, identify_lat_lon
-from .grid import *
+from .dimension import remove_degenerate_axes
 
-from datetime import datetime
-from shutil import which
 import dask.array
 import math
 import os
@@ -43,6 +43,7 @@ import subprocess
 import sys
 import tempfile
 import xarray
+import numpy
 
 
 def cdo_generate_weights(
@@ -52,6 +53,9 @@ def cdo_generate_weights(
     extrapolate=True,
     remap_norm="fracarea",
     remap_area_min=0.0,
+    icongridpath=None,
+    gridpath=None,
+    extra=None
 ):
     """
     Generate weights for regridding using CDO
@@ -77,6 +81,9 @@ def cdo_generate_weights(
         extrapolate (bool): Extrapolate output field
         remap_norm (str): Normalisation method for conservative methods
         remap_area_min (float): Minimum destination area fraction
+        gridpath (str): where to store downloaded grids
+        icongridpath (str): location of ICON grids (e.g. /pool/data/ICON)
+        extra: command to apply to source grid before weight generation
 
     Returns:
         :obj:`xarray.Dataset` with regridding weights
@@ -89,12 +96,21 @@ def cdo_generate_weights(
         raise Exception
 
     # Make some temporary files that we'll feed to CDO
-    source_grid_file = tempfile.NamedTemporaryFile()
-    target_grid_file = tempfile.NamedTemporaryFile()
     weight_file = tempfile.NamedTemporaryFile()
 
-    source_grid.to_netcdf(source_grid_file.name)
-    target_grid.to_netcdf(target_grid_file.name)
+    if type(source_grid) == str:
+        sgrid = source_grid
+    else:
+        source_grid_file = tempfile.NamedTemporaryFile()
+        source_grid.to_netcdf(source_grid_file.name)
+        sgrid = source_grid_file.name
+
+    if type(target_grid) == str:
+        tgrid = target_grid
+    else:
+        target_grid_file = tempfile.NamedTemporaryFile()
+        target_grid.to_netcdf(target_grid_file.name)
+        tgrid = target_grid_file.name
 
     # Setup environment
     env = os.environ
@@ -106,18 +122,36 @@ def cdo_generate_weights(
     env["CDO_REMAP_NORM"] = remap_norm
     env["REMAP_AREA_MIN"] = "%f" % (remap_area_min)
 
+    if gridpath:
+        env["CDO_DOWNLOAD_PATH"] = gridpath
+    if icongridpath:
+        env["CDO_ICON_GRIDS"] = icongridpath
+
     try:
         # Run CDO
-        subprocess.check_output(
-            [
-                "cdo",
-                "gen%s,%s" % (method, target_grid_file.name),
-                source_grid_file.name,
-                weight_file.name,
-            ],
-            stderr=subprocess.PIPE,
-            env=env,
-        )
+        if extra:
+            subprocess.check_output(
+                [
+                    "cdo",
+                    "gen%s,%s" % (method, tgrid),
+                    extra,
+                    sgrid,
+                    weight_file.name,
+                ],
+                stderr=subprocess.PIPE,
+                env=env,
+            )
+        else:
+            subprocess.check_output(
+                [
+                    "cdo",
+                    "gen%s,%s" % (method, tgrid),
+                    sgrid,
+                    weight_file.name,
+                ],
+                stderr=subprocess.PIPE,
+                env=env,
+            )
 
         # Grab the weights file it outputs as a xarray.Dataset
         weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
@@ -130,8 +164,10 @@ def cdo_generate_weights(
 
     finally:
         # Clean up the temporary files
-        source_grid_file.close()
-        target_grid_file.close()
+        if not type(source_grid) == str:
+            source_grid_file.close()
+        if not type(target_grid) == str:
+            target_grid_file.close()
         weight_file.close()
 
 
@@ -303,10 +339,12 @@ def apply_weights(source_data, weights, weights_matrix=None):
 
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(
-            dst_grid_shape[::-1], order="C"
+            #dst_grid_shape[::-1], order="C"
+            dst_grid_shape[::-1]
         )
         dst_grid_center_lon = w.dst_grid_center_lon.data.reshape(
-            dst_grid_shape[::-1], order="C"
+            # dst_grid_shape[::-1], order="C"
+            dst_grid_shape[::-1]
         )
 
         dst_mask = w.dst_grid_imask
@@ -314,18 +352,21 @@ def apply_weights(source_data, weights, weights_matrix=None):
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
     # Check lat/lon are the last axes
-    source_lat, source_lon = identify_lat_lon(source_data)
-    if not (
-        source_lat.name in source_data.dims[-2:]
-        and source_lon.name in source_data.dims[-2:]
-    ):
-        raise Exception(
-            "Last two dimensions should be spatial coordinates,"
-            f" got {source_data.dims[-2:]}"
-        )
+    #source_lat, source_lon = identify_lat_lon(source_data)
+    #if not (
+        #source_lat.name in source_data.dims[-2:]
+        #and source_lon.name in source_data.dims[-2:]
+    #):
+    #    raise Exception(
+    #        "Last two dimensions should be spatial coordinates,"
+    #        f" got {source_data.dims[-2:]}"
+    #    )
 
-    kept_shape = list(source_data.shape[0:-2])
-    kept_dims = list(source_data.dims[0:-2])
+    # Find dimensions to keep
+    nd = sum([(d not in ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude', 'cell', 'cells', 'ncells', 'values', 'value']) for d in source_data.dims])
+
+    kept_shape = list(source_data.shape[0:nd])
+    kept_dims = list(source_data.dims[0:nd])
 
     if weights_matrix is None:
         weights_matrix = compute_weights_matrix(weights)
@@ -377,7 +418,7 @@ def apply_weights(source_data, weights, weights_matrix=None):
 
     # If a regular grid drop the 'i' and 'j' dimensions
     if target_da.coords["lat"].ndim == 1 and target_da.coords["lon"].ndim == 1:
-        target_da = target_da.rename({"i": "lat", "j": "lon"})
+        target_da = target_da.swap_dims({"i": "lat", "j": "lon"})
 
     # Add metadata to the coordinates
     target_da.coords["lat"].attrs["units"] = "degrees_north"
@@ -386,7 +427,7 @@ def apply_weights(source_data, weights, weights_matrix=None):
     target_da.coords["lon"].attrs["standard_name"] = "longitude"
 
     # Now rename to the original coordinate names
-    target_da = target_da.rename({"lat": source_lat.name, "lon": source_lon.name})
+    #target_da = target_da.rename({"lat": source_lat.name, "lon": source_lon.name})
 
     return target_da
 
@@ -418,6 +459,9 @@ class Regridder(object):
 
         # Is there already a weights file?
         if weights is not None:
+            #if isinstance(weights, xarray.Dataset):
+            #    self.weights = xarray.open_mfdataset(weights)
+            #else:
             self.weights = weights
         else:
             # Generate the weights with CDO
