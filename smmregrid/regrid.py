@@ -479,9 +479,10 @@ class Regridder(object):
             self.weights = weights
         else:
             # Generate the weights with CDO
-            _source_grid = identify_grid(source_grid)
-            _target_grid = identify_grid(target_grid)
-            self.weights = cdo_generate_weights(_source_grid, _target_grid)
+            #_source_grid = identify_grid(source_grid)
+            #_target_grid = identify_grid(target_grid)
+            #self.weights = cdo_generate_weights(_source_grid, _target_grid)
+            sys.exit('Missing capability of creating weights...')
 
         self.weights_matrix = compute_weights_matrix(self.weights)
 
