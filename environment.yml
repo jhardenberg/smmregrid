@@ -13,3 +13,5 @@ dependencies:
   - xesmf
   - sparse
   - cfunits
+  - cdo
+  - python-cdo

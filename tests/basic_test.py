@@ -19,8 +19,14 @@ def test_lonlat(method):
     assert f == True
 
 # test for unstructured grids as FESOM CMOR (no bilinear)
-#@pytest.mark.parametrize("method", ['con', 'nn'])
-#def test_unstructured(method):
-#    f = check_cdo_regrid(os.path.join(indir, 'tos-fesom.nc'), tfile, method = method)
-#    assert f == True
+@pytest.mark.parametrize("method", ['con', 'nn'])
+def test_unstructured(method):
+    f = check_cdo_regrid(os.path.join(indir, 'tos-fesom.nc'), tfile, method = method)
+    assert f == True
+
+# test for curvilinear grid
+@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+def test_curivilinear(method):
+    f = check_cdo_regrid(os.path.join(indir, 'onlytos-ipsl.nc'), tfile, method = method)
+    assert f == True
 

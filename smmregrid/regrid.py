@@ -378,18 +378,31 @@ def apply_weights(source_data, weights, weights_matrix=None):
     else:
         source_array = numpy.reshape(source_array, kept_shape + [-1])
 
+    # define src_mask and project it
+    src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
+    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+    target_mask = dask.array.where(target_mask<0.5, 0, 1)
+
     # Handle input mask
     dask.array.ma.set_fill_value(source_array, 1e20)
     source_array = dask.array.ma.fix_invalid(source_array)
     source_array = dask.array.ma.filled(source_array)
-
     target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
-    bmask = numpy.broadcast_to(
-        dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
-    )
+    # define src_mask and project it (no broadcast since no evident improvement)
+    src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
+    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+    target_mask = dask.array.where(target_mask<0.5, 0, 1)
 
-    target_dask = dask.array.where(bmask != 0.0, target_dask, numpy.nan)
+    #bmask = numpy.broadcast_to(
+    #   dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
+    #)
+    #target_dask = dask.array.where(bmask != 0.0, target_dask, numpy.nan)
+    #target_mask = numpy.broadcast_to(
+    #   dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
+    #)
+    target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
+
     target_dask = dask.array.reshape(
         target_dask, kept_shape + [dst_grid_shape[1], dst_grid_shape[0]]
     )
@@ -484,12 +497,34 @@ class Regridder(object):
         """
 
         if isinstance(source_data, xarray.Dataset):
-            return source_data.apply(self.regrid)
-        else:
+            
+            # this is done to remove boundaries and let the code run on DataArray
+            # should be improved to keep time boundaries
+            dropped = [s for s in list(source_data.data_vars) 
+                        if ("bnds" in s or "bounds" in s)] #and "time" not in s]       
+            source_data = source_data.drop_vars(dropped)
+
+            # check if the masks are the same by counting the NaN: to be expanded
+            hownan = len(set((source_data.map(count_nan).to_array().values.tolist())))
+            if hownan == 1:
+                return source_data.map(self.regrid)
+            else:
+                sys.exit("source data has different mask, this can lead to unexpected" \
+                    "results due to the format in which weights are generated. Aborting...")
+        
+        elif isinstance (source_data, xarray.DataArray):
             return apply_weights(
                 source_data, self.weights, weights_matrix=self.weights_matrix
             )
+        else: 
+            sys.exit('Cannot process this source_data, sure it is xarray?')
 
+def count_nan(xdata) :
+
+    """Trivial Function to count nan, to be applied and estimate if the 
+    masks are the same as for the data_vars in the same dataset. Safe check to be impoved. """
+
+    return dask.array.sum(numpy.isnan(xdata)).compute().data
 
 def regrid(source_data, target_grid=None, weights=None):
     """

@@ -16,7 +16,12 @@ def check_cdo_regrid(finput, ftarget, method = 'con'):
     xfield = xr.open_mfdataset(finput)
 
     # var as the last available
-    var = list(xfield.data_vars)[-1]
+    #myvar = list(xfield.data_vars)[-1]
+
+    # var as the one which have time and not have bnds (could work)
+    myvar = [var for var in xfield.data_vars 
+             if 'time' in xfield[var].dims and 'bnds' not in xfield[var].dims]
+    print(myvar)
 
     # interpolation with smmregrid (CDO-based)
     wfield = cdo_generate_weights(finput, ftarget, method = method)
@@ -26,7 +31,9 @@ def check_cdo_regrid(finput, ftarget, method = 'con'):
     # interpolation with pure CDO
     cdo_interpolator = getattr(cdo,  'remap' + method)
     cdofield = cdo_interpolator(ftarget, input = finput, returnXDataset = True)
+    #print(cdofield[myvar])
+    #print(rfield[myvar])
 
     # check if arrays are equal with numerical tolerance
-    checker = np.allclose(cdofield[var].data, rfield[var].data, equal_nan=True).compute()
+    checker = np.allclose(cdofield[myvar].to_array(), rfield[myvar].to_array(), equal_nan=True)
     return checker
