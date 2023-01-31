@@ -6,7 +6,7 @@ from smmregrid import cdo_generate_weights, Regridder
 from cdo import Cdo
 cdo = Cdo()
 
-def check_cdo_regrid(finput, ftarget, method = 'con'):
+def check_cdo_regrid(finput, ftarget, method = 'con', access = 'Dataset'):
 
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced 
@@ -21,12 +21,19 @@ def check_cdo_regrid(finput, ftarget, method = 'con'):
     # var as the one which have time and not have bnds (could work)
     myvar = [var for var in xfield.data_vars 
              if 'time' in xfield[var].dims and 'bnds' not in xfield[var].dims]
-    print(myvar)
+    #print(myvar)
+
+    if access == 'DataArray' : 
+        xfield = xfield[myvar]
 
     # interpolation with smmregrid (CDO-based)
     wfield = cdo_generate_weights(finput, ftarget, method = method)
     interpolator = Regridder(weights=wfield)
     rfield = interpolator.regrid(xfield)
+
+    if access == 'Dataset' : 
+        rfield = rfield[myvar]
+
 
     # interpolation with pure CDO
     cdo_interpolator = getattr(cdo,  'remap' + method)
@@ -35,5 +42,5 @@ def check_cdo_regrid(finput, ftarget, method = 'con'):
     #print(rfield[myvar])
 
     # check if arrays are equal with numerical tolerance
-    checker = np.allclose(cdofield[myvar].to_array(), rfield[myvar].to_array(), equal_nan=True)
+    checker = np.allclose(cdofield[myvar].to_array(), rfield.to_array(), equal_nan=True)
     return checker

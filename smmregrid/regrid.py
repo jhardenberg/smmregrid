@@ -293,7 +293,7 @@ def compute_weights_matrix(weights):
     return sparse_weights
 
 
-def apply_weights(source_data, weights, weights_matrix=None):
+def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     """
     Apply the CDO weights ``weights`` to ``source_data``, performing a regridding operation
 
@@ -390,18 +390,19 @@ def apply_weights(source_data, weights, weights_matrix=None):
     target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
     # define src_mask and project it (no broadcast since no evident improvement)
-    src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
-    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-    target_mask = dask.array.where(target_mask<0.5, 0, 1)
+    if masked : 
+        src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
+        target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+        target_mask = dask.array.where(target_mask<0.5, 0, 1)
 
-    #bmask = numpy.broadcast_to(
-    #   dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
-    #)
-    #target_dask = dask.array.where(bmask != 0.0, target_dask, numpy.nan)
-    #target_mask = numpy.broadcast_to(
-    #   dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
-    #)
-    target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
+        #bmask = numpy.broadcast_to(
+        #   dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
+        #)
+        #target_dask = dask.array.where(bmask != 0.0, target_dask, numpy.nan)
+        #target_mask = numpy.broadcast_to(
+        #   dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
+        #)
+        target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
 
     target_dask = dask.array.reshape(
         target_dask, kept_shape + [dst_grid_shape[1], dst_grid_shape[0]]
@@ -484,7 +485,7 @@ class Regridder(object):
 
         self.weights_matrix = compute_weights_matrix(self.weights)
 
-    def regrid(self, source_data):
+    def regrid(self, source_data, masked = True):
         """Regrid ``source_data`` to match the target grid
 
         Args:
@@ -514,7 +515,7 @@ class Regridder(object):
         
         elif isinstance (source_data, xarray.DataArray):
             return apply_weights(
-                source_data, self.weights, weights_matrix=self.weights_matrix
+                source_data, self.weights, weights_matrix=self.weights_matrix, masked = masked
             )
         else: 
             sys.exit('Cannot process this source_data, sure it is xarray?')
