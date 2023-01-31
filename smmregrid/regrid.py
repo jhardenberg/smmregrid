@@ -498,6 +498,8 @@ class Regridder(object):
         """
 
         if isinstance(source_data, xarray.Dataset):
+
+            #print('Dataset access!')
             
             # this is done to remove boundaries and let the code run on DataArray
             # should be improved to keep time boundaries
@@ -514,6 +516,8 @@ class Regridder(object):
                     "results due to the format in which weights are generated. Aborting...")
         
         elif isinstance (source_data, xarray.DataArray):
+
+            #print('DataArray access!')
             return apply_weights(
                 source_data, self.weights, weights_matrix=self.weights_matrix, masked = masked
             )

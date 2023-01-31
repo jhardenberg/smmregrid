@@ -30,3 +30,8 @@ def test_curivilinear(method):
     f = check_cdo_regrid(os.path.join(indir, 'onlytos-ipsl.nc'), tfile, method = method)
     assert f == True
 
+# test for pressure levels on gaussian grid
+@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+def test_plev_gaussian(method):
+    f = check_cdo_regrid(os.path.join(indir, 'ua-ecearth.nc'), tfile, method = method)
+    assert f == True
