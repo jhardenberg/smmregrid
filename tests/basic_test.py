@@ -6,6 +6,12 @@ import os
 indir = 'tests/data'
 tfile = os.path.join(indir, 'r360x180.nc')
 
+# test for gaussian reduced grid (only nn)
+@pytest.mark.parametrize("method", ['nn'])
+def test_gaussian_reduced(method):
+    f = check_cdo_regrid(os.path.join(indir, 'lsm-ifs.grb'), tfile, method = method)
+    assert f == True
+
 # test for gaussian grids as EC-Earth cmor
 @pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
 def test_gaussian(method):
