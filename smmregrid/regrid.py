@@ -395,9 +395,9 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
         source_array = numpy.reshape(source_array, kept_shape + [-1])
 
     # define src_mask and project it
-    src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
-    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-    target_mask = dask.array.where(target_mask<0.5, 0, 1)
+    #src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
+    #target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+    #target_mask = dask.array.where(target_mask<0.5, 0, 1)
 
     # Handle input mask
     dask.array.ma.set_fill_value(source_array, 1e20)
