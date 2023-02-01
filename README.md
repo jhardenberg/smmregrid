@@ -5,7 +5,19 @@ This repository represents a modification of the regridding routines in [climtas
 
 I only had to change a few lines of code to make it compatible with unstructured grids. The regridder uses efficiently sparse matrix multiplication with dask + some manipulation of the coordinates (which would have to be revised/checked again)
 
-Install with
+It is safer to run it through conda/mamba. Install with: 
+
+```
+conda env create -f environment.yml
+```
+
+then activate the environment:
+
+```
+conda activate smmregrid
+```
+and install smmregrid in editable mode:
+
 ```
 pip install -e .
 ```

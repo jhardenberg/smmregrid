@@ -44,6 +44,7 @@ import sys
 import tempfile
 import xarray
 import numpy
+import functools
 
 
 def cdo_generate_weights(
@@ -298,11 +299,11 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     Apply the CDO weights ``weights`` to ``source_data``, performing a regridding operation
 
     Args:
-        source_data (xarray.Dataset): Source dataset
-        weights (xarray.Dataset): CDO weights information
+        source_data (xarray.DataArray): Source dataset
+        weights (xarray.DataArray): CDO weights information
 
     Returns:
-        xarray.Dataset: Regridded version of the source dataset
+        xarray.DataArray: Regridded version of the source dataset
     """
     # Alias the weights dataset from CDO
     w = weights
@@ -362,8 +363,23 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     #        f" got {source_data.dims[-2:]}"
     #    )
 
+    # keep time related variables as it is (i.e. keep time_bnds)
+    #print('start ' + source_data.name)
+    if ("bnds" in source_data.name or "bounds" in source_data.name): 
+        if 'time' in source_data.name: 
+            #print('original ' + source_data.name)
+            return source_data
+        else: 
+            #print('empty ' + source_data.name)
+            return None
+
+    #print('full ' + source_data.name)
+    # exclude the lon-lat bounds
+
+
     # Find dimensions to keep
-    nd = sum([(d not in ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude', 'cell', 'cells', 'ncells', 'values', 'value']) for d in source_data.dims])
+    nd = sum([(d not in ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude', 
+        'cell', 'cells', 'ncells', 'values', 'value']) for d in source_data.dims])
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
@@ -391,6 +407,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
 
     # define src_mask and project it (no broadcast since no evident improvement)
     if masked : 
+        #print('using src mask...')
         src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
         target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
         target_mask = dask.array.where(target_mask<0.5, 0, 1)
@@ -404,9 +421,13 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
         #)
         target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
 
+    #else: 
+    #    print('not using mask...')
+
     target_dask = dask.array.reshape(
         target_dask, kept_shape + [dst_grid_shape[1], dst_grid_shape[0]]
     )
+
 
     # Create a new DataArray for the output
     target_da = xarray.DataArray(
@@ -503,15 +524,17 @@ class Regridder(object):
             #print('Dataset access!')
             
             # this is done to remove boundaries and let the code run on DataArray
-            # should be improved to keep time boundaries
             dropped = [s for s in list(source_data.data_vars) 
-                        if ("bnds" in s or "bounds" in s)] #and "time" not in s]       
+                        if ("bnds" in s or "bounds" in s) and "time" not in s]       
             source_data = source_data.drop_vars(dropped)
 
-            # check if the masks are the same by counting the NaN: to be expanded
-            hownan = len(set((source_data.map(count_nan).to_array().values.tolist())))
+            # check if the masks are the same by counting the NaN, excluding time_bnds: to be expanded
+            timedrop = [s for s in list(source_data.data_vars) if "time" in s] 
+            hownan = len(set((source_data.drop_vars(timedrop).map(count_nan).to_array().values.tolist())))
             if hownan == 1:
-                return source_data.map(self.regrid)
+                # to pass the mask use a partial function which simplify the syntax
+                partial = functools.partial(self.regrid, masked = masked)
+                return source_data.map(partial, keep_attrs=True)
             else:
                 sys.exit("source data has different mask, this can lead to unexpected" \
                     "results due to the format in which weights are generated. Aborting...")
