@@ -383,6 +383,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
+    #print(kept_dims)
+    #print(kept_dims)
 
     if weights_matrix is None:
         weights_matrix = compute_weights_matrix(weights)
@@ -394,35 +396,31 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     else:
         source_array = numpy.reshape(source_array, kept_shape + [-1])
 
-    # define src_mask and project it
-    #src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
-    #target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-    #target_mask = dask.array.where(target_mask<0.5, 0, 1)
-
     # Handle input mask
     dask.array.ma.set_fill_value(source_array, 1e20)
     source_array = dask.array.ma.fix_invalid(source_array)
     source_array = dask.array.ma.filled(source_array)
     target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
-    # define src_mask and project it (no broadcast since no evident improvement)
-    if masked : 
-        #print('using src mask...')
-        src_mask = dask.array.where(numpy.isnan(source_array), 0, 1)
+
+    # define and compute the new mask
+    if masked: 
+        # select first element of all dimensions but last one
+        src_mask = source_array[tuple([0] * (source_array.ndim-1) + [slice(None)])]
+
+        src_mask = dask.array.where(numpy.isnan(src_mask), 0, 1)
         target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+        #if numpy.any(target_mask==0): #in principle could be a good idea, but there is much overhead so it is disabled
+            
+        #print('using src mask...')
         target_mask = dask.array.where(target_mask<0.5, 0, 1)
 
-        #bmask = numpy.broadcast_to(
-        #   dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
-        #)
-        #target_dask = dask.array.where(bmask != 0.0, target_dask, numpy.nan)
-        #target_mask = numpy.broadcast_to(
-        #   dst_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
-        #)
+        # broadcast the mask and apply it
+        target_mask = numpy.broadcast_to(
+        target_mask.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
+        )
         target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
 
-    #else: 
-    #    print('not using mask...')
 
     target_dask = dask.array.reshape(
         target_dask, kept_shape + [dst_grid_shape[1], dst_grid_shape[0]]
