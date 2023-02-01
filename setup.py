@@ -7,7 +7,7 @@ setup(name='smmregrid',
       author=' Jost von Hardenberg, Scott Wales',
       author_email='jost.hardenberg@polito.it',
       url='https://github.com/jhardenberg/smmregrid',
-      python_requires='>3.7, <3.10', # are we sure we cannot use python 3.10?
+      python_requires='>3.7, <3.11'
       packages=['smmregrid'],
       install_requires=[
           'numpy',
