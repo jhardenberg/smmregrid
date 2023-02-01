@@ -12,9 +12,11 @@ setup(name='smmregrid',
       install_requires=[
           'numpy',
           'xarray',
+          'dask',
           'netcdf4',
           'dask',
           'sparse',
-          'cfunits'
+          'cfunits',
+          'cdo'
       ]
       )

@@ -10,8 +10,10 @@ dependencies:
   - netcdf4 
   - dask
   - xarray
+  - cfgrib
   - xesmf
-  - sparse
   - cfunits
   - cdo
   - python-cdo
+  - pip:
+    - sparse
