@@ -44,7 +44,6 @@ import sys
 import tempfile
 import xarray
 import numpy
-import functools
 
 
 def cdo_generate_weights(
@@ -229,7 +228,7 @@ def esmf_generate_weights(
             extrap_method,
             "--norm_type",
             norm_type,
-            #'--user_areas',
+            # '--user_areas',
             "--no-log",
             "--check",
         ]
@@ -305,6 +304,19 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     Returns:
         xarray.DataArray: Regridded version of the source dataset
     """
+
+    # Understand immediately if we need to retunr something or not
+    # This is done if we have bounds variables
+    if ("bnds" in source_data.name or "bounds" in source_data.name):
+
+        # we keep time bounds, and we ignore all the rest
+        if 'time' in source_data.name:
+            # print('original ' + source_data.name)
+            return source_data
+        else:
+            # print('empty ' + source_data.name)
+            return None
+
     # Alias the weights dataset from CDO
     w = weights
 
@@ -340,7 +352,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
 
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(
-            #dst_grid_shape[::-1], order="C"
+            # dst_grid_shape[::-1], order="C"
             dst_grid_shape[::-1]
         )
         dst_grid_center_lon = w.dst_grid_center_lon.data.reshape(
@@ -349,42 +361,35 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
         )
 
         dst_mask = w.dst_grid_imask
+        src_mask = w.src_grid_imask
 
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
     # Check lat/lon are the last axes
-    #source_lat, source_lon = identify_lat_lon(source_data)
-    #if not (
-        #source_lat.name in source_data.dims[-2:]
-        #and source_lon.name in source_data.dims[-2:]
-    #):
+    # source_lat, source_lon = identify_lat_lon(source_data)
+    # if not (
+        # source_lat.name in source_data.dims[-2:]
+        # and source_lon.name in source_data.dims[-2:]
+    # ):
     #    raise Exception(
     #        "Last two dimensions should be spatial coordinates,"
     #        f" got {source_data.dims[-2:]}"
     #    )
 
     # keep time related variables as it is (i.e. keep time_bnds)
-    #print('start ' + source_data.name)
-    if ("bnds" in source_data.name or "bounds" in source_data.name): 
-        if 'time' in source_data.name: 
-            #print('original ' + source_data.name)
-            return source_data
-        else: 
-            #print('empty ' + source_data.name)
-            return None
+    # print('start ' + source_data.name)
 
-    #print('full ' + source_data.name)
+    # print('full ' + source_data.name)
     # exclude the lon-lat bounds
 
-
     # Find dimensions to keep
-    nd = sum([(d not in ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude', 
-        'cell', 'cells', 'ncells', 'values', 'value']) for d in source_data.dims])
+    nd = sum([(d not in ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
+                         'cell', 'cells', 'ncells', 'values', 'value']) for d in source_data.dims])
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
-    #print(kept_dims)
-    #print(kept_dims)
+    # print(kept_dims)
+    # print(kept_dims)
 
     if weights_matrix is None:
         weights_matrix = compute_weights_matrix(weights)
@@ -402,30 +407,24 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     source_array = dask.array.ma.filled(source_array)
     target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
-
     # define and compute the new mask
-    if masked: 
-        # select first element of all dimensions but last one
-        src_mask = source_array[tuple([0] * (source_array.ndim-1) + [slice(None)])]
+    if masked:
 
-        src_mask = dask.array.where(numpy.isnan(src_mask), 0, 1)
-        target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-        #if numpy.any(target_mask==0): #in principle could be a good idea, but there is much overhead so it is disabled
-            
-        #print('using src mask...')
-        target_mask = dask.array.where(target_mask<0.5, 0, 1)
+        # target mask is loaded from above
+        target_mask = dst_mask.data
 
-        # broadcast the mask and apply it
+        # broadcast the mask on all the remaining dimensions
         target_mask = numpy.broadcast_to(
-        target_mask.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
+            target_mask.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
         )
+
+        # apply the mask
         target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
 
-
+    # reshape the target DataArray
     target_dask = dask.array.reshape(
         target_dask, kept_shape + [dst_grid_shape[1], dst_grid_shape[0]]
     )
-
 
     # Create a new DataArray for the output
     target_da = xarray.DataArray(
@@ -460,7 +459,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     target_da.coords["lon"].attrs["standard_name"] = "longitude"
 
     # Now rename to the original coordinate names
-    #target_da = target_da.rename({"lat": source_lat.name, "lon": source_lon.name})
+    # target_da = target_da.rename({"lat": source_lat.name, "lon": source_lon.name})
 
     return target_da
 
@@ -492,20 +491,25 @@ class Regridder(object):
 
         # Is there already a weights file?
         if weights is not None:
-            #if isinstance(weights, xarray.Dataset):
-            #    self.weights = xarray.open_mfdataset(weights)
-            #else:
-            self.weights = weights
+
+            if not isinstance(weights, xarray.Dataset):
+                self.weights = xarray.open_mfdataset(weights)
+            else:
+                self.weights = weights
         else:
             # Generate the weights with CDO
-            #_source_grid = identify_grid(source_grid)
-            #_target_grid = identify_grid(target_grid)
-            #self.weights = cdo_generate_weights(_source_grid, _target_grid)
+            # _source_grid = identify_grid(source_grid)
+            # _target_grid = identify_grid(target_grid)
+            # self.weights = cdo_generate_weights(_source_grid, _target_grid)
             sys.exit('Missing capability of creating weights...')
 
         self.weights_matrix = compute_weights_matrix(self.weights)
 
-    def regrid(self, source_data, masked = True):
+        # this section is used to create a target mask initializing the CDO weights
+        self.weights = mask_weigths(self.weights, self.weights_matrix)
+        self.masked = check_mask(self.weights)
+
+    def regrid(self, source_data):
         """Regrid ``source_data`` to match the target grid
 
         Args:
@@ -519,39 +523,50 @@ class Regridder(object):
 
         if isinstance(source_data, xarray.Dataset):
 
-            #print('Dataset access!')
-            
-            # this is done to remove boundaries and let the code run on DataArray
-            dropped = [s for s in list(source_data.data_vars) 
-                        if ("bnds" in s or "bounds" in s) and "time" not in s]       
-            source_data = source_data.drop_vars(dropped)
+            # apply the regridder on each DataArray
+            # out = source_data.map(self.regrid, keep_attrs=True) # this has to be implemented
+            out = source_data.map(self.regrid, keep_attrs=False)
 
-            # check if the masks are the same by counting the NaN, excluding time_bnds: to be expanded
-            timedrop = [s for s in list(source_data.data_vars) if "time" in s] 
-            hownan = len(set((source_data.drop_vars(timedrop).map(count_nan).to_array().values.tolist())))
-            if hownan == 1:
-                # to pass the mask use a partial function which simplify the syntax
-                partial = functools.partial(self.regrid, masked = masked)
-                return source_data.map(partial, keep_attrs=True)
-            else:
-                sys.exit("source data has different mask, this can lead to unexpected" \
-                    "results due to the format in which weights are generated. Aborting...")
-        
-        elif isinstance (source_data, xarray.DataArray):
+            # clean from degenerated variables
+            degen_vars = [var for var in out.data_vars if out[var].dims == ()]
+            return out.drop(degen_vars)
+            # else:
+            #    sys.exit("source data has different mask, this can lead to unexpected" \
+            #        "results due to the format in which weights are generated. Aborting...")
 
-            #print('DataArray access!')
+        elif isinstance(source_data, xarray.DataArray):
+
+            # print('DataArray access!')
             return apply_weights(
-                source_data, self.weights, weights_matrix=self.weights_matrix, masked = masked
+                source_data, self.weights, weights_matrix=self.weights_matrix, masked=self.masked
             )
-        else: 
+        else:
             sys.exit('Cannot process this source_data, sure it is xarray?')
 
-def count_nan(xdata) :
 
-    """Trivial Function to count nan, to be applied and estimate if the 
-    masks are the same as for the data_vars in the same dataset. Safe check to be impoved. """
+def mask_weigths(weights, weights_matrix):
+    """This functions precompute the mask for the target interpolation
+    Takes as input the weights from CDO and the precomputed weights matrix
+    Return the target mask"""
 
-    return dask.array.sum(numpy.isnan(xdata)).compute().data
+    src_mask = weights.src_grid_imask.data
+    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+    target_mask = dask.array.where(target_mask < 0.5, 0, 1)
+    weights.dst_grid_imask.data = target_mask
+    return weights
+
+
+def check_mask(weights):
+    """This check if the target mask is empty or full and 
+    return a bool to be passed to the regridder"""
+
+    w = weights.dst_grid_imask
+    v = w.sum()/len(w)
+    if v == 1:
+        return False
+    else:
+        return True
+
 
 def regrid(source_data, target_grid=None, weights=None):
     """
