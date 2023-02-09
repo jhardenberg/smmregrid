@@ -315,7 +315,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
             return source_data
         else:
             # print('empty ' + source_data.name)
-            return None
+            return xarray.DataArray(data=None)
 
     # Alias the weights dataset from CDO
     w = weights
@@ -458,6 +458,9 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     target_da.coords["lon"].attrs["units"] = "degrees_east"
     target_da.coords["lon"].attrs["standard_name"] = "longitude"
 
+    # Copy attributes from the original 
+    target_da.attrs = source_data.attrs
+
     # Now rename to the original coordinate names
     # target_da = target_da.rename({"lat": source_lat.name, "lon": source_lon.name})
 
@@ -524,8 +527,7 @@ class Regridder(object):
         if isinstance(source_data, xarray.Dataset):
 
             # apply the regridder on each DataArray
-            # out = source_data.map(self.regrid, keep_attrs=True) # this has to be implemented
-            out = source_data.map(self.regrid, keep_attrs=False)
+            out = source_data.map(self.regrid, keep_attrs=True)
 
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
