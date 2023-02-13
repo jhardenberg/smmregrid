@@ -5,11 +5,17 @@ name : smmregrid
 channels:
   - conda-forge
 dependencies:
-  - python>=3.8,<3.11
+  - python>=3.7,<3.11
   - numpy
   - netcdf4 
   - dask
   - xarray
+  - cfgrib
   - xesmf
-  - sparse
   - cfunits
+  - cdo
+  - python-cdo
+  - pytest
+  - ipykernel
+  - pip:
+    - sparse==0.13.0
