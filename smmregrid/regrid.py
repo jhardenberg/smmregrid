@@ -384,7 +384,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
 
     # Find dimensions to keep
     nd = sum([(d not in ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                         'cell', 'cells', 'ncells', 'values', 'value']) for d in source_data.dims])
+                         'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']) for d in source_data.dims])
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
@@ -401,6 +401,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     else:
         source_array = numpy.reshape(source_array, kept_shape + [-1])
 
+    #print(source_array)
+    #print(weights_matrix)
     # Handle input mask
     dask.array.ma.set_fill_value(source_array, 1e20)
     source_array = dask.array.ma.fix_invalid(source_array)
