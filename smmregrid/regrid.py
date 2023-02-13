@@ -382,9 +382,17 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     # print('full ' + source_data.name)
     # exclude the lon-lat bounds
 
+    # Dimension on which we can produce the interpolation: to be improved
+    interp_dimensions = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
+                         'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
+    
+    if not any(x in source_data.dims for x in interp_dimensions):
+        print("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
+        print(interp_dimensions)
+        sys.exit('Dimensions mismatch')
+
     # Find dimensions to keep
-    nd = sum([(d not in ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                         'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']) for d in source_data.dims])
+    nd = sum([(d not in interp_dimensions) for d in source_data.dims])
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
@@ -401,8 +409,6 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     else:
         source_array = numpy.reshape(source_array, kept_shape + [-1])
 
-    #print(source_array)
-    #print(weights_matrix)
     # Handle input mask
     dask.array.ma.set_fill_value(source_array, 1e20)
     source_array = dask.array.ma.fix_invalid(source_array)
@@ -533,7 +539,7 @@ class Regridder(object):
 
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
-            return out.drop(degen_vars)
+            return out.drop_vars(degen_vars)
             # else:
             #    sys.exit("source data has different mask, this can lead to unexpected" \
             #        "results due to the format in which weights are generated. Aborting...")
