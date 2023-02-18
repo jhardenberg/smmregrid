@@ -83,7 +83,7 @@ def cdo_generate_weights(
         remap_area_min (float): Minimum destination area fraction
         gridpath (str): where to store downloaded grids
         icongridpath (str): location of ICON grids (e.g. /pool/data/ICON)
-        extra: command to apply to source grid before weight generation
+        extra: command(s) to apply to source grid before weight generation (can be a list)
 
     Returns:
         :obj:`xarray.Dataset` with regridding weights
@@ -130,11 +130,16 @@ def cdo_generate_weights(
     try:
         # Run CDO
         if extra:
+            # make sure extra is a flat list if it is not already
+            if not isinstance(extra, list):
+                extra = [extra]
+
             subprocess.check_output(
                 [
                     "cdo",
-                    "gen%s,%s" % (method, tgrid),
-                    extra,
+                    "gen%s,%s" % (method, tgrid)
+                ] + extra +
+                [
                     sgrid,
                     weight_file.name,
                 ],
@@ -401,8 +406,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     else:
         source_array = numpy.reshape(source_array, kept_shape + [-1])
 
-    #print(source_array)
-    #print(weights_matrix)
+    # print(source_array)
+    # print(weights_matrix)
     # Handle input mask
     dask.array.ma.set_fill_value(source_array, 1e20)
     source_array = dask.array.ma.fix_invalid(source_array)
@@ -460,7 +465,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
     target_da.coords["lon"].attrs["units"] = "degrees_east"
     target_da.coords["lon"].attrs["standard_name"] = "longitude"
 
-    # Copy attributes from the original 
+    # Copy attributes from the original
     target_da.attrs = source_data.attrs
 
     # Now rename to the original coordinate names
@@ -561,7 +566,7 @@ def mask_weigths(weights, weights_matrix):
 
 
 def check_mask(weights):
-    """This check if the target mask is empty or full and 
+    """This check if the target mask is empty or full and
     return a bool to be passed to the regridder"""
 
     w = weights.dst_grid_imask
