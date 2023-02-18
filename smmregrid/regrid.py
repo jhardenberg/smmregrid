@@ -83,7 +83,7 @@ def cdo_generate_weights(
         remap_area_min (float): Minimum destination area fraction
         gridpath (str): where to store downloaded grids
         icongridpath (str): location of ICON grids (e.g. /pool/data/ICON)
-        extra: command to apply to source grid before weight generation
+        extra: command(s) to apply to source grid before weight generation (can be a list)
 
     Returns:
         :obj:`xarray.Dataset` with regridding weights
@@ -130,12 +130,16 @@ def cdo_generate_weights(
     try:
         # Run CDO
         if extra:
+            # make sure extra is a flat list if it is not already
+            if not isinstance(extra, list):
+                extra = [extra]
+
             subprocess.check_output(
                 [
                     "cdo",
-                    "gen%s,%s" % (method, tgrid),
-                    extra,
-                    sgrid,
+                    "gen%s,%s" % (method, tgrid) 
+                ] + extra +
+                [   sgrid,
                     weight_file.name,
                 ],
                 stderr=subprocess.PIPE,
