@@ -23,7 +23,7 @@ def find_var(xfield):
 
 def check_cdo_regrid(finput, ftarget, method='con', access='Dataset'):
     """Given a file to be interpolated finput over the ftarget grid,
-    check if the output of the last variable is the same as produced 
+    check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests."""
 
     # define files and open input file
