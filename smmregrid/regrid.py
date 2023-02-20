@@ -49,7 +49,7 @@ import numpy
 def cdo_generate_weights(
     source_grid,
     target_grid,
-    method="bil",
+    method="con",
     extrapolate=True,
     remap_norm="fracarea",
     remap_area_min=0.0,
@@ -77,7 +77,7 @@ def cdo_generate_weights(
         source_grid (xarray.DataArray): Source grid
         target_grid (xarray.DataArray): Target grid
             description
-        method (str): Regridding method
+        method (str): Regridding method - default conservative
         extrapolate (bool): Extrapolate output field
         remap_norm (str): Normalisation method for conservative methods
         remap_area_min (float): Minimum destination area fraction
@@ -298,13 +298,15 @@ def compute_weights_matrix(weights):
     return sparse_weights
 
 
-def apply_weights(source_data, weights, weights_matrix=None, masked=True):
+def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_dims=None):
     """
     Apply the CDO weights ``weights`` to ``source_data``, performing a regridding operation
 
     Args:
         source_data (xarray.DataArray): Source dataset
         weights (xarray.DataArray): CDO weights information
+        masked (bool): if the DataArray is masked
+        space_dims (list): dimensions on which the interpolation has to be done (e.g. ['lon', 'lat'])
 
     Returns:
         xarray.DataArray: Regridded version of the source dataset
@@ -370,34 +372,18 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True):
 
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
-    # Check lat/lon are the last axes
-    # source_lat, source_lon = identify_lat_lon(source_data)
-    # if not (
-        # source_lat.name in source_data.dims[-2:]
-        # and source_lon.name in source_data.dims[-2:]
-    # ):
-    #    raise Exception(
-    #        "Last two dimensions should be spatial coordinates,"
-    #        f" got {source_data.dims[-2:]}"
-    #    )
-
-    # keep time related variables as it is (i.e. keep time_bnds)
-    # print('start ' + source_data.name)
-
-    # print('full ' + source_data.name)
-    # exclude the lon-lat bounds
-
-    # Dimension on which we can produce the interpolation: to be improved
-    interp_dimensions = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
+    # Dimension on which we can produce the interpolation
+    if space_dims is None: 
+        space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
                          'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
     
-    if not any(x in source_data.dims for x in interp_dimensions):
+    if not any(x in source_data.dims for x in space_dims):
         print("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
-        print(interp_dimensions)
+        print(space_dims)
         sys.exit('Dimensions mismatch')
 
     # Find dimensions to keep
-    nd = sum([(d not in interp_dimensions) for d in source_data.dims])
+    nd = sum([(d not in space_dims) for d in source_data.dims])
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
@@ -499,7 +485,7 @@ class Regridder(object):
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
     """
 
-    def __init__(self, source_grid=None, target_grid=None, weights=None):
+    def __init__(self, source_grid=None, target_grid=None, weights=None, method='con', space_dims=None):
 
         if (source_grid is None or target_grid is None) and weights is None:
             raise Exception(
@@ -517,14 +503,15 @@ class Regridder(object):
             # Generate the weights with CDO
             # _source_grid = identify_grid(source_grid)
             # _target_grid = identify_grid(target_grid)
-            # self.weights = cdo_generate_weights(_source_grid, _target_grid)
-            sys.exit('Missing capability of creating weights...')
+            self.weights = cdo_generate_weights(source_grid, target_grid, method=method)
+            #sys.exit('Missing capability of creating weights...')
 
         self.weights_matrix = compute_weights_matrix(self.weights)
 
         # this section is used to create a target mask initializing the CDO weights
         self.weights = mask_weigths(self.weights, self.weights_matrix)
         self.masked = check_mask(self.weights)
+        self.space_dims = space_dims
 
     def regrid(self, source_data):
         """Regrid ``source_data`` to match the target grid
@@ -554,7 +541,8 @@ class Regridder(object):
 
             # print('DataArray access!')
             return apply_weights(
-                source_data, self.weights, weights_matrix=self.weights_matrix, masked=self.masked
+                source_data, self.weights, weights_matrix=self.weights_matrix, 
+                masked=self.masked, space_dims=self.space_dims
             )
         else:
             sys.exit('Cannot process this source_data, sure it is xarray?')

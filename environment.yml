@@ -17,5 +17,6 @@ dependencies:
   - python-cdo
   - pytest
   - ipykernel
+  - pip
   - pip:
     - sparse==0.13.0

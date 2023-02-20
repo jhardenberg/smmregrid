@@ -47,8 +47,12 @@ def check_cdo_regrid(finput, ftarget, method='con', access='Dataset'):
         cdofield = cdofield[cdovar[0]]
 
     # interpolation with smmregrid (CDO-based)
-    wfield = cdo_generate_weights(finput, ftarget, method=method)
-    interpolator = Regridder(weights=wfield)
+    # method with creation of weights
+    #wfield = cdo_generate_weights(finput, ftarget, method=method)
+    #interpolator = Regridder(weights=wfield)
+
+    # method with automatic creation of weights
+    interpolator = Regridder(source_grid=finput, target_grid=ftarget, method=method)
     rfield = interpolator.regrid(xfield)
 
     if access == 'Dataset':

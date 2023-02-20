@@ -17,7 +17,7 @@ setup(name='smmregrid',
           'cfgrib',
           'dask',
           'sparse',
-          'cfunits',
+          #'cfunits',
           'cdo'
       ]
       )
