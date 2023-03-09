@@ -445,8 +445,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     target_da.coords["lon"] = remove_degenerate_axes(target_da.lon)
 
     # Convert to degrees if needed, rounding to avoid numerical errors
-    target_da.coords["lat"] = numpy.round(target_da.lat * axis_scale, 6)
-    target_da.coords["lon"] = numpy.round(target_da.lon * axis_scale, 6)
+    target_da.coords["lat"] = numpy.round(target_da.lat * axis_scale, 10)
+    target_da.coords["lon"] = numpy.round(target_da.lon * axis_scale, 10)
 
     # If a regular grid drop the 'i' and 'j' dimensions
     if target_da.coords["lat"].ndim == 1 and target_da.coords["lon"].ndim == 1:
