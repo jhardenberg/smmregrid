@@ -444,9 +444,9 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     target_da.coords["lat"] = remove_degenerate_axes(target_da.lat)
     target_da.coords["lon"] = remove_degenerate_axes(target_da.lon)
 
-    # Convert to degrees if needed
-    target_da.coords["lat"] = target_da.lat * axis_scale
-    target_da.coords["lon"] = target_da.lon * axis_scale
+    # Convert to degrees if needed, rounding to avoid numerical errors
+    target_da.coords["lat"] = numpy.round(target_da.lat * axis_scale, 10)
+    target_da.coords["lon"] = numpy.round(target_da.lon * axis_scale, 10)
 
     # If a regular grid drop the 'i' and 'j' dimensions
     if target_da.coords["lat"].ndim == 1 and target_da.coords["lon"].ndim == 1:
@@ -457,9 +457,15 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     target_da.coords["lat"].attrs["standard_name"] = "latitude"
     target_da.coords["lon"].attrs["units"] = "degrees_east"
     target_da.coords["lon"].attrs["standard_name"] = "longitude"
+    target_da.coords["lon"].attrs["axis"] = "X"
+    target_da.coords["lat"].attrs["axis"] = "Y"
 
     # Copy attributes from the original
     target_da.attrs = source_data.attrs
+
+    # Clean CDI gridtype (which can lead to issues with CDO interpretation)
+    if target_da.attrs.get('CDI_grid_type'):
+        del target_da.attrs['CDI_grid_type']
 
     # Now rename to the original coordinate names
     # target_da = target_da.rename({"lat": source_lat.name, "lon": source_lon.name})
