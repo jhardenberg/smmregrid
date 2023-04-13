@@ -26,7 +26,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: provision-with-micromamba
-      uses: mamba-org/provision-with-micromamba@v14
+      uses: mamba-org/provision-with-micromamba@v15
       with:
         environment-file: environment.yml
         environment-name: smmregrid
@@ -36,7 +36,7 @@ jobs:
     - name: Install smmregrid
       run: |
         # install package
-        pip install -e .
+        python -m pip install --editable .
     - name: Lint with flake8
       run: |
         # install flake8
@@ -48,4 +48,36 @@ jobs:
     - name: Test with pytest
       run: |
         conda install pytest
-        python -m pytest
+        
+    coverage:
+      needs: build
+      runs-on: ubuntu-20.04
+      defaults:
+        run:
+          shell: bash -el {0}
+      steps:
+      - uses: actions/checkout@v3
+      - name: provision-with-micromamba
+        uses: mamba-org/provision-with-micromamba@v15
+        with:
+          environment-file: environment.yml
+          environment-name: ECmean4
+          cache-downloads: true
+      - name: Install ECmean4
+        run: |
+          # install package
+          python -m pip install --editable .
+      - name: Install coverage tools
+        run: |
+          python -m pip install coverage
+          python -m pip install coveralls
+      - name: Run coverage
+        run: |
+          coverage run -m pytest
+          coverage lcov
+      - name: Run coveralls
+        uses: coverallsapp/github-action@1.1.3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: coverage.lcov
+
