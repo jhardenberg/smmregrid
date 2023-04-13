@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smmregrid"
+version = "0.0.1"
+authors = [
+  { name="Jost von Hardenberg", email="jost.hardenberg@polito.it" },
+  { name="Paolo Davini", email="p.davini@isac.cnr.it" },
+  { name="Scott Wales", email="scott.wales@unimelb.edu.au"}
+]
+description = "Regridding based on sparse matrix multiplication"
+readme = "README.md"
+requires-python = ">=3.7, <3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    'numpy',
+    'xarray',
+    'dask',
+    'netcdf4',
+    'cfgrib',
+    'dask',
+    'sparse',
+    'cdo'
+]
+
+[project.optional-dependencies]
+tests = [
+    "coverage",
+    "coveralls",
+    "pytest"
+]
+
+#docs = [
+#    "sphinx",
+#    "sphinx-rtd-theme"
+#]
+
+all = [
+    "scriptengine[tests]"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/jhardenberg/smmregrid"
+"Bug Tracker" = "https://github.com/jhardenberg/smmregrid/issues"
