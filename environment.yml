@@ -1,5 +1,7 @@
 # Create a suitable environment:
-#   conda env create -f environment.yml
+# mamba env create -f environment.yml 
+# or 
+# conda env create -f environment.yml
 
 name : smmregrid
 channels:
@@ -13,10 +15,11 @@ dependencies:
   - cfgrib
   - xesmf
   - cfunits
+  - numba
   - cdo
   - python-cdo
   - pytest
   - ipykernel
   - pip
   - pip:
-    - sparse==0.13.0
+    - sparse
