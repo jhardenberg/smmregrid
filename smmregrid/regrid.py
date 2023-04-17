@@ -45,6 +45,42 @@ import tempfile
 import xarray
 import numpy
 
+def cdo_generate_weights3d(
+    source_grid,
+    target_grid,
+    method="con",
+    extrapolate=True,
+    remap_norm="fracarea",
+    remap_area_min=0.0,
+    icongridpath=None,
+    gridpath=None,
+    extra=None,
+    nvert=None
+):
+    if extra:
+    # make sure extra is a flat list if it is not already
+        if not isinstance(extra, list):
+            extra = [extra]
+    else:
+        extra = []
+
+    wlist = []
+    for lev in range(0, nvert):
+        print("Generating level:", lev)
+        extra2 = [f"-sellevidx,{lev+1}"]
+
+        wlist.append(cdo_generate_weights(source_grid,
+                                          target_grid,
+                                          method=method,
+                                          extrapolate=extrapolate,
+                                          remap_norm=remap_norm,
+                                          remap_area_min=remap_area_min,
+                                          icongridpath=icongridpath,
+                                          gridpath=gridpath,
+                                          extra=extra + extra2))
+
+    return combine_2d_to_3d(wlist, "lev", range(0, nvert))
+
 
 def cdo_generate_weights(
     source_grid,
@@ -595,5 +631,12 @@ def regrid(source_data, target_grid=None, weights=None):
     """
 
     regridder = Regridder(source_data, target_grid=target_grid, weights=weights)
-
     return regridder.regrid(source_data)
+
+
+def combine_2d_to_3d(array_list, dim_name, dim_values):
+    """
+    Function to combine a list of 2D xarrays into a 3D one adding a vertical coordinate lev
+    """
+    new_array = [x.assign_coords({dim_name: d}) for x, d in zip(array_list, dim_values)]
+    return xarray.concat(new_array, dim_name)
