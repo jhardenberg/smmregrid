@@ -45,6 +45,7 @@ import tempfile
 import xarray
 import numpy
 
+
 def cdo_generate_weights3d(
     source_grid,
     target_grid,
@@ -55,7 +56,7 @@ def cdo_generate_weights3d(
     icongridpath=None,
     gridpath=None,
     extra=None,
-    nvert=None
+    vert_coord=None
 ):
     if extra:
     # make sure extra is a flat list if it is not already
@@ -64,8 +65,18 @@ def cdo_generate_weights3d(
     else:
         extra = []
 
+    if type(source_grid) == str:
+        sgrid = xarray.open_dataset(source_grid)
+    else:
+        sgrid = source_grid
+
+    nvert = sgrid[vert_coord].values.size
+    #print(nvert)
+    nvert=3
+
     wlist = []
-    for lev in range(0, nvert):
+    # for lev in range(0, nvert):
+    for lev in [0, 40, 65]:
         print("Generating level:", lev)
         extra2 = [f"-sellevidx,{lev+1}"]
 
@@ -78,8 +89,8 @@ def cdo_generate_weights3d(
                                           icongridpath=icongridpath,
                                           gridpath=gridpath,
                                           extra=extra + extra2))
-
-    return combine_2d_to_3d(wlist, "lev", range(0, nvert))
+    return wlist
+    #return weightslist_to_3d(wlist)
 
 
 def cdo_generate_weights(
@@ -303,6 +314,18 @@ def esmf_generate_weights(
         target_file.close()
         weight_file.close()
 
+def compute_weights_matrix3d(weights):
+    """
+    Convert the weights from CDO/ESMF to a numpy array
+    """
+    sparse_weights = []
+    nvert = weights["lev"].values.size
+
+    for i in range(0, nvert):
+        w = weights.sel(lev=i)
+        sparse_weights.append(compute_weights_matrix(w))
+        
+    return sparse_weights
 
 def compute_weights_matrix(weights):
     """
@@ -525,9 +548,15 @@ class Regridder(object):
         source_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Source grid / sample dataset
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample dataset
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
+        vert_coord (str): Name of the vertical coordinate (default: None)
+        method (str): Method to use for interpolation (default: 'con')
+        space_dims (list): List of dimensions to interpolate (default: None)
     """
 
-    def __init__(self, source_grid=None, target_grid=None, weights=None, method='con', space_dims=None):
+    def __init__(self, source_grid=None, target_grid=None, weights=None,
+                 method='con', space_dims=None, vert_coord=None):
+
+        self.vert_coord = vert_coord
 
         if (source_grid is None or target_grid is None) and weights is None:
             raise Exception(
@@ -536,7 +565,6 @@ class Regridder(object):
 
         # Is there already a weights file?
         if weights is not None:
-
             if not isinstance(weights, xarray.Dataset):
                 self.weights = xarray.open_mfdataset(weights)
             else:
@@ -545,15 +573,59 @@ class Regridder(object):
             # Generate the weights with CDO
             # _source_grid = identify_grid(source_grid)
             # _target_grid = identify_grid(target_grid)
-            self.weights = cdo_generate_weights(source_grid, target_grid, method=method)
+            if vert_coord:
+                self.weights = cdo_generate_weights(source_grid, target_grid, method=method)
+            else:
+                self.weights = cdo_generate_weights3d(source_grid, target_grid, method=method, vert_coord=vert_coord)
             #sys.exit('Missing capability of creating weights...')
-
-        self.weights_matrix = compute_weights_matrix(self.weights)
+        if vert_coord:
+            self.weights_matrix = compute_weights_matrix3d(self.weights)  
+        else: 
+            self.weights_matrix = compute_weights_matrix(self.weights)
 
         # this section is used to create a target mask initializing the CDO weights
-        self.weights = mask_weigths(self.weights, self.weights_matrix)
+        self.weights = mask_weights(self.weights, self.weights_matrix)
         self.masked = check_mask(self.weights)
         self.space_dims = space_dims
+
+
+    def regrid3d(self, source_data, vert_coord):
+        """Regrid ``source_data`` to match the target grid - 3D version
+
+        Args:
+            source_data (:class:`xarray.DataArray` or xarray.Dataset): Source
+            variable
+
+        Returns:
+            :class:`xarray.DataArray` or xarray.Dataset with a regridded
+            version of the source variable
+        """
+
+        if isinstance(source_data, xarray.Dataset):
+
+            # apply the regridder on each DataArray
+            out = source_data.map(self.regrid3d, keep_attrs=True)
+
+            # clean from degenerated variables
+            degen_vars = [var for var in out.data_vars if out[var].dims == ()]
+            return out.drop_vars(degen_vars)
+            # else:
+            #    sys.exit("source data has different mask, this can lead to unexpected" \
+            #        "results due to the format in which weights are generated. Aborting...")
+
+        elif isinstance(source_data, xarray.DataArray):
+
+            for lev in range(0, source_data.coords[vert_coord].values.size):
+                xa = source_data.isel(**{vert_coord: lev})
+                wa = self.weights.isel(**{vert_coord: lev})
+
+                # print('DataArray access!')
+                return apply_weights(
+                    xa, self.weights, weights_matrix=self.weights_matrix, 
+                    masked=self.masked, space_dims=self.space_dims
+                )
+        else:
+            sys.exit('Cannot process this source_data, sure it is xarray?')
 
     def regrid(self, source_data):
         """Regrid ``source_data`` to match the target grid
@@ -590,7 +662,7 @@ class Regridder(object):
             sys.exit('Cannot process this source_data, sure it is xarray?')
 
 
-def mask_weigths(weights, weights_matrix):
+def mask_weights(weights, weights_matrix):
     """This functions precompute the mask for the target interpolation
     Takes as input the weights from CDO and the precomputed weights matrix
     Return the target mask"""
@@ -640,3 +712,23 @@ def combine_2d_to_3d(array_list, dim_name, dim_values):
     """
     new_array = [x.assign_coords({dim_name: d}) for x, d in zip(array_list, dim_values)]
     return xarray.concat(new_array, dim_name)
+
+
+def weightslist_to_3d(ds_list):
+    """
+    Function to combine a list of 2D cdo weights into a 3D one adding a vertical coordinate lev
+    """
+    dim_values = range(len(ds_list))
+    nl = [ds.src_address.size for ds in ds_list]
+    nl0 = max(nl)
+    print(nl)
+    nlda = xarray.DataArray(nl, coords={"lev": range(0, len(nl))}, name="link_length")
+    new_array = []
+    varlist = ["src_address", "dst_address", "remap_matrix"]
+    ds0 = ds_list[0].drop(varlist)
+    for x, d in zip(ds_list, dim_values):
+        nl1 = x.src_address.size
+        xplist = [x[vname].pad(num_links=(0, nl0-nl1),  mode='constant') for vname in varlist ]
+        xp = xarray.merge(xplist)
+        new_array.append(xp.assign_coords({"lev": d}))
+    return xarray.merge([nlda, ds0, xarray.concat(new_array, "lev")])
