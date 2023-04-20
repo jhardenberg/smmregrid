@@ -45,6 +45,67 @@ import tempfile
 import xarray
 import numpy
 
+from multiprocessing import Process, Manager
+
+def worker(wlist, n, *args, **kwargs):
+    """Run a worker process"""
+    wlist[n] = cdo_generate_weights(*args, **kwargs).compute()
+
+def cdo_generate_weights3d_mp(
+    source_grid,
+    target_grid,
+    method="con",
+    extrapolate=True,
+    remap_norm="fracarea",
+    remap_area_min=0.0,
+    icongridpath=None,
+    gridpath=None,
+    extra=None,
+    vert_coord=None
+):
+    if extra:
+    # make sure extra is a flat list if it is not already
+        if not isinstance(extra, list):
+            extra = [extra]
+    else:
+        extra = []
+
+    if type(source_grid) == str:
+        sgrid = xarray.open_dataset(source_grid)
+    else:
+        sgrid = source_grid
+
+    nvert = sgrid[vert_coord].values.size
+    #print(nvert)
+    nvert=3
+
+    # for lev in range(0, nvert):
+    processes = []
+    mgr = Manager()
+
+    # dictionaries are shared, so they have to be passed as functions
+    wlist= mgr.list(range(3))
+    
+    for lev, nlev in zip([0, 40, 65], range(3)):
+        print("Generating level:", lev)
+        extra2 = [f"-sellevidx,{lev+1}"]
+        p = Process(target=worker,
+                    args=(wlist, nlev, source_grid, target_grid),
+                    kwargs=dict(method=method,
+                                extrapolate=extrapolate,
+                                remap_norm=remap_norm,
+                                remap_area_min=remap_area_min,
+                                icongridpath=icongridpath,
+                                gridpath=gridpath,
+                                extra=extra + extra2))
+        p.start()
+        processes.append(p)
+
+    for proc in processes:
+        proc.join()
+
+    return weightslist_to_3d(wlist)
+
 
 def cdo_generate_weights3d(
     source_grid,
@@ -89,8 +150,7 @@ def cdo_generate_weights3d(
                                           icongridpath=icongridpath,
                                           gridpath=gridpath,
                                           extra=extra + extra2))
-    return wlist
-    #return weightslist_to_3d(wlist)
+    return weightslist_to_3d(wlist)
 
 
 def cdo_generate_weights(
@@ -721,7 +781,6 @@ def weightslist_to_3d(ds_list):
     dim_values = range(len(ds_list))
     nl = [ds.src_address.size for ds in ds_list]
     nl0 = max(nl)
-    print(nl)
     nlda = xarray.DataArray(nl, coords={"lev": range(0, len(nl))}, name="link_length")
     new_array = []
     varlist = ["src_address", "dst_address", "remap_matrix"]
