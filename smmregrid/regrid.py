@@ -787,7 +787,8 @@ def weightslist_to_3d(ds_list):
     ds0 = ds_list[0].drop(varlist)
     for x, d in zip(ds_list, dim_values):
         nl1 = x.src_address.size
-        xplist = [x[vname].pad(num_links=(0, nl0-nl1),  mode='constant') for vname in varlist ]
+        xplist = [x[vname].pad(num_links=(0, nl0-nl1), mode='constant', constant_values=0)
+                  for vname in varlist ]
         xp = xarray.merge(xplist)
         new_array.append(xp.assign_coords({"lev": d}))
     return xarray.merge([nlda, ds0, xarray.concat(new_array, "lev")])
