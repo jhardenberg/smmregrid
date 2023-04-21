@@ -77,20 +77,20 @@ def cdo_generate_weights3d_mp(
 
     nvert = sgrid[vert_coord].values.size
     #print(nvert)
-    nvert=3
 
     # for lev in range(0, nvert):
     processes = []
     mgr = Manager()
 
     # dictionaries are shared, so they have to be passed as functions
-    wlist= mgr.list(range(3))
+    wlist= mgr.list(range(nvert))
     
-    for lev, nlev in zip([0, 40, 65], range(3)):
+    #for lev, nlev in zip([0, 40, 65], range(3)):
+    for lev in range(nvert):
         print("Generating level:", lev)
         extra2 = [f"-sellevidx,{lev+1}"]
         p = Process(target=worker,
-                    args=(wlist, nlev, source_grid, target_grid),
+                    args=(wlist, lev, source_grid, target_grid),
                     kwargs=dict(method=method,
                                 extrapolate=extrapolate,
                                 remap_norm=remap_norm,
