@@ -376,7 +376,7 @@ def esmf_generate_weights(
 
 def compute_weights_matrix3d(weights):
     """
-    Convert the weights from CDO/ESMF to a numpy array
+    Convert the weights from CDO/ESMF to a list of numpy arrays
     """
     sparse_weights = []
     nvert = weights["lev"].values.size
@@ -634,9 +634,9 @@ class Regridder(object):
             # _source_grid = identify_grid(source_grid)
             # _target_grid = identify_grid(target_grid)
             if vert_coord:
-                self.weights = cdo_generate_weights(source_grid, target_grid, method=method)
-            else:
                 self.weights = cdo_generate_weights3d(source_grid, target_grid, method=method, vert_coord=vert_coord)
+            else:
+                self.weights = cdo_generate_weights(source_grid, target_grid, method=method)
             #sys.exit('Missing capability of creating weights...')
         if vert_coord:
             self.weights_matrix = compute_weights_matrix3d(self.weights)  
@@ -644,12 +644,15 @@ class Regridder(object):
             self.weights_matrix = compute_weights_matrix(self.weights)
 
         # this section is used to create a target mask initializing the CDO weights
-        self.weights = mask_weights(self.weights, self.weights_matrix)
-        self.masked = check_mask(self.weights)
+        if not vert_coord:
+            self.weights = mask_weights(self.weights, self.weights_matrix)
+            self.masked = check_mask(self.weights)
+        else:
+            self.masked = False
         self.space_dims = space_dims
 
 
-    def regrid3d(self, source_data, vert_coord):
+    def regrid3d(self, source_data):
         """Regrid ``source_data`` to match the target grid - 3D version
 
         Args:
@@ -660,7 +663,8 @@ class Regridder(object):
             :class:`xarray.DataArray` or xarray.Dataset with a regridded
             version of the source variable
         """
-
+        vert_coord = self.vert_coord
+        
         if isinstance(source_data, xarray.Dataset):
 
             # apply the regridder on each DataArray
