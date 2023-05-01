@@ -47,6 +47,9 @@ import numpy
 
 from multiprocessing import Process, Manager
 
+default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
+                     'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
+
 def worker(wlist, n, *args, **kwargs):
     """Run a worker process"""
     wlist[n] = cdo_generate_weights2d(*args, **kwargs).compute()
@@ -479,8 +482,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
     # Dimension on which we can produce the interpolation
     if space_dims is None: 
-        space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                         'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
+        space_dims = default_space_dims
     
     if not any(x in source_data.dims for x in space_dims):
         print("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
@@ -599,13 +601,16 @@ class Regridder(object):
         vert_coord (str): Name of the vertical coordinate. 
                           If provided, 3D weights are generated (default: None)
         method (str): Method to use for interpolation (default: 'con')
-        space_dims (list): List of dimensions to interpolate (default: None)
+        space_dims (list): list of dimensions to interpolate (default: None)
+        transpose (bool): transpose the output so that the vertical coordinate is 
+                          just before other spatial coords (dafault: True)
     """
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', space_dims=None, vert_coord=None):
+                 method='con', space_dims=None, vert_coord=None, transpose=True):
 
         self.vert_coord = vert_coord
+        self.transpose = transpose
 
         if (source_grid is None or target_grid is None) and weights is None:
             raise Exception(
@@ -687,20 +692,33 @@ class Regridder(object):
 
         elif isinstance(source_data, xarray.DataArray):
 
-            data3d = []
+            data3d_list = []
             for lev in range(0, source_data.coords[vert_coord].values.size):
                 xa = source_data.isel(**{vert_coord: lev})
                 wa = self.weights.isel(**{"lev": lev})
                 nl = wa.link_length.values
                 wa = wa.isel(num_links=slice(0, nl))
                 wm = self.weights_matrix[lev]
-                data3d.append(apply_weights(
+                data3d_list.append(apply_weights(
                     xa, wa, weights_matrix=wm, 
                     masked=self.masked, space_dims=self.space_dims)
                 )
-            return xarray.concat(data3d, dim=vert_coord)
+            data3d = xarray.concat(data3d_list, dim=vert_coord)
+
+            if self.transpose:
+                # Make sure that the vertical dimension is just before the spatial ones
+                if self.space_dims is None: 
+                    space_dims = default_space_dims
+                else:
+                    space_dims = self.space_dims
+                dims = list(data3d.dims)
+                index = min([i for i, s in enumerate(dims) if s in space_dims])
+                dimst= dims[1:index] + [dims[0]] + dims[index:]
+                data3d = data3d.transpose(*dimst)
+
+            return data3d
         else:
-            sys.exit('Cannot process this source_data, sure it is xarray?')
+            sys.exit('Cannot process this source data, are you sure it is an xarray?')
 
     def regrid2d(self, source_data):
         """Regrid ``source_data`` to match the target grid, 2D version
@@ -761,7 +779,7 @@ def check_mask(weights):
         return True
 
 
-def regrid(source_data, target_grid=None, weights=None, vert_coord=None):
+def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpose=True):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
     to the target grid because it re-generates the weights each time you call
@@ -775,11 +793,14 @@ def regrid(source_data, target_grid=None, weights=None, vert_coord=None):
         vert_coord (str): Name of the vertical coordinate. 
                           If provided, 3D weights are generated (default: None)
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
+        transpose (bool): If True, transpose the output so that the vertical
+                          coordinate is just before the other spatial coordinates (default: True)
+
     Returns:
         :class:`xarray.DataArray` with a regridded version of the source variable
     """
 
-    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, vert_coord=vert_coord)
+    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, vert_coord=vert_coord, transpose=transpose)
     return regridder.regrid(source_data)
 
 
