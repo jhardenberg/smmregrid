@@ -51,7 +51,8 @@ def worker(wlist, n, *args, **kwargs):
     """Run a worker process"""
     wlist[n] = cdo_generate_weights(*args, **kwargs).compute()
 
-def cdo_generate_weights3d_mp(
+
+def cdo_generate_weights3d(
     source_grid,
     target_grid,
     method="con",
@@ -85,7 +86,6 @@ def cdo_generate_weights3d_mp(
     # dictionaries are shared, so they have to be passed as functions
     wlist= mgr.list(range(nvert))
     
-    #for lev, nlev in zip([0, 40, 65], range(3)):
     for lev in range(nvert):
         print("Generating level:", lev)
         extra2 = [f"-sellevidx,{lev+1}"]
@@ -104,52 +104,6 @@ def cdo_generate_weights3d_mp(
     for proc in processes:
         proc.join()
 
-    return weightslist_to_3d(wlist)
-
-
-def cdo_generate_weights3d(
-    source_grid,
-    target_grid,
-    method="con",
-    extrapolate=True,
-    remap_norm="fracarea",
-    remap_area_min=0.0,
-    icongridpath=None,
-    gridpath=None,
-    extra=None,
-    vert_coord=None
-):
-    if extra:
-    # make sure extra is a flat list if it is not already
-        if not isinstance(extra, list):
-            extra = [extra]
-    else:
-        extra = []
-
-    if type(source_grid) == str:
-        sgrid = xarray.open_dataset(source_grid)
-    else:
-        sgrid = source_grid
-
-    nvert = sgrid[vert_coord].values.size
-    #print(nvert)
-    nvert=3
-
-    wlist = []
-    # for lev in range(0, nvert):
-    for lev in [0, 40, 65]:
-        print("Generating level:", lev)
-        extra2 = [f"-sellevidx,{lev+1}"]
-
-        wlist.append(cdo_generate_weights(source_grid,
-                                          target_grid,
-                                          method=method,
-                                          extrapolate=extrapolate,
-                                          remap_norm=remap_norm,
-                                          remap_area_min=remap_area_min,
-                                          icongridpath=icongridpath,
-                                          gridpath=gridpath,
-                                          extra=extra + extra2))
     return weightslist_to_3d(wlist)
 
 
@@ -614,7 +568,8 @@ class Regridder(object):
         source_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Source grid / sample dataset
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample dataset
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
-        vert_coord (str): Name of the vertical coordinate (default: None)
+        vert_coord (str): Name of the vertical coordinate. 
+                          If provided, 3D weights are generated (default: None)
         method (str): Method to use for interpolation (default: 'con')
         space_dims (list): List of dimensions to interpolate (default: None)
     """
@@ -696,10 +651,9 @@ class Regridder(object):
                 # print('DataArray access!')
                 data3d.append(apply_weights(
                     xa, wa, weights_matrix=wm, 
-                    masked=self.masked, space_dims=self.space_dims
+                    masked=self.masked, space_dims=self.space_dims)
                 )
-                )
-            return data3d
+            return xarray.concat(data3d, dim=vert_coord)
         else:
             sys.exit('Cannot process this source_data, sure it is xarray?')
 
