@@ -21,7 +21,7 @@ def find_var(xfield):
     return myvar
 
 
-def check_cdo_regrid(finput, ftarget, method='con', access='Dataset'):
+def check_cdo_regrid(finput, ftarget, method='con', access='Dataset', vert_coord=None):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests."""
@@ -52,7 +52,7 @@ def check_cdo_regrid(finput, ftarget, method='con', access='Dataset'):
     #interpolator = Regridder(weights=wfield)
 
     # method with automatic creation of weights
-    interpolator = Regridder(source_grid=finput, target_grid=ftarget, method=method)
+    interpolator = Regridder(source_grid=finput, target_grid=ftarget, method=method, vert_coord=vert_coord)
     rfield = interpolator.regrid(xfield)
 
     if access == 'Dataset':

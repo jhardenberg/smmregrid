@@ -43,8 +43,14 @@ def test_curivilinear(method):
     fff = check_cdo_regrid(os.path.join(indir, 'onlytos-ipsl.nc'), tfile, method=method)
     assert fff is True
 
-# test for pressure levels on gaussian grid
+# test for pressure levels on gaussian grid (2D, level-by-level)
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_plev_gaussian(method):
     fff = check_cdo_regrid(os.path.join(indir, 'ua-ecearth.nc'), tfile, method=method)
+    assert fff is True
+
+# test for pressure levels on gaussian grid (3D)
+@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+def test_plev_gaussian(method):
+    fff = check_cdo_regrid(os.path.join(indir, 'ua-ecearth.nc'), tfile, method=method, vert_coord="plev")
     assert fff is True
