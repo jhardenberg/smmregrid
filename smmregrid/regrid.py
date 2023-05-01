@@ -613,6 +613,23 @@ class Regridder(object):
         self.space_dims = space_dims
 
 
+    def regrid(self, source_data):
+        """Regrid ``source_data`` to match the target grid
+
+        Args:
+            source_data (:class:`xarray.DataArray` or xarray.Dataset): Source
+            variable
+
+        Returns:
+            :class:`xarray.DataArray` or xarray.Dataset with a regridded
+            version of the source variable
+        """
+
+        if self.vert_coord: # 3D or 2D?
+            return self.regrid3d(source_data)
+        else:
+            return self.regrid2d(source_data)
+
     def regrid3d(self, source_data):
         """Regrid ``source_data`` to match the target grid - 3D version
 
@@ -647,8 +664,6 @@ class Regridder(object):
                 nl = wa.link_length.values
                 wa = wa.isel(num_links=slice(0, nl))
                 wm = self.weights_matrix[lev]
-
-                # print('DataArray access!')
                 data3d.append(apply_weights(
                     xa, wa, weights_matrix=wm, 
                     masked=self.masked, space_dims=self.space_dims)
@@ -657,8 +672,8 @@ class Regridder(object):
         else:
             sys.exit('Cannot process this source_data, sure it is xarray?')
 
-    def regrid(self, source_data):
-        """Regrid ``source_data`` to match the target grid
+    def regrid2d(self, source_data):
+        """Regrid ``source_data`` to match the target grid, 2D version
 
         Args:
             source_data (:class:`xarray.DataArray` or xarray.Dataset): Source
@@ -716,7 +731,7 @@ def check_mask(weights):
         return True
 
 
-def regrid(source_data, target_grid=None, weights=None):
+def regrid(source_data, target_grid=None, weights=None, vert_coord=None):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
     to the target grid because it re-generates the weights each time you call
@@ -727,21 +742,23 @@ def regrid(source_data, target_grid=None, weights=None):
     Args:
         source_data (:class:`xarray.DataArray`): Source variable
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample variable
-
+        vert_coord (str): Name of the vertical coordinate. 
+                          If provided, 3D weights are generated (default: None)
+        weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
     Returns:
         :class:`xarray.DataArray` with a regridded version of the source variable
     """
 
-    regridder = Regridder(source_data, target_grid=target_grid, weights=weights)
+    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, vert_coord=vert_coord)
     return regridder.regrid(source_data)
 
 
-def combine_2d_to_3d(array_list, dim_name, dim_values):
-    """
-    Function to combine a list of 2D xarrays into a 3D one adding a vertical coordinate lev
-    """
-    new_array = [x.assign_coords({dim_name: d}) for x, d in zip(array_list, dim_values)]
-    return xarray.concat(new_array, dim_name)
+# def combine_2d_to_3d(array_list, dim_name, dim_values):
+#     """
+#     Function to combine a list of 2D xarrays into a 3D one adding a vertical coordinate lev
+#     """
+#     new_array = [x.assign_coords({dim_name: d}) for x, d in zip(array_list, dim_values)]
+#     return xarray.concat(new_array, dim_name)
 
 
 def weightslist_to_3d(ds_list):
