@@ -382,9 +382,11 @@ def compute_weights_matrix3d(weights):
     nvert = weights["lev"].values.size
 
     for i in range(0, nvert):
-        w = weights.sel(lev=i)
+        w = weights.isel(lev=i)
+        nl = w.link_length.values
+        w = w.isel(num_links=slice(0, nl))
         sparse_weights.append(compute_weights_matrix(w))
-        
+    
     return sparse_weights
 
 def compute_weights_matrix(weights):
@@ -392,7 +394,8 @@ def compute_weights_matrix(weights):
     Convert the weights from CDO/ESMF to a numpy array
     """
     w = weights
-    if w.title.startswith("ESMF"):
+    #if w.title.startswith("ESMF"):
+    if "S" in w.variables:
         # ESMF style weights
         src_address = w.col - 1
         dst_address = w.row - 1
@@ -405,7 +408,7 @@ def compute_weights_matrix(weights):
         dst_address = w.dst_address - 1
         remap_matrix = w.remap_matrix[:, 0]
         w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
-
+        
     # Create a sparse array from the weights
     sparse_weights_delayed = dask.delayed(sparse.COO)(
         [src_address.data, dst_address.data], remap_matrix.data, shape=w_shape
@@ -454,7 +457,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     # array, multiplied by the weights matrix, then unstacked back into a 2d
     # array
 
-    if w.title.startswith("ESMF"):
+    #if w.title.startswith("ESMF"):
+    if "S" in w.variables:
         # ESMF style weights
         src_address = w.col - 1
         dst_address = w.row - 1
@@ -524,6 +528,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     dask.array.ma.set_fill_value(source_array, 1e20)
     source_array = dask.array.ma.fix_invalid(source_array)
     source_array = dask.array.ma.filled(source_array)
+
     target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
     # define and compute the new mask
@@ -556,6 +561,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         },
         name=source_data.name,
     )
+
     target_da.coords["lat"] = xarray.DataArray(dst_grid_center_lat, dims=["i", "j"])
     target_da.coords["lon"] = xarray.DataArray(dst_grid_center_lon, dims=["i", "j"])
 
@@ -679,15 +685,21 @@ class Regridder(object):
 
         elif isinstance(source_data, xarray.DataArray):
 
+            data3d = []
             for lev in range(0, source_data.coords[vert_coord].values.size):
                 xa = source_data.isel(**{vert_coord: lev})
-                wa = self.weights.isel(**{vert_coord: lev})
+                wa = self.weights.isel(**{"lev": lev})
+                nl = wa.link_length.values
+                wa = wa.isel(num_links=slice(0, nl))
+                wm = self.weights_matrix[lev]
 
                 # print('DataArray access!')
-                return apply_weights(
-                    xa, self.weights, weights_matrix=self.weights_matrix, 
+                data3d.append(apply_weights(
+                    xa, wa, weights_matrix=wm, 
                     masked=self.masked, space_dims=self.space_dims
                 )
+                )
+            return data3d
         else:
             sys.exit('Cannot process this source_data, sure it is xarray?')
 
