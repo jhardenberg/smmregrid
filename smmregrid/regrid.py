@@ -105,8 +105,9 @@ def cdo_generate_weights(
     num_blocks, remainder = divmod(nvert, nproc)
     num_blocks = num_blocks + (0 if remainder == 0 else 1)
 
-    blocks = np.array_split(numpy.arange(nvert), num_blocks)
+    blocks = numpy.array_split(numpy.arange(nvert), num_blocks)
     for block in blocks:
+        processes = []
         for lev in block:
             print("Generating level:", lev)
             extra2 = [f"-sellevidx,{lev+1}"]
@@ -415,7 +416,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         xarray.DataArray: Regridded version of the source dataset
     """
 
-    # Understand immediately if we need to retunr something or not
+    # Understand immediately if we need to return something or not
     # This is done if we have bounds variables
     if ("bnds" in source_data.name or "bounds" in source_data.name):
 
@@ -651,11 +652,13 @@ class Regridder(object):
             :class:`xarray.DataArray` or xarray.Dataset with a regridded
             version of the source variable
         """
-
-        if self.vert_coord: # 3D or 2D?
-            return self.regrid3d(source_data)
+        if (self.vert_coord and
+            isinstance(source_data, xarray.DataArray) and
+            self.vert_coord in source_data.coords):
+            # if this is a 3D dataarray, we specified the vertical coord and it has it
+                return self.regrid3d(source_data)
         else:
-            return self.regrid2d(source_data)
+                return self.regrid2d(source_data)
 
     def regrid3d(self, source_data):
         """Regrid ``source_data`` to match the target grid - 3D version
@@ -673,7 +676,7 @@ class Regridder(object):
         if isinstance(source_data, xarray.Dataset):
 
             # apply the regridder on each DataArray
-            out = source_data.map(self.regrid3d, keep_attrs=True)
+            out = source_data.map(self.regrid, keep_attrs=True)
 
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
