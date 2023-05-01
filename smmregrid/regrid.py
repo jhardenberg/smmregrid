@@ -49,10 +49,10 @@ from multiprocessing import Process, Manager
 
 def worker(wlist, n, *args, **kwargs):
     """Run a worker process"""
-    wlist[n] = cdo_generate_weights(*args, **kwargs).compute()
+    wlist[n] = cdo_generate_weights2d(*args, **kwargs).compute()
 
 
-def cdo_generate_weights3d(
+def cdo_generate_weights(
     source_grid,
     target_grid,
     method="con",
@@ -62,8 +62,25 @@ def cdo_generate_weights3d(
     icongridpath=None,
     gridpath=None,
     extra=None,
-    vert_coord=None
+    vert_coord=None,
+    cdo="cdo",
+    nproc=1
 ):
+
+    if not vert_coord: # Are we 2D?
+        return cdo_generate_weights2d(
+            source_grid,
+            target_grid,
+            method=method,
+            extrapolate=extrapolate,
+            remap_norm=remap_norm,
+            remap_area_min=remap_area_min,
+            icongridpath=icongridpath,
+            gridpath=gridpath,
+            extra=extra,
+            cdo=cdo,
+            nproc=nproc)
+
     if extra:
     # make sure extra is a flat list if it is not already
         if not isinstance(extra, list):
@@ -80,34 +97,45 @@ def cdo_generate_weights3d(
     #print(nvert)
 
     # for lev in range(0, nvert):
-    processes = []
     mgr = Manager()
 
     # dictionaries are shared, so they have to be passed as functions
     wlist= mgr.list(range(nvert))
-    
-    for lev in range(nvert):
-        print("Generating level:", lev)
-        extra2 = [f"-sellevidx,{lev+1}"]
-        p = Process(target=worker,
-                    args=(wlist, lev, source_grid, target_grid),
-                    kwargs=dict(method=method,
-                                extrapolate=extrapolate,
-                                remap_norm=remap_norm,
-                                remap_area_min=remap_area_min,
-                                icongridpath=icongridpath,
-                                gridpath=gridpath,
-                                extra=extra + extra2))
-        p.start()
-        processes.append(p)
 
-    for proc in processes:
-        proc.join()
+    num_blocks, remainder = divmod(nvert, nproc)
+    num_blocks = num_blocks + (0 if remainder == 0 else 1)
+    for i in range(num_blocks):
+        start = i * nproc
+        end = start + nproc
+        end = (nvert if end > nvert else end)
+        print("Block #", i, start, end)
+
+        processes = []
+        for lev in range(start, end):
+
+            print("Generating level:", lev)
+            extra2 = [f"-sellevidx,{lev+1}"]
+            p = Process(target=worker,
+                        args=(wlist, lev, source_grid, target_grid),
+                        kwargs=dict(method=method,
+                                    extrapolate=extrapolate,
+                                    remap_norm=remap_norm,
+                                    remap_area_min=remap_area_min,
+                                    icongridpath=icongridpath,
+                                    gridpath=gridpath,
+                                    extra=extra + extra2,
+                                    cdo=cdo,
+                                    nproc=nproc))
+            p.start()
+            processes.append(p)
+
+        for proc in processes:
+            proc.join()
 
     return weightslist_to_3d(wlist)
 
 
-def cdo_generate_weights(
+def cdo_generate_weights2d(
     source_grid,
     target_grid,
     method="con",
@@ -116,7 +144,9 @@ def cdo_generate_weights(
     remap_area_min=0.0,
     icongridpath=None,
     gridpath=None,
-    extra=None
+    extra=None,
+    cdo="cdo",
+    nproc=1
 ):
     """
     Generate weights for regridding using CDO
@@ -145,6 +175,8 @@ def cdo_generate_weights(
         gridpath (str): where to store downloaded grids
         icongridpath (str): location of ICON grids (e.g. /pool/data/ICON)
         extra: command(s) to apply to source grid before weight generation (can be a list)
+        cdo: the command to launch cdo ["cdo"]
+        nproc: number of processes to use for weight generation
 
     Returns:
         :obj:`xarray.Dataset` with regridding weights
@@ -197,7 +229,7 @@ def cdo_generate_weights(
 
             subprocess.check_output(
                 [
-                    "cdo",
+                    cdo,
                     "gen%s,%s" % (method, tgrid)
                 ] + extra +
                 [
@@ -210,7 +242,7 @@ def cdo_generate_weights(
         else:
             subprocess.check_output(
                 [
-                    "cdo",
+                    cdo,
                     "gen%s,%s" % (method, tgrid),
                     sgrid,
                     weight_file.name,
@@ -595,7 +627,7 @@ class Regridder(object):
             # _source_grid = identify_grid(source_grid)
             # _target_grid = identify_grid(target_grid)
             if vert_coord:
-                self.weights = cdo_generate_weights3d(source_grid, target_grid, method=method, vert_coord=vert_coord)
+                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, vert_coord=vert_coord)
             else:
                 self.weights = cdo_generate_weights(source_grid, target_grid, method=method)
             #sys.exit('Missing capability of creating weights...')
