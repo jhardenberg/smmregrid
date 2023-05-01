@@ -104,15 +104,19 @@ def cdo_generate_weights(
 
     num_blocks, remainder = divmod(nvert, nproc)
     num_blocks = num_blocks + (0 if remainder == 0 else 1)
-    for i in range(num_blocks):
-        start = i * nproc
-        end = start + nproc
-        end = (nvert if end > nvert else end)
-        print("Block #", i, start, end)
 
-        processes = []
-        for lev in range(start, end):
+    # for i in range(num_blocks):
+    #     start = i * nproc
+    #     end = start + nproc
+    #     end = (nvert if end > nvert else end)
+    #     print("Block #", i, start, end)
 
+    #     processes = []
+    #     for lev in range(start, end):
+
+    blocks = np.array_split(numpy.arange(nvert), num_blocks)
+    for block in blocks:
+        for lev in block:
             print("Generating level:", lev)
             extra2 = [f"-sellevidx,{lev+1}"]
             p = Process(target=worker,
