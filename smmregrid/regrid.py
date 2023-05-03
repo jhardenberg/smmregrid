@@ -363,13 +363,19 @@ def compute_weights_matrix3d(weights):
     """
     Convert the weights from CDO/ESMF to a list of numpy arrays
     """
+
+    # CDO 2.2.0 fix
+    if "numLinks" in weights.dims:
+        links_dim = "numLinks"
+    else:
+        links_dim = "num_links"
+
     sparse_weights = []
     nvert = weights["lev"].values.size
-
     for i in range(0, nvert):
         w = weights.isel(lev=i)
         nl = w.link_length.values
-        w = w.isel(num_links=slice(0, nl))
+        w = w.isel(**{links_dim: slice(0, nl)})
         sparse_weights.append(compute_weights_matrix(w))
     
     return sparse_weights
@@ -677,6 +683,12 @@ class Regridder(object):
             version of the source variable
         """
         vert_coord = self.vert_coord
+
+        # CDO 2.2.0 fix
+        if "numLinks" in self.weights.dims:
+            links_dim = "numLinks"
+        else:
+            links_dim = "num_links"
         
         if isinstance(source_data, xarray.Dataset):
 
@@ -697,7 +709,7 @@ class Regridder(object):
                 xa = source_data.isel(**{vert_coord: lev})
                 wa = self.weights.isel(**{"lev": lev})
                 nl = wa.link_length.values
-                wa = wa.isel(num_links=slice(0, nl))
+                wa = wa.isel(**{links_dim: slice(0, nl)})
                 wm = self.weights_matrix[lev]
                 data3d_list.append(apply_weights(
                     xa, wa, weights_matrix=wm, 
@@ -816,6 +828,12 @@ def weightslist_to_3d(ds_list):
     """
     Function to combine a list of 2D cdo weights into a 3D one adding a vertical coordinate lev
     """
+    # CDO 2.2.0 fix
+    if "numLinks" in ds_list[0].dims:
+        links_dim = "numLinks"
+    else:
+        links_dim = "num_links"
+    
     dim_values = range(len(ds_list))
     nl = [ds.src_address.size for ds in ds_list]
     nl0 = max(nl)
@@ -825,7 +843,8 @@ def weightslist_to_3d(ds_list):
     ds0 = ds_list[0].drop(varlist)
     for x, d in zip(ds_list, dim_values):
         nl1 = x.src_address.size
-        xplist = [x[vname].pad(num_links=(0, nl0-nl1), mode='constant', constant_values=0)
+#        xplist = [x[vname].pad(num_links=(0, nl0-nl1), mode='constant', constant_values=0)
+        xplist = [x[vname].pad(**{links_dim: (0, nl0-nl1), "mode": 'constant', "constant_values": 0})
                   for vname in varlist ]
         xp = xarray.merge(xplist)
         new_array.append(xp.assign_coords({"lev": d}))
