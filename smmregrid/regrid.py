@@ -840,7 +840,7 @@ def weightslist_to_3d(ds_list):
     nlda = xarray.DataArray(nl, coords={"lev": range(0, len(nl))}, name="link_length")
     new_array = []
     varlist = ["src_address", "dst_address", "remap_matrix"]
-    ds0 = ds_list[0].drop(varlist)
+    ds0 = ds_list[0].drop_vars(varlist)
     for x, d in zip(ds_list, dim_values):
         nl1 = x.src_address.size
 #        xplist = [x[vname].pad(num_links=(0, nl0-nl1), mode='constant', constant_values=0)
