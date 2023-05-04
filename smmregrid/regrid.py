@@ -490,6 +490,9 @@ class Regridder(object):
         source_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Source grid / sample dataset
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample dataset
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
+        method (str): Method to use for interpolation ('con', 'bilinear', 'nearest', 'bicubic', 'lanczos')
+        space_dims (list): List of dimensions on which to interpolate (e.g. ['lon', 'lat'])
+        cdo (str): Path to CDO executable
     """
 
     def __init__(self, source_grid=None, target_grid=None, weights=None, method='con', space_dims=None, cdo="cdo"):
@@ -590,6 +593,7 @@ def regrid(source_data, target_grid=None, weights=None, cdo="cdo"):
     Args:
         source_data (:class:`xarray.DataArray`): Source variable
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample variable
+        weights (path or xarray): optional precomputed regridding weights
         cdo (path): path of cdo executable ["cdo"]
     Returns:
         :class:`xarray.DataArray` with a regridded version of the source variable
