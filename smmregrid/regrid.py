@@ -55,7 +55,8 @@ def cdo_generate_weights(
     remap_area_min=0.0,
     icongridpath=None,
     gridpath=None,
-    extra=None
+    extra=None,
+    cdo="cdo"
 ):
     """
     Generate weights for regridding using CDO
@@ -84,7 +85,7 @@ def cdo_generate_weights(
         gridpath (str): where to store downloaded grids
         icongridpath (str): location of ICON grids (e.g. /pool/data/ICON)
         extra: command(s) to apply to source grid before weight generation (can be a list)
-
+        cdo: path to cdo binary
     Returns:
         :obj:`xarray.Dataset` with regridding weights
     """
@@ -136,7 +137,7 @@ def cdo_generate_weights(
 
             subprocess.check_output(
                 [
-                    "cdo",
+                    cdo,
                     "gen%s,%s" % (method, tgrid)
                 ] + extra +
                 [
@@ -149,7 +150,7 @@ def cdo_generate_weights(
         else:
             subprocess.check_output(
                 [
-                    "cdo",
+                    cdo,
                     "gen%s,%s" % (method, tgrid),
                     sgrid,
                     weight_file.name,
@@ -491,7 +492,7 @@ class Regridder(object):
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
     """
 
-    def __init__(self, source_grid=None, target_grid=None, weights=None, method='con', space_dims=None):
+    def __init__(self, source_grid=None, target_grid=None, weights=None, method='con', space_dims=None, cdo="cdo"):
 
         if (source_grid is None or target_grid is None) and weights is None:
             raise Exception(
@@ -509,7 +510,7 @@ class Regridder(object):
             # Generate the weights with CDO
             # _source_grid = identify_grid(source_grid)
             # _target_grid = identify_grid(target_grid)
-            self.weights = cdo_generate_weights(source_grid, target_grid, method=method)
+            self.weights = cdo_generate_weights(source_grid, target_grid, method=method, cdo=cdo)
             #sys.exit('Missing capability of creating weights...')
 
         self.weights_matrix = compute_weights_matrix(self.weights)
@@ -578,7 +579,7 @@ def check_mask(weights):
         return True
 
 
-def regrid(source_data, target_grid=None, weights=None):
+def regrid(source_data, target_grid=None, weights=None, cdo="cdo"):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
     to the target grid because it re-generates the weights each time you call
@@ -589,11 +590,11 @@ def regrid(source_data, target_grid=None, weights=None):
     Args:
         source_data (:class:`xarray.DataArray`): Source variable
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample variable
-
+        cdo (path): path of cdo executable ["cdo"]
     Returns:
         :class:`xarray.DataArray` with a regridded version of the source variable
     """
 
-    regridder = Regridder(source_data, target_grid=target_grid, weights=weights)
+    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, cdo=cdo)
 
     return regridder.regrid(source_data)
