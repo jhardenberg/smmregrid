@@ -35,7 +35,6 @@ multiple datasets.
 
 from .dimension import remove_degenerate_axes
 
-import dask.array
 import math
 import os
 import sparse
@@ -44,11 +43,12 @@ import sys
 import tempfile
 import xarray
 import numpy
-
+import dask.array
 from multiprocessing import Process, Manager
 
 default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
+default_vert_coords = ['lev', 'nz1'] #not yet used
 
 def worker(wlist, n, *args, **kwargs):
     """Run a worker process"""
@@ -91,7 +91,7 @@ def cdo_generate_weights(
     else:
         extra = []
 
-    if type(source_grid) == str:
+    if isinstance(source_grid, str):
         sgrid = xarray.open_dataset(source_grid)
     else:
         sgrid = source_grid
@@ -619,7 +619,7 @@ class Regridder(object):
         self.transpose = transpose
 
         if (source_grid is None or target_grid is None) and weights is None:
-            raise Exception(
+            raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
             )
 
@@ -631,8 +631,6 @@ class Regridder(object):
                 self.weights = weights
         else:
             # Generate the weights with CDO
-            # _source_grid = identify_grid(source_grid)
-            # _target_grid = identify_grid(target_grid)
             if vert_coord:
                 self.weights = cdo_generate_weights(source_grid, target_grid, method=method, vert_coord=vert_coord)
             else:
@@ -648,7 +646,9 @@ class Regridder(object):
             self.weights = mask_weights(self.weights, self.weights_matrix)
             self.masked = check_mask(self.weights)
         else:
-            self.masked = False
+            # this has to be improved
+            self.weights = mask_weights3d(self.weights, self.weights_matrix)
+            self.masked = True
         self.space_dims = space_dims
 
 
@@ -704,6 +704,11 @@ class Regridder(object):
 
         elif isinstance(source_data, xarray.DataArray):
 
+            # this is necessary to remove lev-bounds, temporary hack since they should
+            # be treated in a smarter way
+            if ("bnds" in source_data.name or "bounds" in source_data.name):
+                return source_data
+
             data3d_list = []
             for lev in range(0, source_data.coords[vert_coord].values.size):
                 xa = source_data.isel(**{vert_coord: lev})
@@ -712,14 +717,14 @@ class Regridder(object):
                 wa = wa.isel(**{links_dim: slice(0, nl)})
                 wm = self.weights_matrix[lev]
                 data3d_list.append(apply_weights(
-                    xa, wa, weights_matrix=wm, 
+                    xa, wa, weights_matrix=wm,
                     masked=self.masked, space_dims=self.space_dims)
                 )
             data3d = xarray.concat(data3d_list, dim=vert_coord)
 
             if self.transpose:
                 # Make sure that the vertical dimension is just before the spatial ones
-                if self.space_dims is None: 
+                if self.space_dims is None:
                     space_dims = default_space_dims
                 else:
                     space_dims = self.space_dims
@@ -775,7 +780,19 @@ def mask_weights(weights, weights_matrix):
     src_mask = weights.src_grid_imask.data
     target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
     target_mask = dask.array.where(target_mask < 0.5, 0, 1)
-    weights.dst_grid_imask.data = target_mask
+    weights['dst_grid_imask'].data = target_mask
+    return weights
+
+def mask_weights3d(weights, weights_matrix):
+    """This functions precompute the mask for the target interpolation
+    Takes as input the weights from CDO and the precomputed weights matrix
+    Return the target mask"""
+
+    for nlev in range(len(weights['lev'])):
+        src_mask = weights.src_grid_imask.loc[{'lev': nlev}].data
+        target_mask = dask.array.tensordot(src_mask, weights_matrix[nlev], axes=1)
+        target_mask = dask.array.where(target_mask < 0.5, 0, 1)
+        weights['dst_grid_imask'].loc[{'lev': nlev}] = target_mask
     return weights
 
 
@@ -839,7 +856,7 @@ def weightslist_to_3d(ds_list):
     nl0 = max(nl)
     nlda = xarray.DataArray(nl, coords={"lev": range(0, len(nl))}, name="link_length")
     new_array = []
-    varlist = ["src_address", "dst_address", "remap_matrix"]
+    varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
     ds0 = ds_list[0].drop_vars(varlist)
     for x, d in zip(ds_list, dim_values):
         nl1 = x.src_address.size
