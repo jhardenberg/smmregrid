@@ -177,6 +177,7 @@ def cdo_generate_weights2d(
         cdo: the command to launch cdo ["cdo"]
         nproc: number of processes to use for weight generation
 
+        cdo: path to cdo binary
     Returns:
         :obj:`xarray.Dataset` with regridding weights
     """
@@ -613,7 +614,8 @@ class Regridder(object):
     """
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', space_dims=None, vert_coord=None, transpose=True):
+                 method='con', space_dims=None, vert_coord=None, transpose=True,
+                 cdo='cdo'):
 
         self.vert_coord = vert_coord
         self.transpose = transpose
@@ -632,9 +634,9 @@ class Regridder(object):
         else:
             # Generate the weights with CDO
             if vert_coord:
-                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, vert_coord=vert_coord)
+                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, vert_coord=vert_coord, cdo=cdo)
             else:
-                self.weights = cdo_generate_weights(source_grid, target_grid, method=method)
+                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, cdo=cdo)
             #sys.exit('Missing capability of creating weights...')
         if vert_coord:
             self.weights_matrix = compute_weights_matrix3d(self.weights)  
@@ -808,7 +810,7 @@ def check_mask(weights):
         return True
 
 
-def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpose=True):
+def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpose=True, cdo='cdo'):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
     to the target grid because it re-generates the weights each time you call
@@ -825,11 +827,12 @@ def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpo
         transpose (bool): If True, transpose the output so that the vertical
                           coordinate is just before the other spatial coordinates (default: True)
 
+        cdo (path): path of cdo executable ["cdo"]
     Returns:
         :class:`xarray.DataArray` with a regridded version of the source variable
     """
 
-    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, vert_coord=vert_coord, transpose=transpose)
+    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, vert_coord=vert_coord, cdo=cdo, transpose=transpose)
     return regridder.regrid(source_data)
 
 
