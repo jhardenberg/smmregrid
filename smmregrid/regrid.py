@@ -33,29 +33,31 @@ matrix multiply, maintaining chunking in dimensions other than lat and lon.
 multiple datasets.
 """
 
-from .dimension import remove_degenerate_axes
+
 
 import math
 import os
-import sparse
 import subprocess
 import sys
 import tempfile
+from multiprocessing import Process, Manager
 import xarray
 import numpy
+import sparse
 import dask.array
-from multiprocessing import Process, Manager
+from .dimension import remove_degenerate_axes
 
+# default spatial dimensions and vertical coordinates
 default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
-default_vert_coords = ['lev', 'nz1'] #not yet used
+default_vert_coords = ['lev', 'nz1']
 
-def worker(wlist, n, *args, **kwargs):
+
+def worker(wlist, nnn, *args, **kwargs):
     """Run a worker process"""
-    wlist[n] = cdo_generate_weights2d(*args, **kwargs).compute()
+    wlist[nnn] = cdo_generate_weights2d(*args, **kwargs).compute()
 
 def find_vert_coord(xfield):
-
     """Find a vertical coordinate among defaults"""
 
     if isinstance(xfield, str):
@@ -63,24 +65,13 @@ def find_vert_coord(xfield):
     for dim in default_vert_coords:
         if dim in xfield.dims:
             return dim
-        
 
-def cdo_generate_weights(
-    source_grid,
-    target_grid,
-    method="con",
-    extrapolate=True,
-    remap_norm="fracarea",
-    remap_area_min=0.0,
-    icongridpath=None,
-    gridpath=None,
-    extra=None,
-    vert_coord=None,
-    cdo="cdo",
-    nproc=1
-):
+def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
+                         remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
+                         gridpath=None, extra=None, vert_coord=None, cdo="cdo", nproc=1):
+    """Generate the weights using CDO, handling both 2D and 3D cases"""
 
-    if not vert_coord: # Are we 2D?
+    if not vert_coord: # Are we 2D? Use default method
         return cdo_generate_weights2d(
             source_grid,
             target_grid,
@@ -124,7 +115,7 @@ def cdo_generate_weights(
         for lev in block:
             print("Generating level:", lev)
             extra2 = [f"-sellevidx,{lev+1}"]
-            p = Process(target=worker,
+            ppp = Process(target=worker,
                         args=(wlist, lev, source_grid, target_grid),
                         kwargs=dict(method=method,
                                     extrapolate=extrapolate,
@@ -135,8 +126,8 @@ def cdo_generate_weights(
                                     extra=extra + extra2,
                                     cdo=cdo,
                                     nproc=nproc))
-            p.start()
-            processes.append(p)
+            ppp.start()
+            processes.append(ppp)
 
         for proc in processes:
             proc.join()
@@ -144,19 +135,9 @@ def cdo_generate_weights(
     return weightslist_to_3d(wlist)
 
 
-def cdo_generate_weights2d(
-    source_grid,
-    target_grid,
-    method="con",
-    extrapolate=True,
-    remap_norm="fracarea",
-    remap_area_min=0.0,
-    icongridpath=None,
-    gridpath=None,
-    extra=None,
-    cdo="cdo",
-    nproc=1
-):
+def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=True,
+                           remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
+                           gridpath=None, extra=None, cdo="cdo", nproc=1):
     """
     Generate weights for regridding using CDO
 
@@ -194,21 +175,21 @@ def cdo_generate_weights2d(
 
     supported_methods = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
     if method not in supported_methods:
-        raise Exception
+        raise ValueError('The remap method provided is not supported!')
     if remap_norm not in ["fracarea", "destarea"]:
-        raise Exception
+        raise ValueError('The remap normalization provided is not supported!')
 
     # Make some temporary files that we'll feed to CDO
     weight_file = tempfile.NamedTemporaryFile()
 
-    if type(source_grid) == str:
+    if isinstance(source_grid, str):
         sgrid = source_grid
     else:
         source_grid_file = tempfile.NamedTemporaryFile()
         source_grid.to_netcdf(source_grid_file.name)
         sgrid = source_grid_file.name
 
-    if type(target_grid) == str:
+    if isinstance(target_grid, str):
         tgrid = target_grid
     else:
         target_grid_file = tempfile.NamedTemporaryFile()
@@ -265,16 +246,16 @@ def cdo_generate_weights2d(
         weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
         return weights
 
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError as err:
         # Print the CDO error message
-        print(e.output.decode(), file=sys.stderr)
+        print(err.output.decode(), file=sys.stderr)
         raise
 
     finally:
         # Clean up the temporary files
-        if not type(source_grid) == str:
+        if not isinstance(source_grid, str):
             source_grid_file.close()
-        if not type(target_grid) == str:
+        if not isinstance(target_grid, str):
             target_grid_file.close()
         weight_file.close()
 
@@ -359,9 +340,9 @@ def esmf_generate_weights(
         # Load so we can delete the temp file
         return weights.load()
 
-    except subprocess.CalledProcessError as e:
-        print(e)
-        print(e.output.decode("utf-8"))
+    except subprocess.CalledProcessError as err:
+        print(err)
+        print(err.output.decode("utf-8"))
         raise
 
     finally:
@@ -372,7 +353,7 @@ def esmf_generate_weights(
 
 def compute_weights_matrix3d(weights):
     """
-    Convert the weights from CDO/ESMF to a list of numpy arrays
+    Convert the weights from CDO to a list of numpy arrays
     """
 
     # CDO 2.2.0 fix
@@ -410,7 +391,7 @@ def compute_weights_matrix(weights):
         dst_address = w.dst_address - 1
         remap_matrix = w.remap_matrix[:, 0]
         w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
-        
+   
     # Create a sparse array from the weights
     sparse_weights_delayed = dask.delayed(sparse.COO)(
         [src_address.data, dst_address.data], remap_matrix.data, shape=w_shape
@@ -430,7 +411,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         source_data (xarray.DataArray): Source dataset
         weights (xarray.DataArray): CDO weights information
         masked (bool): if the DataArray is masked
-        space_dims (list): dimensions on which the interpolation has to be done (e.g. ['lon', 'lat'])
+        space_dims (list): dimensions on which the interpolation has to be done (e.g.['lon', 'lat'])
 
     Returns:
         xarray.DataArray: Regridded version of the source dataset
@@ -498,7 +479,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
     # Dimension on which we can produce the interpolation
-    if space_dims is None: 
+    if space_dims is None:
         space_dims = default_space_dims
     
     if not any(x in source_data.dims for x in space_dims):
@@ -626,8 +607,12 @@ class Regridder(object):
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', space_dims=None, vert_coord=None, transpose=True,
                  cdo='cdo'):
+        
+        if not vert_coord:
+            self.vert_coord = find_vert_coord(source_grid)
+        else:
+            self.vert_coord = vert_coord
 
-        self.vert_coord = vert_coord
         self.transpose = transpose
 
         if (source_grid is None or target_grid is None) and weights is None:
@@ -643,14 +628,10 @@ class Regridder(object):
                 self.weights = weights
         else:
             # Generate the weights with CDO
-            if vert_coord:
-                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, 
-                                                    vert_coord=vert_coord, cdo=cdo)
-            else:
-                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, 
-                                                    cdo=cdo)
-            #sys.exit('Missing capability of creating weights...')
-        if vert_coord:
+            self.weights = cdo_generate_weights(source_grid, target_grid, method=method,
+                                                vert_coord=self.vert_coord, cdo=cdo)
+                
+        if self.vert_coord:
             self.weights_matrix = compute_weights_matrix3d(self.weights)
         else: 
             self.weights_matrix = compute_weights_matrix(self.weights)

@@ -10,13 +10,13 @@ tfile = os.path.join(indir, 'r360x180.nc')
 # test for pressure levels on gaussian grid (3D)
 @pytest.mark.parametrize("method", ['con', 'nn'])
 def test_nemo_3d(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'so3d-nemo.nc'), tfile, method=method, vert_coord="lev")
+    fff = check_cdo_regrid(os.path.join(indir, 'so3d-nemo.nc'), tfile, method=method)
     assert fff is True
 
 # test for pressure levels on gaussian grid (3D)
 @pytest.mark.parametrize("method", ['con', 'nn'])
 def test_fesom_3d(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'temp3d-fesom.nc'), tfile, method=method, vert_coord="nz1")
+    fff = check_cdo_regrid(os.path.join(indir, 'temp3d-fesom.nc'), tfile, method=method)
     assert fff is True
 
 # test for gaussian reduced grid (only nn)
