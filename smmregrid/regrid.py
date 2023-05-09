@@ -54,6 +54,16 @@ def worker(wlist, n, *args, **kwargs):
     """Run a worker process"""
     wlist[n] = cdo_generate_weights2d(*args, **kwargs).compute()
 
+def find_vert_coord(xfield):
+
+    """Find a vertical coordinate among defaults"""
+
+    if isinstance(xfield, str):
+        xfield = xarray.open_dataset(xfield)
+    for dim in default_vert_coords:
+        if dim in xfield.dims:
+            return dim
+        
 
 def cdo_generate_weights(
     source_grid,
@@ -634,23 +644,20 @@ class Regridder(object):
         else:
             # Generate the weights with CDO
             if vert_coord:
-                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, vert_coord=vert_coord, cdo=cdo)
+                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, 
+                                                    vert_coord=vert_coord, cdo=cdo)
             else:
-                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, cdo=cdo)
+                self.weights = cdo_generate_weights(source_grid, target_grid, method=method, 
+                                                    cdo=cdo)
             #sys.exit('Missing capability of creating weights...')
         if vert_coord:
-            self.weights_matrix = compute_weights_matrix3d(self.weights)  
+            self.weights_matrix = compute_weights_matrix3d(self.weights)
         else: 
             self.weights_matrix = compute_weights_matrix(self.weights)
 
-        # this section is used to create a target mask initializing the CDO weights
-        if not vert_coord:
-            self.weights = mask_weights(self.weights, self.weights_matrix)
-            self.masked = check_mask(self.weights)
-        else:
-            # this has to be improved
-            self.weights = mask_weights3d(self.weights, self.weights_matrix)
-            self.masked = True
+        # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
+        self.weights = mask_weights(self.weights, self.weights_matrix)
+        self.masked = check_mask(self.weights)
         self.space_dims = space_dims
 
 
@@ -700,9 +707,6 @@ class Regridder(object):
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
             return out.drop_vars(degen_vars)
-            # else:
-            #    sys.exit("source data has different mask, this can lead to unexpected" \
-            #        "results due to the format in which weights are generated. Aborting...")
 
         elif isinstance(source_data, xarray.DataArray):
 
@@ -718,9 +722,10 @@ class Regridder(object):
                 nl = wa.link_length.values
                 wa = wa.isel(**{links_dim: slice(0, nl)})
                 wm = self.weights_matrix[lev]
+                mm = self.masked[lev]
                 data3d_list.append(apply_weights(
                     xa, wa, weights_matrix=wm,
-                    masked=self.masked, space_dims=self.space_dims)
+                    masked=mm, space_dims=self.space_dims)
                 )
             data3d = xarray.concat(data3d_list, dim=vert_coord)
 
@@ -756,12 +761,9 @@ class Regridder(object):
             # apply the regridder on each DataArray
             out = source_data.map(self.regrid, keep_attrs=True)
 
-            # clean from degenerated variables
+            # clean from degenerated variables (e.g. boundaries)
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
             return out.drop_vars(degen_vars)
-            # else:
-            #    sys.exit("source data has different mask, this can lead to unexpected" \
-            #        "results due to the format in which weights are generated. Aborting...")
 
         elif isinstance(source_data, xarray.DataArray):
 
@@ -773,41 +775,53 @@ class Regridder(object):
         else:
             sys.exit('Cannot process this source_data, sure it is xarray?')
 
+def mask_tensordot(src_mask, weights_matrix):
+
+    """Apply tensor dot product to source mask to return destination mask"""
+
+    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+    target_mask = dask.array.where(target_mask < 0.5, 0, 1)
+    return target_mask
+
 
 def mask_weights(weights, weights_matrix):
     """This functions precompute the mask for the target interpolation
     Takes as input the weights from CDO and the precomputed weights matrix
-    Return the target mask"""
+    Return the target mask: handle the 3d case"""
 
-    src_mask = weights.src_grid_imask.data
-    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-    target_mask = dask.array.where(target_mask < 0.5, 0, 1)
-    weights['dst_grid_imask'].data = target_mask
+    src_mask = weights.src_grid_imask
+    if 'lev' in weights.dims:
+        for nlev in range(len(weights['lev'])):
+            mask = src_mask.loc[{'lev': nlev}].data
+            weights['dst_grid_imask'].loc[{'lev': nlev}] = mask_tensordot(mask, weights_matrix[nlev])
+    else:
+        mask = src_mask.data
+        weights['dst_grid_imask'].data = mask_tensordot(mask, weights_matrix)
+
     return weights
-
-def mask_weights3d(weights, weights_matrix):
-    """This functions precompute the mask for the target interpolation
-    Takes as input the weights from CDO and the precomputed weights matrix
-    Return the target mask"""
-
-    for nlev in range(len(weights['lev'])):
-        src_mask = weights.src_grid_imask.loc[{'lev': nlev}].data
-        target_mask = dask.array.tensordot(src_mask, weights_matrix[nlev], axes=1)
-        target_mask = dask.array.where(target_mask < 0.5, 0, 1)
-        weights['dst_grid_imask'].loc[{'lev': nlev}] = target_mask
-    return weights
-
 
 def check_mask(weights):
-    """This check if the target mask is empty or full and
-    return a bool to be passed to the regridder"""
+    """Check if the target mask is empty or full and
+    return a bool to be passed to the regridder.
+    Handle the 3d case"""
 
-    w = weights.dst_grid_imask
-    v = w.sum()/len(w)
-    if v == 1:
-        return False
+    if 'lev' in weights.dims:
+        result = []
+        for nlev in range(len(weights['lev'])):
+            w = weights['dst_grid_imask'].loc[{'lev': nlev}]
+            v = w.sum()/len(w)
+            if v == 1:
+                result.append(False)
+            else:
+                result.append(True)
+        return result
     else:
-        return True
+        w = weights['dst_grid_imask']
+        v = w.sum()/len(w)
+        if v == 1:
+            return False
+        else:
+            return True
 
 
 def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpose=True, cdo='cdo'):
@@ -832,7 +846,8 @@ def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpo
         :class:`xarray.DataArray` with a regridded version of the source variable
     """
 
-    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, vert_coord=vert_coord, cdo=cdo, transpose=transpose)
+    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, 
+                          vert_coord=vert_coord, cdo=cdo, transpose=transpose)
     return regridder.regrid(source_data)
 
 
