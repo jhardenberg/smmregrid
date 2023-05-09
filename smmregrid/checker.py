@@ -1,9 +1,12 @@
-import xarray as xr
+"""Module for cdo-smmregrid comparison"""
+
 import numpy as np
+import xarray as xr
+from cdo import Cdo
 import xarray as xr
 from smmregrid import cdo_generate_weights, Regridder
 
-from cdo import Cdo
+
 cdo = Cdo()
 
 

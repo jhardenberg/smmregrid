@@ -2,6 +2,7 @@
 
 import os
 import sys
+import logging
 import tempfile
 import subprocess
 from multiprocessing import Process, Manager
@@ -60,7 +61,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
     for block in blocks:
         processes = []
         for lev in block:
-            print("Generating level:", lev)
+            logging.warning("Generating level: %s", str(lev))
             extra2 = [f"-sellevidx,{lev+1}"]
             ppp = Process(target=worker,
                         args=(wlist, lev, source_grid, target_grid),
@@ -113,7 +114,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         icongridpath (str): location of ICON grids (e.g. /pool/data/ICON)
         extra: command(s) to apply to source grid before weight generation (can be a list)
         cdo: the command to launch cdo ["cdo"]
-        nproc: number of processes to use for weight generation
+        nproc: number of processes to use for weight generation (NOT USED!)
 
         cdo: path to cdo binary
     Returns:
@@ -195,7 +196,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
 
     except subprocess.CalledProcessError as err:
         # Print the CDO error message
-        print(err.output.decode(), file=sys.stderr)
+        logging.error(err.output.decode(), file=sys.stderr)
         raise
 
     finally:

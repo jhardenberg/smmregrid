@@ -37,6 +37,7 @@ multiple datasets.
 
 import math
 import sys
+import logging
 import xarray
 import numpy
 import sparse
@@ -132,10 +133,10 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
         # we keep time bounds, and we ignore all the rest
         if 'time' in source_data.name:
-            # print('original ' + source_data.name)
+            logging.info('original ' + source_data.name)
             return source_data
         else:
-            # print('empty ' + source_data.name)
+            logging.info('empty ' + source_data.name)
             return xarray.DataArray(data=None)
 
     # Alias the weights dataset from CDO
@@ -192,8 +193,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         space_dims = default_space_dims
     
     if not any(x in source_data.dims for x in space_dims):
-        print("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
-        print(space_dims)
+        logging.error("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
+        logging.error(space_dims)
         sys.exit('Dimensions mismatch')
 
     # Find dimensions to keep
@@ -201,8 +202,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
-    # print(kept_dims)
-    # print(kept_dims)
+    logging.info('Dimension kept:')
+    logging.info(kept_dims)
 
     if weights_matrix is None:
         weights_matrix = compute_weights_matrix(weights)
@@ -374,7 +375,7 @@ class Regridder(object):
         
         elif isinstance(source_data, xarray.DataArray):
 
-            out = self.regrid_array(source_data)
+            return self.regrid_array(source_data)
 
         else:
             sys.exit('The object provided is not a Xarray object!')
@@ -400,6 +401,8 @@ class Regridder(object):
             :class:`xarray.DataArray` with a regridded
             version of the source variable
         """
+
+        logging.info('3D DataArray access!')
 
         # CDO 2.2.0 fix
         if "numLinks" in self.weights.dims:
@@ -452,9 +455,9 @@ class Regridder(object):
             :class:`xarray.DataArray` with a regridded
             version of the source variable
         """
-        # print('DataArray access!')
+        logging.info('2D DataArray access!')
         return apply_weights(
-            source_data, self.weights, weights_matrix=self.weights_matrix, 
+            source_data, self.weights, weights_matrix=self.weights_matrix,
             masked=self.masked, space_dims=self.space_dims
         )
 
