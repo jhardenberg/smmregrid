@@ -44,25 +44,13 @@ import sparse
 import dask.array
 from .dimension import remove_degenerate_axes
 from .cdo_weights import cdo_generate_weights
+from .util import find_vert_coord
 
 # default spatial dimensions and vertical coordinates
 default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
-default_vert_coords = ['lev', 'nz1']
 
-def find_vert_coord(xfield):
-    """
-    Find a vertical coordinate among defaults
-    Used to define if we need the 3d interpolation with adaptive mask
-    """
-
-    if isinstance(xfield, str):
-        xfield = xarray.open_dataset(xfield)
-    for coord in default_vert_coords:
-        if coord in xfield.coords:
-            return coord
-
-def compute_weights_matrix3d(weights):
+def compute_weights_matrix3d(weights, vert_coord='lev'):
     """
     Convert the weights from CDO to a list of numpy arrays
     """
@@ -74,9 +62,9 @@ def compute_weights_matrix3d(weights):
         links_dim = "num_links"
 
     sparse_weights = []
-    nvert = weights["lev"].values.size
+    nvert = weights[vert_coord].values.size
     for i in range(0, nvert):
-        w = weights.isel(lev=i)
+        w = weights.loc[{vert_coord: i}]
         nl = w.link_length.values
         w = w.isel(**{links_dim: slice(0, nl)})
         sparse_weights.append(compute_weights_matrix(w))
@@ -133,10 +121,10 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
         # we keep time bounds, and we ignore all the rest
         if 'time' in source_data.name:
-            logging.info('original ' + source_data.name)
+            logging.info('original %s', source_data.name)
             return source_data
         else:
-            logging.info('empty ' + source_data.name)
+            logging.info('empty %s', source_data.name)
             return xarray.DataArray(data=None)
 
     # Alias the weights dataset from CDO
@@ -316,39 +304,45 @@ class Regridder(object):
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', space_dims=None, vert_coord=None, transpose=True,
                  cdo='cdo'):
-    
-        # Check if there is a vertical coordinate for 3d oceanic data
-        if not vert_coord:
-            self.vert_coord = find_vert_coord(source_grid)
-        else:
-            self.vert_coord = vert_coord
-
-        self.transpose = transpose
-
-        if (source_grid is None or target_grid is None) and weights is None:
+        
+        if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
             )
-
+        
+        self.transpose = transpose
+    
         # Is there already a weights file?
         if weights is not None:
             if not isinstance(weights, xarray.Dataset):
                 self.weights = xarray.open_mfdataset(weights)
             else:
                 self.weights = weights
+            
+            if not vert_coord:
+                self.vert_coord = find_vert_coord(self.weights)
+            else:
+                self.vert_coord = vert_coord
         else:
+
+            # Check if there is a vertical coordinate for 3d oceanic data
+            if not vert_coord:
+                self.vert_coord = find_vert_coord(source_grid)
+            else:
+                self.vert_coord = vert_coord
+
             # Generate the weights with CDO
             self.weights = cdo_generate_weights(source_grid, target_grid, method=method,
                                                 vert_coord=self.vert_coord, cdo=cdo)
 
         if self.vert_coord:
-            self.weights_matrix = compute_weights_matrix3d(self.weights)
+            self.weights_matrix = compute_weights_matrix3d(self.weights, self.vert_coord)
         else: 
             self.weights_matrix = compute_weights_matrix(self.weights)
 
         # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
-        self.weights = mask_weights(self.weights, self.weights_matrix)
-        self.masked = check_mask(self.weights)
+        self.weights = mask_weights(self.weights, self.weights_matrix, self.vert_coord)
+        self.masked = check_mask(self.weights, self.vert_coord)
         self.space_dims = space_dims
 
 
@@ -418,7 +412,7 @@ class Regridder(object):
         data3d_list = []
         for lev in range(0, source_data.coords[self.vert_coord].values.size):
             xa = source_data.isel(**{self.vert_coord: lev})
-            wa = self.weights.isel(**{"lev": lev})
+            wa = self.weights.isel(**{self.vert_coord: lev})
             nl = wa.link_length.values
             wa = wa.isel(**{links_dim: slice(0, nl)})
             wm = self.weights_matrix[lev]
@@ -469,31 +463,31 @@ def mask_tensordot(src_mask, weights_matrix):
     target_mask = dask.array.where(target_mask < 0.5, 0, 1)
     return target_mask
 
-def mask_weights(weights, weights_matrix):
+def mask_weights(weights, weights_matrix, vert_coord=None):
     """This functions precompute the mask for the target interpolation
     Takes as input the weights from CDO and the precomputed weights matrix
     Return the target mask: handle the 3d case"""
 
     src_mask = weights.src_grid_imask
-    if 'lev' in weights.dims:
-        for nlev in range(len(weights['lev'])):
-            mask = src_mask.loc[{'lev': nlev}].data
-            weights['dst_grid_imask'].loc[{'lev': nlev}] = mask_tensordot(mask, weights_matrix[nlev])
+    if vert_coord is not None:
+        for nlev in range(len(weights[vert_coord])):
+            mask = src_mask.loc[{vert_coord: nlev}].data
+            weights['dst_grid_imask'].loc[{vert_coord: nlev}] = mask_tensordot(mask, weights_matrix[nlev])
     else:
         mask = src_mask.data
         weights['dst_grid_imask'].data = mask_tensordot(mask, weights_matrix)
 
     return weights
 
-def check_mask(weights):
+def check_mask(weights, vert_coord=None):
     """Check if the target mask is empty or full and
     return a bool to be passed to the regridder.
     Handle the 3d case"""
 
-    if 'lev' in weights.dims:
+    if vert_coord is not None:
         result = []
-        for nlev in range(len(weights['lev'])):
-            w = weights['dst_grid_imask'].loc[{'lev': nlev}]
+        for nlev in range(len(weights[vert_coord])):
+            w = weights['dst_grid_imask'].loc[{vert_coord: nlev}]
             v = w.sum()/len(w)
             if v == 1:
                 result.append(False)

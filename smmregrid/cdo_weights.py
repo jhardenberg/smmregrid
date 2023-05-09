@@ -8,6 +8,7 @@ import subprocess
 from multiprocessing import Process, Manager
 import numpy
 import xarray
+from .util import find_vert_coord
 
 
 def worker(wlist, nnn, *args, **kwargs):
@@ -18,6 +19,11 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
                          gridpath=None, extra=None, vert_coord=None, cdo="cdo", nproc=1):
     """Generate the weights using CDO, handling both 2D and 3D cases"""
+
+    # Check if there is a vertical coordinate for 3d oceanic data
+    if not vert_coord:
+        vert_coord = find_vert_coord(source_grid)
+        logging.warning('vert_coord is %s',str(vert_coord))
 
     if not vert_coord: # Are we 2D? Use default method
         return cdo_generate_weights2d(
@@ -61,7 +67,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
     for block in blocks:
         processes = []
         for lev in block:
-            logging.warning("Generating level: %s", str(lev))
+            logging.info("Generating level: %s", str(lev))
             extra2 = [f"-sellevidx,{lev+1}"]
             ppp = Process(target=worker,
                         args=(wlist, lev, source_grid, target_grid),
@@ -80,7 +86,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         for proc in processes:
             proc.join()
 
-    return weightslist_to_3d(wlist)
+    return weightslist_to_3d(wlist, vert_coord)
 
 
 def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=True,
@@ -208,7 +214,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         weight_file.close()
 
 
-def weightslist_to_3d(ds_list):
+def weightslist_to_3d(ds_list, vert_coord='lev'):
     """
     Function to combine a list of 2D cdo weights into a 3D one adding a vertical coordinate lev
     """
@@ -221,7 +227,7 @@ def weightslist_to_3d(ds_list):
     dim_values = range(len(ds_list))
     nl = [ds.src_address.size for ds in ds_list]
     nl0 = max(nl)
-    nlda = xarray.DataArray(nl, coords={"lev": range(0, len(nl))}, name="link_length")
+    nlda = xarray.DataArray(nl, coords={vert_coord: range(0, len(nl))}, name="link_length")
     new_array = []
     varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
     ds0 = ds_list[0].drop_vars(varlist)
@@ -231,5 +237,5 @@ def weightslist_to_3d(ds_list):
         xplist = [x[vname].pad(**{links_dim: (0, nl0-nl1), "mode": 'constant', "constant_values": 0})
                   for vname in varlist ]
         xp = xarray.merge(xplist)
-        new_array.append(xp.assign_coords({"lev": d}))
-    return xarray.merge([nlda, ds0, xarray.concat(new_array, "lev")])
+        new_array.append(xp.assign_coords({vert_coord: d}))
+    return xarray.merge([nlda, ds0, xarray.concat(new_array, vert_coord)])
