@@ -57,9 +57,9 @@ def find_vert_coord(xfield):
 
     if isinstance(xfield, str):
         xfield = xarray.open_dataset(xfield)
-    for dim in default_vert_coords:
-        if dim in xfield.dims:
-            return dim
+    for coord in default_vert_coords:
+        if coord in xfield.coords:
+            return coord
 
 def compute_weights_matrix3d(weights):
     """
@@ -152,10 +152,10 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     #if w.title.startswith("ESMF"):
     if "S" in w.variables:
         # ESMF style weights
-        src_address = w.col - 1
-        dst_address = w.row - 1
-        remap_matrix = w.S
-        w_shape = (w.sizes["n_a"], w.sizes["n_b"])
+        #src_address = w.col - 1
+        #dst_address = w.row - 1
+        #remap_matrix = w.S
+        #w_shape = (w.sizes["n_a"], w.sizes["n_b"])
 
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.yc_b.data.reshape(dst_grid_shape[::-1])
@@ -167,10 +167,10 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
     else:
         # CDO style weights
-        src_address = w.src_address - 1
-        dst_address = w.dst_address - 1
-        remap_matrix = w.remap_matrix[:, 0]
-        w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
+        #src_address = w.src_address - 1
+        #dst_address = w.dst_address - 1
+        #remap_matrix = w.remap_matrix[:, 0]
+        #w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
 
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(
@@ -183,7 +183,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         )
 
         dst_mask = w.dst_grid_imask
-        src_mask = w.src_grid_imask
+        #src_mask = w.src_grid_imask
 
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
@@ -315,7 +315,8 @@ class Regridder(object):
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', space_dims=None, vert_coord=None, transpose=True,
                  cdo='cdo'):
-        
+    
+        # Check if there is a vertical coordinate for 3d oceanic data
         if not vert_coord:
             self.vert_coord = find_vert_coord(source_grid)
         else:
@@ -338,7 +339,7 @@ class Regridder(object):
             # Generate the weights with CDO
             self.weights = cdo_generate_weights(source_grid, target_grid, method=method,
                                                 vert_coord=self.vert_coord, cdo=cdo)
-                
+
         if self.vert_coord:
             self.weights_matrix = compute_weights_matrix3d(self.weights)
         else: 
@@ -361,26 +362,44 @@ class Regridder(object):
             :class:`xarray.DataArray` or xarray.Dataset with a regridded
             version of the source variable
         """
-        if (self.vert_coord and
-            isinstance(source_data, xarray.DataArray) and
-            self.vert_coord in source_data.coords):
-            # if this is a 3D dataarray, we specified the vertical coord and it has it
-                return self.regrid3d(source_data)
+
+        if isinstance(source_data, xarray.Dataset):
+
+            # apply the regridder on each DataArray
+            out = source_data.map(self.regrid_array, keep_attrs=True)
+
+            # clean from degenerated variables
+            degen_vars = [var for var in out.data_vars if out[var].dims == ()]
+            return out.drop_vars(degen_vars)
+        
+        elif isinstance(source_data, xarray.DataArray):
+
+            out = self.regrid_array(source_data)
+
         else:
-                return self.regrid2d(source_data)
+            sys.exit('The object provided is not a Xarray object!')
+
+    def regrid_array(self, source_data):
+
+        """Regridding selection through 2d and 3d arrays"""
+        
+        if (self.vert_coord and self.vert_coord in source_data.coords):
+            # if this is a 3D we specified the vertical coord and it has it
+            return self.regrid3d(source_data)
+        else:
+            return self.regrid2d(source_data)
 
     def regrid3d(self, source_data):
         """Regrid ``source_data`` to match the target grid - 3D version
 
         Args:
-            source_data (:class:`xarray.DataArray` or xarray.Dataset): Source
+            source_data (:class:`xarray.DataArray`): Source
             variable
 
         Returns:
-            :class:`xarray.DataArray` or xarray.Dataset with a regridded
+            :class:`xarray.DataArray` with a regridded
             version of the source variable
         """
-        vert_coord = self.vert_coord
 
         # CDO 2.2.0 fix
         if "numLinks" in self.weights.dims:
@@ -388,46 +407,35 @@ class Regridder(object):
         else:
             links_dim = "num_links"
         
-        if isinstance(source_data, xarray.Dataset):
+        # this is necessary to remove lev-bounds, temporary hack since they should
+        # be treated in a smarter way
+        if ("bnds" in source_data.name or "bounds" in source_data.name):
+            return source_data
 
-            # apply the regridder on each DataArray
-            out = source_data.map(self.regrid, keep_attrs=True)
+        data3d_list = []
+        for lev in range(0, source_data.coords[self.vert_coord].values.size):
+            xa = source_data.isel(**{self.vert_coord: lev})
+            wa = self.weights.isel(**{"lev": lev})
+            nl = wa.link_length.values
+            wa = wa.isel(**{links_dim: slice(0, nl)})
+            wm = self.weights_matrix[lev]
+            mm = self.masked[lev]
+            data3d_list.append(apply_weights(
+                xa, wa, weights_matrix=wm,
+                masked=mm, space_dims=self.space_dims)
+            )
+        data3d = xarray.concat(data3d_list, dim=self.vert_coord)
 
-            # clean from degenerated variables
-            degen_vars = [var for var in out.data_vars if out[var].dims == ()]
-            return out.drop_vars(degen_vars)
-
-        elif isinstance(source_data, xarray.DataArray):
-
-            # this is necessary to remove lev-bounds, temporary hack since they should
-            # be treated in a smarter way
-            if ("bnds" in source_data.name or "bounds" in source_data.name):
-                return source_data
-
-            data3d_list = []
-            for lev in range(0, source_data.coords[vert_coord].values.size):
-                xa = source_data.isel(**{vert_coord: lev})
-                wa = self.weights.isel(**{"lev": lev})
-                nl = wa.link_length.values
-                wa = wa.isel(**{links_dim: slice(0, nl)})
-                wm = self.weights_matrix[lev]
-                mm = self.masked[lev]
-                data3d_list.append(apply_weights(
-                    xa, wa, weights_matrix=wm,
-                    masked=mm, space_dims=self.space_dims)
-                )
-            data3d = xarray.concat(data3d_list, dim=vert_coord)
-
-            if self.transpose:
-                # Make sure that the vertical dimension is just before the spatial ones
-                if self.space_dims is None:
-                    space_dims = default_space_dims
-                else:
-                    space_dims = self.space_dims
-                dims = list(data3d.dims)
-                index = min([i for i, s in enumerate(dims) if s in space_dims])
-                dimst= dims[1:index] + [dims[0]] + dims[index:]
-                data3d = data3d.transpose(*dimst)
+        if self.transpose:
+            # Make sure that the vertical dimension is just before the spatial ones
+            if self.space_dims is None:
+                space_dims = default_space_dims
+            else:
+                space_dims = self.space_dims
+            dims = list(data3d.dims)
+            index = min([i for i, s in enumerate(dims) if s in space_dims])
+            dimst= dims[1:index] + [dims[0]] + dims[index:]
+            data3d = data3d.transpose(*dimst)
 
             return data3d
         else:
@@ -437,32 +445,18 @@ class Regridder(object):
         """Regrid ``source_data`` to match the target grid, 2D version
 
         Args:
-            source_data (:class:`xarray.DataArray` or xarray.Dataset): Source
+            source_data (:class:`xarray.DataArray`): Source
             variable
 
         Returns:
-            :class:`xarray.DataArray` or xarray.Dataset with a regridded
+            :class:`xarray.DataArray` with a regridded
             version of the source variable
         """
-
-        if isinstance(source_data, xarray.Dataset):
-
-            # apply the regridder on each DataArray
-            out = source_data.map(self.regrid, keep_attrs=True)
-
-            # clean from degenerated variables (e.g. boundaries)
-            degen_vars = [var for var in out.data_vars if out[var].dims == ()]
-            return out.drop_vars(degen_vars)
-
-        elif isinstance(source_data, xarray.DataArray):
-
-            # print('DataArray access!')
-            return apply_weights(
-                source_data, self.weights, weights_matrix=self.weights_matrix, 
-                masked=self.masked, space_dims=self.space_dims
-            )
-        else:
-            sys.exit('Cannot process this source_data, sure it is xarray?')
+        # print('DataArray access!')
+        return apply_weights(
+            source_data, self.weights, weights_matrix=self.weights_matrix, 
+            masked=self.masked, space_dims=self.space_dims
+        )
 
 def mask_tensordot(src_mask, weights_matrix):
 
@@ -471,7 +465,6 @@ def mask_tensordot(src_mask, weights_matrix):
     target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
     target_mask = dask.array.where(target_mask < 0.5, 0, 1)
     return target_mask
-
 
 def mask_weights(weights, weights_matrix):
     """This functions precompute the mask for the target interpolation
