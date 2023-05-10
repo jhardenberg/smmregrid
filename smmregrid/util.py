@@ -2,7 +2,7 @@
 
 import xarray
 
-default_vert_coords = ['lev', 'nz1']
+default_vert_coords = ['lev', 'nz1', 'nz']
 
 def find_vert_coord(xfield):
     """
