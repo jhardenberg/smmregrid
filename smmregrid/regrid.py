@@ -33,270 +33,23 @@ matrix multiply, maintaining chunking in dimensions other than lat and lon.
 multiple datasets.
 """
 
-from .dimension import remove_degenerate_axes
 
-import dask.array
 import math
-import os
-import sparse
-import subprocess
 import sys
-import tempfile
+import logging
 import xarray
 import numpy
+import sparse
+import dask.array
+from .dimension import remove_degenerate_axes
+from .cdo_weights import cdo_generate_weights
+from .util import find_vert_coord
+from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 
 
-def cdo_generate_weights(
-    source_grid,
-    target_grid,
-    method="con",
-    extrapolate=True,
-    remap_norm="fracarea",
-    remap_area_min=0.0,
-    icongridpath=None,
-    gridpath=None,
-    extra=None,
-    cdo="cdo"
-):
-    """
-    Generate weights for regridding using CDO
-
-    Available weight generation methods are:
-
-     * bic: SCRIP Bicubic
-     * bil: SCRIP Bilinear
-     * con: SCRIP First-order conservative
-     * con2: SCRIP Second-order conservative
-     * dis: SCRIP Distance-weighted average
-     * laf: YAC Largest area fraction
-     * ycon: YAC First-order conservative
-     * nn: Nearest neighbour
-
-    Run ``cdo gen${method} --help`` for details of each method
-
-    Args:
-        source_grid (xarray.DataArray): Source grid
-        target_grid (xarray.DataArray): Target grid
-            description
-        method (str): Regridding method - default conservative
-        extrapolate (bool): Extrapolate output field
-        remap_norm (str): Normalisation method for conservative methods
-        remap_area_min (float): Minimum destination area fraction
-        gridpath (str): where to store downloaded grids
-        icongridpath (str): location of ICON grids (e.g. /pool/data/ICON)
-        extra: command(s) to apply to source grid before weight generation (can be a list)
-        cdo: path to cdo binary
-    Returns:
-        :obj:`xarray.Dataset` with regridding weights
-    """
-
-    supported_methods = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
-    if method not in supported_methods:
-        raise Exception
-    if remap_norm not in ["fracarea", "destarea"]:
-        raise Exception
-
-    # Make some temporary files that we'll feed to CDO
-    weight_file = tempfile.NamedTemporaryFile()
-
-    if type(source_grid) == str:
-        sgrid = source_grid
-    else:
-        source_grid_file = tempfile.NamedTemporaryFile()
-        source_grid.to_netcdf(source_grid_file.name)
-        sgrid = source_grid_file.name
-
-    if type(target_grid) == str:
-        tgrid = target_grid
-    else:
-        target_grid_file = tempfile.NamedTemporaryFile()
-        target_grid.to_netcdf(target_grid_file.name)
-        tgrid = target_grid_file.name
-
-    # Setup environment
-    env = os.environ
-    if extrapolate:
-        env["REMAP_EXTRAPOLATE"] = "on"
-    else:
-        env["REMAP_EXTRAPOLATE"] = "off"
-
-    env["CDO_REMAP_NORM"] = remap_norm
-    env["REMAP_AREA_MIN"] = "%f" % (remap_area_min)
-
-    if gridpath:
-        env["CDO_DOWNLOAD_PATH"] = gridpath
-    if icongridpath:
-        env["CDO_ICON_GRIDS"] = icongridpath
-
-    try:
-        # Run CDO
-        if extra:
-            # make sure extra is a flat list if it is not already
-            if not isinstance(extra, list):
-                extra = [extra]
-
-            subprocess.check_output(
-                [
-                    cdo,
-                    "gen%s,%s" % (method, tgrid)
-                ] + extra +
-                [
-                    sgrid,
-                    weight_file.name,
-                ],
-                stderr=subprocess.PIPE,
-                env=env,
-            )
-        else:
-            subprocess.check_output(
-                [
-                    cdo,
-                    "gen%s,%s" % (method, tgrid),
-                    sgrid,
-                    weight_file.name,
-                ],
-                stderr=subprocess.PIPE,
-                env=env,
-            )
-
-        # Grab the weights file it outputs as a xarray.Dataset
-        weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
-        return weights
-
-    except subprocess.CalledProcessError as e:
-        # Print the CDO error message
-        print(e.output.decode(), file=sys.stderr)
-        raise
-
-    finally:
-        # Clean up the temporary files
-        if not type(source_grid) == str:
-            source_grid_file.close()
-        if not type(target_grid) == str:
-            target_grid_file.close()
-        weight_file.close()
-
-
-def esmf_generate_weights(
-    source_grid,
-    target_grid,
-    method="bilinear",
-    extrap_method="nearestidavg",
-    norm_type="dstarea",
-    line_type=None,
-    pole=None,
-    ignore_unmapped=False,
-):
-    """Generate regridding weights with ESMF
-
-    https://www.earthsystemcog.org/projects/esmf/regridding
-
-    Args:
-        source_grid (:obj:`xarray.Dataarray`): Source grid. If masked the mask
-            will be used in the regridding
-        target_grid (:obj:`xarray.Dataarray`): Target grid. If masked the mask
-            will be used in the regridding
-        method (str): ESMF Regridding method, see ``ESMF_RegridWeightGen --help``
-        extrap_method (str): ESMF Extrapolation method, see ``ESMF_RegridWeightGen --help``
-
-    Returns:
-        :obj:`xarray.Dataset` with regridding information from
-            ESMF_RegridWeightGen
-    """
-    # Make some temporary files that we'll feed to ESMF
-    source_file = tempfile.NamedTemporaryFile(suffix=".nc")
-    target_file = tempfile.NamedTemporaryFile(suffix=".nc")
-    weight_file = tempfile.NamedTemporaryFile(suffix=".nc")
-
-    rwg = "ESMF_RegridWeightGen"
-
-    if "_FillValue" not in source_grid.encoding:
-        source_grid.encoding["_FillValue"] = -1e20
-
-    if "_FillValue" not in target_grid.encoding:
-        target_grid.encoding["_FillValue"] = -1e20
-
-    try:
-        source_grid.to_netcdf(source_file.name)
-        target_grid.to_netcdf(target_file.name)
-
-        command = [
-            rwg,
-            "--source",
-            source_file.name,
-            "--destination",
-            target_file.name,
-            "--weight",
-            weight_file.name,
-            "--method",
-            method,
-            "--extrap_method",
-            extrap_method,
-            "--norm_type",
-            norm_type,
-            # '--user_areas',
-            "--no-log",
-            "--check",
-        ]
-
-        if isinstance(source_grid, xarray.DataArray):
-            command.extend(["--src_missingvalue", source_grid.name])
-        if isinstance(target_grid, xarray.DataArray):
-            command.extend(["--dst_missingvalue", target_grid.name])
-        if ignore_unmapped:
-            command.extend(["--ignore_unmapped"])
-        if line_type is not None:
-            command.extend(["--line_type", line_type])
-        if pole is not None:
-            command.extend(["--pole", pole])
-
-        out = subprocess.check_output(args=command, stderr=subprocess.PIPE)
-        print(out.decode("utf-8"))
-
-        weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
-        # Load so we can delete the temp file
-        return weights.load()
-
-    except subprocess.CalledProcessError as e:
-        print(e)
-        print(e.output.decode("utf-8"))
-        raise
-
-    finally:
-        # Clean up the temporary files
-        source_file.close()
-        target_file.close()
-        weight_file.close()
-
-
-def compute_weights_matrix(weights):
-    """
-    Convert the weights from CDO/ESMF to a numpy array
-    """
-    w = weights
-    if w.title.startswith("ESMF"):
-        # ESMF style weights
-        src_address = w.col - 1
-        dst_address = w.row - 1
-        remap_matrix = w.S
-        w_shape = (w.sizes["n_a"], w.sizes["n_b"])
-
-    else:
-        # CDO style weights
-        src_address = w.src_address - 1
-        dst_address = w.dst_address - 1
-        remap_matrix = w.remap_matrix[:, 0]
-        w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
-
-    # Create a sparse array from the weights
-    sparse_weights_delayed = dask.delayed(sparse.COO)(
-        [src_address.data, dst_address.data], remap_matrix.data, shape=w_shape
-    )
-    sparse_weights = dask.array.from_delayed(
-        sparse_weights_delayed, shape=w_shape, dtype=remap_matrix.dtype
-    )
-
-    return sparse_weights
+# default spatial dimensions and vertical coordinates
+default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
+                     'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
 
 
 def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_dims=None):
@@ -307,22 +60,22 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         source_data (xarray.DataArray): Source dataset
         weights (xarray.DataArray): CDO weights information
         masked (bool): if the DataArray is masked
-        space_dims (list): dimensions on which the interpolation has to be done (e.g. ['lon', 'lat'])
+        space_dims (list): dimensions on which the interpolation has to be done (e.g.['lon', 'lat'])
 
     Returns:
         xarray.DataArray: Regridded version of the source dataset
     """
 
-    # Understand immediately if we need to retunr something or not
+    # Understand immediately if we need to return something or not
     # This is done if we have bounds variables
     if ("bnds" in source_data.name or "bounds" in source_data.name):
 
         # we keep time bounds, and we ignore all the rest
         if 'time' in source_data.name:
-            # print('original ' + source_data.name)
+            logging.info('original %s', source_data.name)
             return source_data
         else:
-            # print('empty ' + source_data.name)
+            logging.info('empty %s', source_data.name)
             return xarray.DataArray(data=None)
 
     # Alias the weights dataset from CDO
@@ -336,12 +89,13 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     # array, multiplied by the weights matrix, then unstacked back into a 2d
     # array
 
-    if w.title.startswith("ESMF"):
+    #if w.title.startswith("ESMF"):
+    if "S" in w.variables:
         # ESMF style weights
-        src_address = w.col - 1
-        dst_address = w.row - 1
-        remap_matrix = w.S
-        w_shape = (w.sizes["n_a"], w.sizes["n_b"])
+        #src_address = w.col - 1
+        #dst_address = w.row - 1
+        #remap_matrix = w.S
+        #w_shape = (w.sizes["n_a"], w.sizes["n_b"])
 
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.yc_b.data.reshape(dst_grid_shape[::-1])
@@ -353,10 +107,10 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
     else:
         # CDO style weights
-        src_address = w.src_address - 1
-        dst_address = w.dst_address - 1
-        remap_matrix = w.remap_matrix[:, 0]
-        w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
+        #src_address = w.src_address - 1
+        #dst_address = w.dst_address - 1
+        #remap_matrix = w.remap_matrix[:, 0]
+        #w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
 
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(
@@ -369,18 +123,17 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         )
 
         dst_mask = w.dst_grid_imask
-        src_mask = w.src_grid_imask
+        #src_mask = w.src_grid_imask
 
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
     # Dimension on which we can produce the interpolation
-    if space_dims is None: 
-        space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                         'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
+    if space_dims is None:
+        space_dims = default_space_dims
     
     if not any(x in source_data.dims for x in space_dims):
-        print("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
-        print(space_dims)
+        logging.error("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
+        logging.error(space_dims)
         sys.exit('Dimensions mismatch')
 
     # Find dimensions to keep
@@ -388,8 +141,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
-    # print(kept_dims)
-    # print(kept_dims)
+    logging.info('Dimension kept:')
+    logging.info(kept_dims)
 
     if weights_matrix is None:
         weights_matrix = compute_weights_matrix(weights)
@@ -406,6 +159,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     dask.array.ma.set_fill_value(source_array, 1e20)
     source_array = dask.array.ma.fix_invalid(source_array)
     source_array = dask.array.ma.filled(source_array)
+
     target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
     # define and compute the new mask
@@ -438,6 +192,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
         },
         name=source_data.name,
     )
+
     target_da.coords["lat"] = xarray.DataArray(dst_grid_center_lat, dims=["i", "j"])
     target_da.coords["lon"] = xarray.DataArray(dst_grid_center_lon, dims=["i", "j"])
 
@@ -473,7 +228,6 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
     return target_da
 
-
 class Regridder(object):
     """Set up the regridding operation
 
@@ -490,35 +244,63 @@ class Regridder(object):
         source_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Source grid / sample dataset
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample dataset
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
+        vert_coord (str): Name of the vertical coordinate. 
+                          If provided, 3D weights are generated (default: None)
+        method (str): Method to use for interpolation (default: 'con')
+        space_dims (list): list of dimensions to interpolate (default: None)
+        transpose (bool): transpose the output so that the vertical coordinate is 
+                          just before other spatial coords (dafault: True)
     """
 
-    def __init__(self, source_grid=None, target_grid=None, weights=None, method='con', space_dims=None, cdo="cdo"):
-
-        if (source_grid is None or target_grid is None) and weights is None:
-            raise Exception(
+    def __init__(self, source_grid=None, target_grid=None, weights=None,
+                 method='con', space_dims=None, vert_coord=None, transpose=True,
+                 cdo='cdo'):
+        
+        if (source_grid is None or target_grid is None) and (weights is None):
+            raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
             )
-
+        
+        self.transpose = transpose
+    
         # Is there already a weights file?
         if weights is not None:
-
             if not isinstance(weights, xarray.Dataset):
                 self.weights = xarray.open_mfdataset(weights)
             else:
                 self.weights = weights
+            
+            if not vert_coord:
+                self.vert_coord = find_vert_coord(self.weights)
+            else:
+                self.vert_coord = vert_coord
         else:
+
+            # Check if there is a vertical coordinate for 3d oceanic data
+            if not vert_coord:
+                self.vert_coord = find_vert_coord(source_grid)
+            else:
+                self.vert_coord = vert_coord
+
             # Generate the weights with CDO
-            # _source_grid = identify_grid(source_grid)
-            # _target_grid = identify_grid(target_grid)
-            self.weights = cdo_generate_weights(source_grid, target_grid, method=method, cdo=cdo)
-            #sys.exit('Missing capability of creating weights...')
+            self.weights = cdo_generate_weights(source_grid, target_grid, method=method,
+                                                vert_coord=self.vert_coord, cdo=cdo)
 
-        self.weights_matrix = compute_weights_matrix(self.weights)
+        if self.vert_coord:
+            self.weights_matrix = compute_weights_matrix3d(self.weights, self.vert_coord)
+        else: 
+            self.weights_matrix = compute_weights_matrix(self.weights)
 
-        # this section is used to create a target mask initializing the CDO weights
-        self.weights = mask_weigths(self.weights, self.weights_matrix)
-        self.masked = check_mask(self.weights)
+        # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
+        if "dst_grid_masked" in self.weights.variables:  # has a destination mask been precomputed?
+            self.masked = self.weights.dst_grid_masked.data  # ok, let's use it
+        else:
+            # compute the destination mask now
+            self.weights = mask_weights(self.weights, self.weights_matrix, self.vert_coord)
+            self.masked = check_mask(self.weights, self.vert_coord)
+
         self.space_dims = space_dims
+
 
     def regrid(self, source_data):
         """Regrid ``source_data`` to match the target grid
@@ -535,51 +317,102 @@ class Regridder(object):
         if isinstance(source_data, xarray.Dataset):
 
             # apply the regridder on each DataArray
-            out = source_data.map(self.regrid, keep_attrs=True)
+            out = source_data.map(self.regrid_array, keep_attrs=True)
 
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
             return out.drop_vars(degen_vars)
-            # else:
-            #    sys.exit("source data has different mask, this can lead to unexpected" \
-            #        "results due to the format in which weights are generated. Aborting...")
-
+        
         elif isinstance(source_data, xarray.DataArray):
 
-            # print('DataArray access!')
-            return apply_weights(
-                source_data, self.weights, weights_matrix=self.weights_matrix, 
-                masked=self.masked, space_dims=self.space_dims
-            )
+            return self.regrid_array(source_data)
+
         else:
-            sys.exit('Cannot process this source_data, sure it is xarray?')
+            sys.exit('The object provided is not a Xarray object!')
+
+    def regrid_array(self, source_data):
+
+        """Regridding selection through 2d and 3d arrays"""
+        
+        if (self.vert_coord and self.vert_coord in source_data.coords):
+            # if this is a 3D we specified the vertical coord and it has it
+            return self.regrid3d(source_data)
+        else:
+            return self.regrid2d(source_data)
+
+    def regrid3d(self, source_data):
+        """Regrid ``source_data`` to match the target grid - 3D version
+
+        Args:
+            source_data (:class:`xarray.DataArray`): Source
+            variable
+
+        Returns:
+            :class:`xarray.DataArray` with a regridded
+            version of the source variable
+        """
+
+        logging.info('3D DataArray access!')
+
+        # CDO 2.2.0 fix
+        if "numLinks" in self.weights.dims:
+            links_dim = "numLinks"
+        else:
+            links_dim = "num_links"
+        
+        # this is necessary to remove lev-bounds, temporary hack since they should
+        # be treated in a smarter way
+        if ("bnds" in source_data.name or "bounds" in source_data.name):
+            return source_data
+
+        data3d_list = []
+        for lev in range(0, source_data.coords[self.vert_coord].values.size):
+            xa = source_data.isel(**{self.vert_coord: lev})
+            wa = self.weights.isel(**{self.vert_coord: lev})
+            nl = wa.link_length.values
+            wa = wa.isel(**{links_dim: slice(0, nl)})
+            wm = self.weights_matrix[lev]
+            mm = self.masked[lev]
+            data3d_list.append(apply_weights(
+                xa, wa, weights_matrix=wm,
+                masked=mm, space_dims=self.space_dims)
+            )
+        data3d = xarray.concat(data3d_list, dim=self.vert_coord)
+
+        if self.transpose:
+            # Make sure that the vertical dimension is just before the spatial ones
+            if self.space_dims is None:
+                space_dims = default_space_dims
+            else:
+                space_dims = self.space_dims
+            dims = list(data3d.dims)
+            index = min([i for i, s in enumerate(dims) if s in space_dims])
+            dimst= dims[1:index] + [dims[0]] + dims[index:]
+            data3d = data3d.transpose(*dimst)
+
+            return data3d
+        else:
+            sys.exit('Cannot process this source data, are you sure it is an xarray?')
+
+    def regrid2d(self, source_data):
+        """Regrid ``source_data`` to match the target grid, 2D version
+
+        Args:
+            source_data (:class:`xarray.DataArray`): Source
+            variable
+
+        Returns:
+            :class:`xarray.DataArray` with a regridded
+            version of the source variable
+        """
+        logging.info('2D DataArray access!')
+        return apply_weights(
+            source_data, self.weights, weights_matrix=self.weights_matrix,
+            masked=self.masked, space_dims=self.space_dims
+        )
 
 
-def mask_weigths(weights, weights_matrix):
-    """This functions precompute the mask for the target interpolation
-    Takes as input the weights from CDO and the precomputed weights matrix
-    Return the target mask"""
-
-    src_mask = weights.src_grid_imask.data
-    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-    target_mask = dask.array.where(target_mask < 0.5, 0, 1)
-    weights.dst_grid_imask.data = target_mask
-    return weights
-
-
-def check_mask(weights):
-    """This check if the target mask is empty or full and
-    return a bool to be passed to the regridder"""
-
-    w = weights.dst_grid_imask
-    v = w.sum()/len(w)
-    if v == 1:
-        return False
-    else:
-        return True
-
-
-def regrid(source_data, target_grid=None, weights=None, cdo="cdo"):
+def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpose=True, cdo='cdo'):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
     to the target grid because it re-generates the weights each time you call
@@ -590,11 +423,25 @@ def regrid(source_data, target_grid=None, weights=None, cdo="cdo"):
     Args:
         source_data (:class:`xarray.DataArray`): Source variable
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample variable
+        vert_coord (str): Name of the vertical coordinate. 
+                          If provided, 3D weights are generated (default: None)
+        weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
+        transpose (bool): If True, transpose the output so that the vertical
+                          coordinate is just before the other spatial coordinates (default: True)
+
         cdo (path): path of cdo executable ["cdo"]
     Returns:
         :class:`xarray.DataArray` with a regridded version of the source variable
     """
 
-    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, cdo=cdo)
-
+    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, 
+                          vert_coord=vert_coord, cdo=cdo, transpose=transpose)
     return regridder.regrid(source_data)
+
+
+# def combine_2d_to_3d(array_list, dim_name, dim_values):
+#     """
+#     Function to combine a list of 2D xarrays into a 3D one adding a vertical coordinate lev
+#     """
+#     new_array = [x.assign_coords({dim_name: d}) for x, d in zip(array_list, dim_values)]
+#     return xarray.concat(new_array, dim_name)
