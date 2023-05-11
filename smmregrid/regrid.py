@@ -482,6 +482,21 @@ def mask_weights(weights, weights_matrix, vert_coord=None):
 def check_mask(weights, vert_coord=None):
     """Check if the target mask is empty or full and
     return a bool to be passed to the regridder.
+    Handle the 3d case (5x time faster)"""
+
+    wdst = weights['dst_grid_imask']
+    if vert_coord is not None:
+        check = wdst.mean(dim=tuple(dim for dim in wdst.dims if dim != vert_coord))
+        out = (check != 1).data.tolist()
+    else:
+        check = wdst.mean()
+        out = (check != 1).data
+
+    return out
+
+def check_mask_old(weights, vert_coord=None):
+    """Old version: check if the target mask is empty or full and
+    return a bool to be passed to the regridder.
     Handle the 3d case"""
 
     if vert_coord is not None:
