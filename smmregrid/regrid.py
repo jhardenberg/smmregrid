@@ -292,8 +292,8 @@ class Regridder(object):
             self.weights_matrix = compute_weights_matrix(self.weights)
 
         # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
-        if "dst_grid_masked" in weights.variables:  # has a destination mask been precomputed?
-            self.masked = weights.dst_grid_masked.data  # ok, let's use it
+        if "dst_grid_masked" in self.weights.variables:  # has a destination mask been precomputed?
+            self.masked = self.weights.dst_grid_masked.data  # ok, let's use it
         else:
             # compute the destination mask now
             self.weights = mask_weights(self.weights, self.weights_matrix, self.vert_coord)
