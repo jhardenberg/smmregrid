@@ -9,6 +9,7 @@ from multiprocessing import Process, Manager
 import numpy
 import xarray
 from .util import find_vert_coord
+from .weights import compute_weights_matrix3d, compute_weights_matrix3d, mask_weights, check_mask
 
 
 def worker(wlist, nnn, *args, **kwargs):
@@ -86,7 +87,16 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         for proc in processes:
             proc.join()
 
-    return weightslist_to_3d(wlist, vert_coord)
+    # Precompute destination weights mask
+    weights = weightslist_to_3d(wlist, vert_coord)
+    weights_matrix = compute_weights_matrix3d(weights, vert_coord)
+    weights = mask_weights(weights, weights_matrix, vert_coord)
+    masked = check_mask(weights, vert_coord)
+    masked = [int(x) for x in masked]  # convert to list of int
+    masked_xa = xarray.DataArray(masked, coords={vert_coord: range(0, len(masked))}, name="dst_grid_masked")
+    # weights.dst_grid_imask.attrs.update({"masked": int(masked)})  # Record that this mask has been computed and if a mask is present
+
+    return xarray.merge([weights, masked_xa])
 
 
 def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=True,
