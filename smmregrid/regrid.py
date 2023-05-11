@@ -44,7 +44,7 @@ import dask.array
 from .dimension import remove_degenerate_axes
 from .cdo_weights import cdo_generate_weights
 from .util import find_vert_coord
-from .weights import compute_weights_matrix3d, compute_weights_matrix3d, mask_weights, check_mask
+from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 
 
 # default spatial dimensions and vertical coordinates
@@ -292,8 +292,13 @@ class Regridder(object):
             self.weights_matrix = compute_weights_matrix(self.weights)
 
         # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
-        self.weights = mask_weights(self.weights, self.weights_matrix, self.vert_coord)
-        self.masked = check_mask(self.weights, self.vert_coord)
+        if "dst_grid_masked" in weights.variables:  # has a destination mask been precomputed?
+            self.masked = weights.dst_grid_masked.data  # ok, let's use it
+        else:
+            # compute the destination mask now
+            self.weights = mask_weights(self.weights, self.weights_matrix, self.vert_coord)
+            self.masked = check_mask(self.weights, self.vert_coord)
+
         self.space_dims = space_dims
 
 

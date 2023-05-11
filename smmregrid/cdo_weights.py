@@ -9,7 +9,7 @@ from multiprocessing import Process, Manager
 import numpy
 import xarray
 from .util import find_vert_coord
-from .weights import compute_weights_matrix3d, compute_weights_matrix3d, mask_weights, check_mask
+from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 
 
 def worker(wlist, nnn, *args, **kwargs):
@@ -27,7 +27,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         logging.warning('vert_coord is %s',str(vert_coord))
 
     if not vert_coord: # Are we 2D? Use default method
-        return cdo_generate_weights2d(
+        weights =cdo_generate_weights2d(
             source_grid,
             target_grid,
             method=method,
@@ -40,63 +40,72 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
             cdo=cdo,
             nproc=nproc)
 
-    if extra:
-    # make sure extra is a flat list if it is not already
-        if not isinstance(extra, list):
-            extra = [extra]
-    else:
-        extra = []
+        # Precompute destination weights mask
+        weights_matrix = compute_weights_matrix(weights)
+        weights = mask_weights(weights, weights_matrix, vert_coord)
+        masked = int(check_mask(weights, vert_coord))
+        masked_xa = xarray.DataArray(masked, name="dst_grid_masked")
 
-    if isinstance(source_grid, str):
-        sgrid = xarray.open_dataset(source_grid)
-    else:
-        sgrid = source_grid
+        return xarray.merge([weights, masked_xa])
 
-    nvert = sgrid[vert_coord].values.size
-    #print(nvert)
+    else:  # we are 3D
+        if extra:
+        # make sure extra is a flat list if it is not already
+            if not isinstance(extra, list):
+                extra = [extra]
+        else:
+            extra = []
 
-    # for lev in range(0, nvert):
-    mgr = Manager()
+        if isinstance(source_grid, str):
+            sgrid = xarray.open_dataset(source_grid)
+        else:
+            sgrid = source_grid
 
-    # dictionaries are shared, so they have to be passed as functions
-    wlist= mgr.list(range(nvert))
+        nvert = sgrid[vert_coord].values.size
+        #print(nvert)
 
-    num_blocks, remainder = divmod(nvert, nproc)
-    num_blocks = num_blocks + (0 if remainder == 0 else 1)
+        # for lev in range(0, nvert):
+        mgr = Manager()
 
-    blocks = numpy.array_split(numpy.arange(nvert), num_blocks)
-    for block in blocks:
-        processes = []
-        for lev in block:
-            logging.info("Generating level: %s", str(lev))
-            extra2 = [f"-sellevidx,{lev+1}"]
-            ppp = Process(target=worker,
-                        args=(wlist, lev, source_grid, target_grid),
-                        kwargs=dict(method=method,
-                                    extrapolate=extrapolate,
-                                    remap_norm=remap_norm,
-                                    remap_area_min=remap_area_min,
-                                    icongridpath=icongridpath,
-                                    gridpath=gridpath,
-                                    extra=extra + extra2,
-                                    cdo=cdo,
-                                    nproc=nproc))
-            ppp.start()
-            processes.append(ppp)
+        # dictionaries are shared, so they have to be passed as functions
+        wlist= mgr.list(range(nvert))
 
-        for proc in processes:
-            proc.join()
+        num_blocks, remainder = divmod(nvert, nproc)
+        num_blocks = num_blocks + (0 if remainder == 0 else 1)
 
-    # Precompute destination weights mask
-    weights = weightslist_to_3d(wlist, vert_coord)
-    weights_matrix = compute_weights_matrix3d(weights, vert_coord)
-    weights = mask_weights(weights, weights_matrix, vert_coord)
-    masked = check_mask(weights, vert_coord)
-    masked = [int(x) for x in masked]  # convert to list of int
-    masked_xa = xarray.DataArray(masked, coords={vert_coord: range(0, len(masked))}, name="dst_grid_masked")
-    # weights.dst_grid_imask.attrs.update({"masked": int(masked)})  # Record that this mask has been computed and if a mask is present
+        blocks = numpy.array_split(numpy.arange(nvert), num_blocks)
+        for block in blocks:
+            processes = []
+            for lev in block:
+                logging.info("Generating level: %s", str(lev))
+                extra2 = [f"-sellevidx,{lev+1}"]
+                ppp = Process(target=worker,
+                            args=(wlist, lev, source_grid, target_grid),
+                            kwargs=dict(method=method,
+                                        extrapolate=extrapolate,
+                                        remap_norm=remap_norm,
+                                        remap_area_min=remap_area_min,
+                                        icongridpath=icongridpath,
+                                        gridpath=gridpath,
+                                        extra=extra + extra2,
+                                        cdo=cdo,
+                                        nproc=nproc))
+                ppp.start()
+                processes.append(ppp)
 
-    return xarray.merge([weights, masked_xa])
+            for proc in processes:
+                proc.join()
+
+        weights = weightslist_to_3d(wlist, vert_coord)
+
+        # Precompute destination weights mask
+        weights_matrix = compute_weights_matrix3d(weights, vert_coord)
+        weights = mask_weights(weights, weights_matrix, vert_coord)
+        masked = check_mask(weights, vert_coord)
+        masked = [int(x) for x in masked]  # convert to list of int
+        masked_xa = xarray.DataArray(masked, coords={vert_coord: range(0, len(masked))}, name="dst_grid_masked")
+
+        return xarray.merge([weights, masked_xa])
 
 
 def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=True,
