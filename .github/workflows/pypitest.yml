@@ -1,0 +1,43 @@
+# This workflow will install Python dependencies using Mamba, run tests and lint with a single version of Python
+
+name: pypi-test
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1" #run every Tuesday night at 2AM UTC
+
+permissions:
+  contents: read
+
+jobs:
+  mamba-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        #python-version: ["3.10"]
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+    - uses: actions/checkout@v3
+    - name: provision-with-micromamba
+      uses: mamba-org/provision-with-micromamba@v15
+      with:
+        environment-file: environment.yml
+        environment-name: smmregrid
+        cache-downloads: true
+        cache-env: true
+        channels: conda-forge,numba
+        channel-priority: flexible
+        extra-specs: |
+            python=${{ matrix.python-version }}
+    - name: Install smmregrid
+      run: |
+        # install package
+        python -m pip install smmregrid
+    - name: Test with pytest
+      run: |
+        python -m pytest
