@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "smmregrid"
-version = "0.0.1"
+dynamic = ["version"]
 authors = [
   { name="Jost von Hardenberg", email="jost.hardenberg@polito.it" },
   { name="Paolo Davini", email="p.davini@isac.cnr.it" },
@@ -15,6 +15,7 @@ readme = "README.md"
 requires-python = ">=3.7, <3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: OS Independent",
 ]
@@ -48,3 +49,7 @@ all = [
 [project.urls]
 "Homepage" = "https://github.com/jhardenberg/smmregrid"
 "Bug Tracker" = "https://github.com/jhardenberg/smmregrid/issues"
+"Repository" = "https://github.com/oloapinivad/ECmean4"
+
+[tool.setuptools.dynamic]
+version = {attr = "smmregrid.__version__"}

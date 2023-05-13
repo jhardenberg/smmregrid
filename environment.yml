@@ -6,8 +6,9 @@
 name : smmregrid
 channels:
   - conda-forge
+  - numba
 dependencies:
-  - python>=3.7,<3.11
+  - python>=3.8
   - numpy
   - netcdf4 
   - dask

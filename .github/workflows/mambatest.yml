@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
     defaults:
       run:
         shell: bash -el {0}
@@ -31,6 +31,9 @@ jobs:
         environment-file: environment.yml
         environment-name: smmregrid
         cache-downloads: true
+        cache-env: true
+        channels: conda-forge,numba
+        channel-priority: flexible
         extra-specs: |
             python=${{ matrix.python-version }}
     - name: Install smmregrid
@@ -64,9 +67,9 @@ jobs:
       uses: mamba-org/provision-with-micromamba@v15
       with:
         environment-file: environment.yml
-        environment-name: ECmean4
+        environment-name: smmregrid
         cache-downloads: true
-    - name: Install ECmean4
+    - name: Install smmregrid
       run: |
         # install package
         python -m pip install --editable .
