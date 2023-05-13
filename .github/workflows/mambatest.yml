@@ -57,7 +57,7 @@ jobs:
         
   coverage:
     needs: build
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash -el {0}
