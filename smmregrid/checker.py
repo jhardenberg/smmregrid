@@ -36,7 +36,7 @@ def check_cdo_regrid(finput, ftarget, method='con', access='Dataset', vert_coord
     # myvar = list(xfield.data_vars)[-1]
 
     # interpolation with pure CDO
-    cdo_interpolator = getattr(cdo,  'remap' + method)
+    cdo_interpolator = getattr(cdo, 'remap' + method)
     cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True)
     # print(cdofield)
 
@@ -51,8 +51,8 @@ def check_cdo_regrid(finput, ftarget, method='con', access='Dataset', vert_coord
 
     # interpolation with smmregrid (CDO-based)
     # method with creation of weights
-    #wfield = cdo_generate_weights(finput, ftarget, method=method)
-    #interpolator = Regridder(weights=wfield)
+    # wfield = cdo_generate_weights(finput, ftarget, method=method)
+    # interpolator = Regridder(weights=wfield)
 
     # method with automatic creation of weights
     interpolator = Regridder(source_grid=finput, target_grid=ftarget, method=method, vert_coord=vert_coord)

@@ -22,7 +22,7 @@ def compute_weights_matrix3d(weights, vert_coord='lev'):
         nl = w.link_length.values
         w = w.isel(**{links_dim: slice(0, nl)})
         sparse_weights.append(compute_weights_matrix(w))
-    
+
     return sparse_weights
 
 
@@ -31,7 +31,7 @@ def compute_weights_matrix(weights):
     Convert the weights from CDO/ESMF to a numpy array
     """
     w = weights
-    #if w.title.startswith("ESMF"):
+    # if w.title.startswith("ESMF"):
     if "S" in w.variables:
         # ESMF style weights
         src_address = w.col - 1
@@ -45,7 +45,7 @@ def compute_weights_matrix(weights):
         dst_address = w.dst_address - 1
         remap_matrix = w.remap_matrix[:, 0]
         w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
-   
+
     # Create a sparse array from the weights
     sparse_weights_delayed = dask.delayed(sparse.COO)(
         [src_address.data, dst_address.data], remap_matrix.data, shape=w_shape
@@ -58,7 +58,6 @@ def compute_weights_matrix(weights):
 
 
 def mask_tensordot(src_mask, weights_matrix):
-
     """Apply tensor dot product to source mask to return destination mask"""
 
     target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
@@ -108,7 +107,7 @@ def check_mask_old(weights, vert_coord=None):
         result = []
         for nlev in range(len(weights[vert_coord])):
             w = weights['dst_grid_imask'].loc[{vert_coord: nlev}]
-            v = w.sum()/len(w)
+            v = w.sum() / len(w)
             if v == 1:
                 result.append(False)
             else:
@@ -116,7 +115,7 @@ def check_mask_old(weights, vert_coord=None):
         return result
     else:
         w = weights['dst_grid_imask']
-        v = w.sum()/len(w)
+        v = w.sum() / len(w)
         if v == 1:
             return False
         else:

@@ -2,19 +2,23 @@
 
 import os
 import sys
-import logging
 import tempfile
 import subprocess
 from multiprocessing import Process, Manager
 import numpy
 import xarray
-from .util import find_vert_coord
+from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
+from .log import setup_logger
+
+# set up logger
+loggy = setup_logger(level='WARNING', name=__name__)
 
 
 def worker(wlist, nnn, *args, **kwargs):
     """Run a worker process"""
     wlist[nnn] = cdo_generate_weights2d(*args, **kwargs).compute()
+
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
@@ -23,11 +27,11 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
 
     # Check if there is a vertical coordinate for 3d oceanic data
     if not vert_coord:
-        vert_coord = find_vert_coord(source_grid)
-        logging.warning('vert_coord is %s',str(vert_coord))
+        vert_coord = find_vert_coords(source_grid)
+        loggy.warning('vert_coord is %s', str(vert_coord))
 
-    if not vert_coord: # Are we 2D? Use default method
-        weights =cdo_generate_weights2d(
+    if not vert_coord:  # Are we 2D? Use default method
+        weights = cdo_generate_weights2d(
             source_grid,
             target_grid,
             method=method,
@@ -50,7 +54,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
 
     else:  # we are 3D
         if extra:
-        # make sure extra is a flat list if it is not already
+            # make sure extra is a flat list if it is not already
             if not isinstance(extra, list):
                 extra = [extra]
         else:
@@ -62,13 +66,13 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
             sgrid = source_grid
 
         nvert = sgrid[vert_coord].values.size
-        #print(nvert)
+        # print(nvert)
 
         # for lev in range(0, nvert):
         mgr = Manager()
 
         # dictionaries are shared, so they have to be passed as functions
-        wlist= mgr.list(range(nvert))
+        wlist = mgr.list(range(nvert))
 
         num_blocks, remainder = divmod(nvert, nproc)
         num_blocks = num_blocks + (0 if remainder == 0 else 1)
@@ -77,19 +81,19 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         for block in blocks:
             processes = []
             for lev in block:
-                logging.info("Generating level: %s", str(lev))
+                loggy.info("Generating level: %s", str(lev))
                 extra2 = [f"-sellevidx,{lev+1}"]
                 ppp = Process(target=worker,
-                            args=(wlist, lev, source_grid, target_grid),
-                            kwargs=dict(method=method,
-                                        extrapolate=extrapolate,
-                                        remap_norm=remap_norm,
-                                        remap_area_min=remap_area_min,
-                                        icongridpath=icongridpath,
-                                        gridpath=gridpath,
-                                        extra=extra + extra2,
-                                        cdo=cdo,
-                                        nproc=nproc))
+                              args=(wlist, lev, source_grid, target_grid),
+                              kwargs=dict(method=method,
+                                          extrapolate=extrapolate,
+                                          remap_norm=remap_norm,
+                                          remap_area_min=remap_area_min,
+                                          icongridpath=icongridpath,
+                                          gridpath=gridpath,
+                                          extra=extra + extra2,
+                                          cdo=cdo,
+                                          nproc=nproc))
                 ppp.start()
                 processes.append(ppp)
 
@@ -194,7 +198,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
             subprocess.check_output(
                 [
                     cdo,
-                    "gen%s,%s" % (method, tgrid)
+                    f"gen{method},{tgrid}"
                 ] + extra +
                 [
                     sgrid,
@@ -207,7 +211,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
             subprocess.check_output(
                 [
                     cdo,
-                    "gen%s,%s" % (method, tgrid),
+                    f"gen{method},{tgrid}",
                     sgrid,
                     weight_file.name,
                 ],
@@ -221,7 +225,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
 
     except subprocess.CalledProcessError as err:
         # Print the CDO error message
-        logging.error(err.output.decode(), file=sys.stderr)
+        print(err.output.decode(), file=sys.stderr)
         raise
 
     finally:
@@ -242,7 +246,7 @@ def weightslist_to_3d(ds_list, vert_coord='lev'):
         links_dim = "numLinks"
     else:
         links_dim = "num_links"
-    
+
     dim_values = range(len(ds_list))
     nl = [ds.src_address.size for ds in ds_list]
     nl0 = max(nl)
@@ -253,8 +257,8 @@ def weightslist_to_3d(ds_list, vert_coord='lev'):
     for x, d in zip(ds_list, dim_values):
         nl1 = x.src_address.size
 #        xplist = [x[vname].pad(num_links=(0, nl0-nl1), mode='constant', constant_values=0)
-        xplist = [x[vname].pad(**{links_dim: (0, nl0-nl1), "mode": 'constant', "constant_values": 0})
-                  for vname in varlist ]
-        xp = xarray.merge(xplist)
-        new_array.append(xp.assign_coords({vert_coord: d}))
+        xplist = [x[vname].pad(**{links_dim: (0, nl0 - nl1), "mode": 'constant', "constant_values": 0})
+                  for vname in varlist]
+        xmerged = xarray.merge(xplist)
+        new_array.append(xmerged.assign_coords({vert_coord: d}))
     return xarray.merge([nlda, ds0, xarray.concat(new_array, vert_coord)])
