@@ -53,7 +53,7 @@ jobs:
          python -m pip install pytest
     - name: Run tests
       run: |
-        python -m pytest
+        python -m pytest -v
         
   coverage:
     needs: build
