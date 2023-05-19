@@ -6,6 +6,7 @@ from smmregrid.checker import check_cdo_regrid
 
 INDIR = 'tests/data'
 tfile = os.path.join(INDIR, 'r360x180.nc')
+rfile = os.path.join(INDIR, 'regional.nc')
 
 # test for pressure levels on gaussian grid (3D)
 @pytest.mark.parametrize("method", ['con', 'nn'])
@@ -39,6 +40,13 @@ def test_gaussian_reduced(method):
 @pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
 def test_gaussian_regular(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'tas-ecearth.nc'), tfile,
+                           remap_method=method)
+    assert fff is True
+
+# test for gaussian grids as EC-Earth cmor
+@pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
+def test_gaussian_regular_regional(method):
+    fff = check_cdo_regrid(os.path.join(INDIR, 'tas-ecearth.nc'), rfile,
                            remap_method=method)
     assert fff is True
 
