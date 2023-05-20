@@ -49,7 +49,7 @@ from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weig
 
 # default spatial dimensions and vertical coordinates
 default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                     'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
+                     'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem']
 
 
 def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_dims=None):
