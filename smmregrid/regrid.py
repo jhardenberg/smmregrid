@@ -50,7 +50,7 @@ loggy = setup_logger(level='WARNING', name=__name__)
 
 # default spatial dimensions and vertical coordinates
 default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix']
+                     'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem']
 
 
 def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_dims=None):
