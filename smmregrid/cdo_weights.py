@@ -28,7 +28,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
     # Check if there is a vertical coordinate for 3d oceanic data
     if not vert_coord:
         vert_coord = find_vert_coords(source_grid)
-        loggy.warning('vert_coord is %s', str(vert_coord))
+        loggy.info('vert_coord is %s', str(vert_coord))
 
     if not vert_coord:  # Are we 2D? Use default method
         weights = cdo_generate_weights2d(
