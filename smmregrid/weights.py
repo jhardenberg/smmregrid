@@ -2,7 +2,9 @@
 
 import dask.array
 import sparse
+import logging
 
+loggy = logging.getLogger(__name__)
 
 def compute_weights_matrix3d(weights, vert_coord='lev'):
     """

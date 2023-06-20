@@ -9,10 +9,10 @@ import numpy
 import xarray
 from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
-from .log import setup_logger
+import logging
 
 # set up logger
-loggy = setup_logger(level='WARNING', name=__name__)
+loggy = logging.getLogger(__name__)
 
 
 def worker(wlist, nnn, *args, **kwargs):

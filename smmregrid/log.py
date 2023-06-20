@@ -6,11 +6,21 @@ def setup_logger(level=None, name=None):
     """Define a logger to be used extensively within smmregrid"""
 
     if name is None:
-        name = __name__
+        name = "smmregrid"
 
     loglev = convert_logger(level)
 
     logger = logging.getLogger(name)  # Create a logger specific to your module
+
+    if logger.handlers:
+        logger.warning('Logging is already setup with name %s', name)
+        if level != logging.getLevelName(logger.getEffectiveLevel()):
+            logger.setLevel(loglev)
+            logger.info('Updating the log_level to %s', loglev)
+        return logger
+
+    # avoid duplication/propagation of loggers
+    logger.propagate = False
 
     logger.setLevel(loglev)  # Set the desired log level
 
@@ -20,7 +30,7 @@ def setup_logger(level=None, name=None):
 
     # Create a handler for the logger
     handler = logging.StreamHandler()
-    handler.setLevel(loglev)  # Set the desired log level for the handler
+    #handler.setLevel(loglev)  # Set the desired log level for the handler
     handler.setFormatter(formatter)  # Assign the formatter to the handler
     logger.addHandler(handler)  # Add the handler to the logger
 

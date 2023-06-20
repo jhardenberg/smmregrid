@@ -43,10 +43,10 @@ from .dimension import remove_degenerate_axes
 from .cdo_weights import cdo_generate_weights
 from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
-from .log import setup_logger
+import logging
 
 # set up logger
-loggy = setup_logger(level='WARNING', name=__name__)
+loggy = logging.getLogger(__name__)
 
 # default spatial dimensions and vertical coordinates
 default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
@@ -73,10 +73,10 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
         # we keep time bounds, and we ignore all the rest
         if 'time' in source_data.name:
-            loggy.info('original %s', source_data.name)
+            loggy.info('%s will not be interpolated in the output', source_data.name)
             return source_data
         else:
-            loggy.info('empty %s', source_data.name)
+            loggy.info('%s will be excluded from the output', source_data.name)
             return xarray.DataArray(data=None)
 
     # Alias the weights dataset from CDO
@@ -142,8 +142,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
-    loggy.info('Dimension kept:')
-    loggy.info(kept_dims)
+    loggy.info('Dimension kept: %s', kept_dims)
+    #loggy.info(kept_dims)
 
     if weights_matrix is None:
         weights_matrix = compute_weights_matrix(weights)
@@ -351,7 +351,7 @@ class Regridder(object):
             version of the source variable
         """
 
-        loggy.info('3D DataArray access!')
+        loggy.debug('3D DataArray access: variable is %s', source_data.name)
 
         # CDO 2.2.0 fix
         if "numLinks" in self.weights.dims:
@@ -404,7 +404,7 @@ class Regridder(object):
             :class:`xarray.DataArray` with a regridded
             version of the source variable
         """
-        loggy.info('2D DataArray access!')
+        loggy.debug('2D DataArray access: variables is %s', source_data.name)
         return apply_weights(
             source_data, self.weights, weights_matrix=self.weights_matrix,
             masked=self.masked, space_dims=self.space_dims

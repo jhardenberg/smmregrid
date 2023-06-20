@@ -1,12 +1,12 @@
 """Utils module"""
 
 import xarray
-from .log import setup_logger
+import logging
 
 default_vert_coords = ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half']
 
 # set up logger
-loggy = setup_logger(level='WARNING', name=__name__)
+loggy = logging.getLogger(__name__)
 
 def find_vert_coords(xfield):
     """
@@ -23,7 +23,3 @@ def find_vert_coords(xfield):
     if len(vcoords) == 0:
         return None
     return vcoords[0]
-
-    # for coord in default_vert_coords:
-    #     if coord in xfield.coords:
-    #         return coord
