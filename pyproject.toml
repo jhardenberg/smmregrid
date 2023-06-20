@@ -40,7 +40,9 @@ tests = [
 ]
 
 notebooks = [
-    "ipykernel"
+    "ipykernel",
+    "matplotlib",
+    "jinja2"
 ]
 
 #docs = [
