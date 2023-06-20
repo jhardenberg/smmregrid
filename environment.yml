@@ -6,21 +6,11 @@
 name : smmregrid
 channels:
   - conda-forge
-  - numba
 dependencies:
   - python>=3.8
-  - numpy
-  - netcdf4 
-  - dask
-  - xarray
-  - cfgrib
+  - ecCodes
   - xesmf
-  - cfunits
-  - numba
   - cdo
-  - python-cdo
-  - pytest
-  - ipykernel
   - pip
   - pip:
-    - sparse
+    - -e .[all]

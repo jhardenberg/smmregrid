@@ -3,66 +3,87 @@
 import os
 import pytest
 from smmregrid.checker import check_cdo_regrid
+from smmregrid.log import setup_logger
 
-indir = 'tests/data'
-tfile = os.path.join(indir, 'r360x180.nc')
+INDIR = 'tests/data'
+tfile = os.path.join(INDIR, 'r360x180.nc')
+rfile = os.path.join(INDIR, 'regional.nc')
 
 # test for pressure levels on gaussian grid (3D)
 @pytest.mark.parametrize("method", ['con', 'nn'])
 def test_nemo_3d(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'so3d-nemo.nc'), tfile, method=method)
+    fff = check_cdo_regrid(os.path.join(INDIR, 'so3d-nemo.nc'), tfile,
+                           remap_method=method, init_method='grids')
     assert fff is True
 
 # test for pressure levels on gaussian grid (3D)
 @pytest.mark.parametrize("method", ['con', 'nn'])
 def test_fesom_3d(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'temp3d-fesom.nc'), tfile, method=method)
+    fff = check_cdo_regrid(os.path.join(INDIR, 'temp3d-fesom.nc'), tfile,
+                           remap_method=method, init_method='grids')
     assert fff is True
 
 # test for gaussian reduced grid (only nn)
 @pytest.mark.parametrize("method", ['nn', 'con'])
 def test_healpix(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'tas-healpix2.nc'), tfile, method=method)
+    fff = check_cdo_regrid(os.path.join(INDIR, 'tas-healpix2.nc'), tfile,
+                           remap_method=method, init_method='grids')
     assert fff is True
 
 # test for gaussian reduced grid (only nn)
 @pytest.mark.parametrize("method", ['nn'])
 def test_gaussian_reduced(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'lsm-ifs.grb'), tfile, method=method)
+    fff = check_cdo_regrid(os.path.join(INDIR, 'lsm-ifs.grb'), tfile,
+                           remap_method=method, init_method='grids')
     assert fff is True
 
 # test for gaussian grids as EC-Earth cmor
 @pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
-def test_gaussian(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'tas-ecearth.nc'), tfile, method=method)
+def test_gaussian_regular(method):
+    fff = check_cdo_regrid(os.path.join(INDIR, 'tas-ecearth.nc'), tfile,
+                           remap_method=method)
     assert fff is True
 
-# test for lonlt grids
+# test for gaussian grids as EC-Earth cmor
+@pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
+def test_gaussian_regular_regional(method):
+    fff = check_cdo_regrid(os.path.join(INDIR, 'tas-ecearth.nc'), rfile,
+                           remap_method=method)
+    assert fff is True
+
+# test for lonlt grids, init by weights
 @pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
 def test_lonlat(method):
-    fff = check_cdo_regrid(os.path.join(indir, '2t-era5.nc'), tfile, method=method)
+    fff = check_cdo_regrid(os.path.join(INDIR, '2t-era5.nc'), tfile,
+                           remap_method=method, init_method='weights')
     assert fff is True
 
 # test for unstructured grids as FESOM CMOR (no bilinear)
 @pytest.mark.parametrize("method", ['con', 'nn'])
 def test_unstructured(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'tos-fesom.nc'), tfile, method=method)
+    fff = check_cdo_regrid(os.path.join(INDIR, 'tos-fesom.nc'), tfile,
+                           remap_method=method, init_method='grids')
     assert fff is True
 
 # test for curvilinear grid
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_curivilinear(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'onlytos-ipsl.nc'), tfile, method=method)
+    fff = check_cdo_regrid(os.path.join(INDIR, 'onlytos-ipsl.nc'), tfile,
+                           remap_method=method, init_method='grids')
     assert fff is True
 
-# test for pressure levels on gaussian grid (2D, level-by-level)
+# test for pressure levels on gaussian grid (2D, level-by-level), init by weights
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_levbylev_plev_gaussian(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'ua-ecearth.nc'), tfile, method=method)
+    fff = check_cdo_regrid(os.path.join(INDIR, 'ua-ecearth.nc'), tfile,
+                           remap_method=method, init_method='weights',
+                           vert_coord="plev")
     assert fff is True
 
-# test for pressure levels on gaussian grid (3D)
+# test for pressure levels on gaussian grid with info logging (3D)
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_full_plev_gaussian(method):
-    fff = check_cdo_regrid(os.path.join(indir, 'ua-ecearth.nc'), tfile, method=method, vert_coord="plev")
+    _ = setup_logger('INFO')
+    fff = check_cdo_regrid(os.path.join(INDIR, 'ua-ecearth.nc'), tfile,
+                           remap_method=method, init_method='grids')
     assert fff is True

@@ -3,8 +3,7 @@
 import numpy as np
 import xarray as xr
 from cdo import Cdo
-import xarray as xr
-from smmregrid import cdo_generate_weights, Regridder
+from smmregrid import Regridder, cdo_generate_weights
 
 
 cdo = Cdo()
@@ -24,7 +23,8 @@ def find_var(xfield):
     return myvar
 
 
-def check_cdo_regrid(finput, ftarget, method='con', access='Dataset', vert_coord=None):
+def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
+                     init_method='grids', vert_coord=None):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests."""
@@ -36,7 +36,7 @@ def check_cdo_regrid(finput, ftarget, method='con', access='Dataset', vert_coord
     # myvar = list(xfield.data_vars)[-1]
 
     # interpolation with pure CDO
-    cdo_interpolator = getattr(cdo,  'remap' + method)
+    cdo_interpolator = getattr(cdo, 'remap' + remap_method)
     cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True)
     # print(cdofield)
 
@@ -51,11 +51,17 @@ def check_cdo_regrid(finput, ftarget, method='con', access='Dataset', vert_coord
 
     # interpolation with smmregrid (CDO-based)
     # method with creation of weights
-    #wfield = cdo_generate_weights(finput, ftarget, method=method)
-    #interpolator = Regridder(weights=wfield)
+    # wfield = cdo_generate_weights(finput, ftarget, method=method)
+    # interpolator = Regridder(weights=wfield)
 
     # method with automatic creation of weights
-    interpolator = Regridder(source_grid=finput, target_grid=ftarget, method=method, vert_coord=vert_coord)
+    if init_method == 'grids':
+        interpolator = Regridder(source_grid=finput, target_grid=ftarget,
+                                 method=remap_method, vert_coord=vert_coord)
+    if init_method == 'weights':
+        wfield = cdo_generate_weights(finput, ftarget,
+                                      method=remap_method, vert_coord=vert_coord)
+        interpolator = Regridder(weights=wfield, vert_coord=vert_coord)
     rfield = interpolator.regrid(xfield)
 
     if access == 'Dataset':

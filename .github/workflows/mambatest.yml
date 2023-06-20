@@ -9,6 +9,8 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  schedule:
+    - cron: "0 1 * * 1" #run every Monday night at 1AM UTC
 
 permissions:
   contents: read
@@ -26,16 +28,17 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: provision-with-micromamba
-      uses: mamba-org/provision-with-micromamba@v15
+      uses: mamba-org/setup-micromamba@v1
       with:
         environment-file: environment.yml
         environment-name: smmregrid
         cache-downloads: true
-        cache-env: true
-        channels: conda-forge,numba
-        channel-priority: flexible
-        extra-specs: |
-            python=${{ matrix.python-version }}
+        cache-environment: true
+        condarc: |
+          channels:
+            - conda-forge
+        create-args: >-
+              python=${{ matrix.python-version }}
     - name: Install smmregrid
       run: |
         # install package
@@ -53,7 +56,7 @@ jobs:
          python -m pip install pytest
     - name: Run tests
       run: |
-        python -m pytest
+        python -m pytest -v
         
   coverage:
     needs: build
@@ -64,11 +67,15 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: provision-with-micromamba
-      uses: mamba-org/provision-with-micromamba@v15
+      uses: mamba-org/setup-micromamba@v1
       with:
         environment-file: environment.yml
         environment-name: smmregrid
         cache-downloads: true
+        cache-environment: true
+        condarc: |
+          channels:
+            - conda-forge
     - name: Install smmregrid
       run: |
         # install package
