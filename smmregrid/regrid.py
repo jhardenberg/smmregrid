@@ -69,7 +69,7 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
     # Understand immediately if we need to return something or not
     # This is done if we have bounds variables
-    if ("bnds" in source_data.name or "bounds" in source_data.name):
+    if any(substring in source_data.name for substring in ["bnds", "bounds", "vertices"]):
 
         # we keep time bounds, and we ignore all the rest
         if 'time' in source_data.name:
