@@ -3,6 +3,7 @@
 import os
 import pytest
 from smmregrid.checker import check_cdo_regrid
+from smmregrid.log import setup_logger
 
 INDIR = 'tests/data'
 tfile = os.path.join(INDIR, 'r360x180.nc')
@@ -79,9 +80,10 @@ def test_levbylev_plev_gaussian(method):
                            vert_coord="plev")
     assert fff is True
 
-# test for pressure levels on gaussian grid (3D)
+# test for pressure levels on gaussian grid with info logging (3D)
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_full_plev_gaussian(method):
+    _ = setup_logger('INFO')
     fff = check_cdo_regrid(os.path.join(INDIR, 'ua-ecearth.nc'), tfile,
                            remap_method=method, init_method='grids')
     assert fff is True
