@@ -27,7 +27,9 @@ dependencies = [
     'cfgrib',
     'dask',
     'sparse',
-    'cdo'
+    'cdo',
+    'numba',
+    'cfunits'
 ]
 
 [project.optional-dependencies]
@@ -37,19 +39,23 @@ tests = [
     "pytest"
 ]
 
+notebooks = [
+    "ipykernel"
+]
+
 #docs = [
 #    "sphinx",
 #    "sphinx-rtd-theme"
 #]
 
 all = [
-    "scriptengine[tests]"
+    "smmregrid[tests,notebooks]"
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/jhardenberg/smmregrid"
 "Bug Tracker" = "https://github.com/jhardenberg/smmregrid/issues"
-"Repository" = "https://github.com/oloapinivad/ECmean4"
+"Repository" = "https://github.com/jhardenberg/smmregrid"
 
 [tool.setuptools.dynamic]
 version = {attr = "smmregrid.__version__"}
