@@ -204,7 +204,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
                     sgrid,
                     weight_file.name,
                 ],
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 env=env,
             )
         else:
@@ -215,7 +215,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
                     sgrid,
                     weight_file.name,
                 ],
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 env=env,
             )
 
