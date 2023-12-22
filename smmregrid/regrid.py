@@ -363,9 +363,14 @@ class Regridder(object):
         # be treated in a smarter way
         if ("bnds" in source_data.name or "bounds" in source_data.name):
             return source_data
+        
+        if "idx_3d" in source_data.coords:
+            levlist = data.coords["idx_3d"].values
+        else:
+            levlist = range(0, source_data.coords[self.vert_coord].values.size)
 
         data3d_list = []
-        for lev in range(0, source_data.coords[self.vert_coord].values.size):
+        for lev in levlist:
             xa = source_data.isel(**{self.vert_coord: lev})
             wa = self.weights.isel(**{self.vert_coord: lev})
             nl = wa.link_length.values
