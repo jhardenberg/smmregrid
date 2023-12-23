@@ -365,18 +365,19 @@ class Regridder(object):
             return source_data
         
         if "idx_3d" in source_data.coords:
-            levlist = data.coords["idx_3d"].values
+            levlist = source_data.coords["idx_3d"].values
         else:
             levlist = range(0, source_data.coords[self.vert_coord].values.size)
 
         data3d_list = []
-        for lev in levlist:
+        for lev in range(0, len(levlist)):
+            levw = levlist[lev]
             xa = source_data.isel(**{self.vert_coord: lev})
-            wa = self.weights.isel(**{self.vert_coord: lev})
+            wa = self.weights.isel(**{self.vert_coord: levw})
             nl = wa.link_length.values
             wa = wa.isel(**{links_dim: slice(0, nl)})
-            wm = self.weights_matrix[lev]
-            mm = self.masked[lev]
+            wm = self.weights_matrix[levw]
+            mm = self.masked[levw]
             data3d_list.append(apply_weights(
                 xa, wa, weights_matrix=wm,
                 masked=mm, space_dims=self.space_dims)
