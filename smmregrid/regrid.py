@@ -247,6 +247,8 @@ class Regridder(object):
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
         vert_coord (str): Name of the vertical coordinate.
                           If provided, 3D weights are generated (default: None)
+        level_idx (str): Name of helper vertical coordinate with original level indices.
+                         If provided, 3D weights are selected from those levels (default: "idx_3d")
         method (str): Method to use for interpolation (default: 'con')
         space_dims (list): list of dimensions to interpolate (default: None)
         transpose (bool): transpose the output so that the vertical coordinate is
@@ -255,7 +257,7 @@ class Regridder(object):
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', space_dims=None, vert_coord=None, transpose=True,
-                 cdo='cdo'):
+                 cdo='cdo', level_idx="idx_3d"):
 
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
@@ -301,6 +303,7 @@ class Regridder(object):
             self.masked = check_mask(self.weights, self.vert_coord)
 
         self.space_dims = space_dims
+        self.level_idx = level_idx
 
     def regrid(self, source_data):
         """Regrid ``source_data`` to match the target grid
@@ -364,20 +367,21 @@ class Regridder(object):
         if ("bnds" in source_data.name or "bounds" in source_data.name):
             return source_data
         
-        if "idx_3d" in source_data.coords:
-            levlist = source_data.coords["idx_3d"].values
+        # If a special additional coordinate is present pick correct levels from weights
+        if self.level_idx in source_data.coords:
+            levlist = source_data.coords[self.level_idx].values
         else:
             levlist = range(0, source_data.coords[self.vert_coord].values.size)
 
         data3d_list = []
         for lev in range(0, len(levlist)):
-            levw = levlist[lev]
+            levidx = levlist[lev]
             xa = source_data.isel(**{self.vert_coord: lev})
-            wa = self.weights.isel(**{self.vert_coord: levw})
+            wa = self.weights.isel(**{self.vert_coord: levidx})
             nl = wa.link_length.values
             wa = wa.isel(**{links_dim: slice(0, nl)})
-            wm = self.weights_matrix[levw]
-            mm = self.masked[levw]
+            wm = self.weights_matrix[levidx]
+            mm = self.masked[levidx]
             data3d_list.append(apply_weights(
                 xa, wa, weights_matrix=wm,
                 masked=mm, space_dims=self.space_dims)
