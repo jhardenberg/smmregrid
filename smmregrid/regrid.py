@@ -247,8 +247,8 @@ class Regridder(object):
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
         vert_coord (str): Name of the vertical coordinate.
                           If provided, 3D weights are generated (default: None)
-        level_idx (str): Name of helper vertical coordinate with original level indices.
-                         If provided, 3D weights are selected from those levels (default: "idx_3d")
+        level_idx (str): Prefix of helper vertical coordinate with original level indices.
+                         If provided, 3D weights are selected from those levels (default: "idx_")
         method (str): Method to use for interpolation (default: 'con')
         space_dims (list): list of dimensions to interpolate (default: None)
         transpose (bool): transpose the output so that the vertical coordinate is
@@ -257,7 +257,7 @@ class Regridder(object):
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', space_dims=None, vert_coord=None, transpose=True,
-                 cdo='cdo', level_idx="idx_3d"):
+                 cdo='cdo', level_idx="idx_"):
 
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
@@ -368,10 +368,12 @@ class Regridder(object):
             return source_data
         
         # If a special additional coordinate is present pick correct levels from weights
-        if self.level_idx in source_data.coords:
-            levlist = source_data.coords[self.level_idx].values
+        coord = next((coord for coord in source_data.coords if coord.startswith(self.level_idx)), None)
+        if coord:  # if a coordinate starting with level_idx is found
+            levlist = source_data.coords[coord].values.tolist()
+            levlist = [levlist] if numpy.isscalar(levlist) else levlist
         else:
-            levlist = range(0, source_data.coords[self.vert_coord].values.size)
+            levlist = list(range(0, source_data.coords[self.vert_coord].values.size))
 
         data3d_list = []
         for lev in range(0, len(levlist)):
