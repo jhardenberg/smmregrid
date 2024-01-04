@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [v0.0.4]
 
+- Allow also single 3D level
+- prefix used to identify helper index coordinate
+
+## [v0.0.4]
+
 - Additional helper coordinate to select correct levels from full 3D weights
 
 ## [v0.0.3]
