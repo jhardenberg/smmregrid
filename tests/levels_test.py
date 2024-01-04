@@ -22,6 +22,6 @@ def test_nemo_3d_levels(method):
     assert fff is True,  "Multiple levels test failed"
 
     fff = check_cdo_regrid_levels(os.path.join(INDIR, 'so3d-nemo.nc'), tfile,
-                           "lev", 15, remap_method=method) # single level
-    assert fff is True, "Single level test failed"
+                           "lev", [15], remap_method=method) # single level
+    assert fff is True, "Single 3D level test failed"
 
