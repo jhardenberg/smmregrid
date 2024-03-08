@@ -87,3 +87,13 @@ def test_full_plev_gaussian(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'ua-ecearth.nc'), tfile,
                            remap_method=method, init_method='grids')
     assert fff is True
+
+# test to verify that NaN are preserved
+@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+def test_nan_preserve(method): 
+    xfield = xr.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
+    xfield['tas'][1,:,:] = np.nan
+    wfield = cdo_generate_weights(indata, tfile, method = method)
+    interpolator = Regridder(weights=wfield)
+    rfield = interpolator.regrid(xfield)
+    assert np.isnan(rfield['tas'][1,:,:]).all().compute()
