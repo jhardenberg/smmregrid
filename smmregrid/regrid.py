@@ -175,6 +175,10 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
 
         # apply the mask
         target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
+    
+    # after the tensordot, bring the NaN back in
+    # Use greater than 1e19 to avoid numerical noise from interpolation.
+    target_dask = xarray.where(target_dask > 1e19, numpy.nan, target_dask)
 
     # reshape the target DataArray
     target_dask = dask.array.reshape(
