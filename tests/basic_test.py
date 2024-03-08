@@ -2,12 +2,25 @@
 
 import os
 import pytest
-from smmregrid.checker import check_cdo_regrid
+import xarray
+import numpy
+from smmregrid.checker import check_cdo_regrid, cdo_generate_weights, Regridder
 from smmregrid.log import setup_logger
 
 INDIR = 'tests/data'
 tfile = os.path.join(INDIR, 'r360x180.nc')
 rfile = os.path.join(INDIR, 'regional.nc')
+
+
+# test to verify that NaN are preserved
+@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+def test_nan_preserve(method): 
+    xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
+    xfield['tas'][1,:,:] = numpy.nan
+    wfield = cdo_generate_weights(xfield, tfile, method = method)
+    interpolator = Regridder(weights=wfield)
+    rfield = interpolator.regrid(xfield)
+    assert numpy.isnan(rfield['tas'][1,:,:]).all().compute()
 
 # test for pressure levels on gaussian grid (3D)
 @pytest.mark.parametrize("method", ['con', 'nn'])
@@ -88,12 +101,3 @@ def test_full_plev_gaussian(method):
                            remap_method=method, init_method='grids')
     assert fff is True
 
-# test to verify that NaN are preserved
-@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
-def test_nan_preserve(method): 
-    xfield = xr.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
-    xfield['tas'][1,:,:] = np.nan
-    wfield = cdo_generate_weights(indata, tfile, method = method)
-    interpolator = Regridder(weights=wfield)
-    rfield = interpolator.regrid(xfield)
-    assert np.isnan(rfield['tas'][1,:,:]).all().compute()
