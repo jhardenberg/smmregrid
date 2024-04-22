@@ -29,9 +29,10 @@ jobs:
         environment-file: environment.yml
         environment-name: smmregrid
         cache-downloads: true
-        cache-env: true
-        channels: conda-forge,numba
-        channel-priority: flexible
+        cache-environment: true
+        condarc: |
+          channels:
+            - conda-forge
         extra-specs: |
             python=${{ matrix.python-version }}
     - name: Install smmregrid
