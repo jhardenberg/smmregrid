@@ -22,7 +22,7 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-    - uses: actions/checkout4
+    - uses: actions/checkout@v4
     - name: provision-with-micromamba
       uses: mamba-org/setup-micromamba@v1
       with:
