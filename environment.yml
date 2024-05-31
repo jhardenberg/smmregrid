@@ -9,7 +9,6 @@ channels:
 dependencies:
   - python>=3.8
   - ecCodes
-  - xesmf
   - cdo
   - pip
   - pip:

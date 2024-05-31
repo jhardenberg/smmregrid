@@ -6,6 +6,7 @@ import logging
 
 loggy = logging.getLogger(__name__)
 
+
 def compute_weights_matrix3d(weights, vert_coord='lev'):
     """
     Convert the weights from CDO to a list of numpy arrays
@@ -30,23 +31,15 @@ def compute_weights_matrix3d(weights, vert_coord='lev'):
 
 def compute_weights_matrix(weights):
     """
-    Convert the weights from CDO/ESMF to a numpy array
+    Convert the weights from CDO to a numpy array
     """
     w = weights
-    # if w.title.startswith("ESMF"):
-    if "S" in w.variables:
-        # ESMF style weights
-        src_address = w.col - 1
-        dst_address = w.row - 1
-        remap_matrix = w.S
-        w_shape = (w.sizes["n_a"], w.sizes["n_b"])
 
-    else:
-        # CDO style weights
-        src_address = w.src_address - 1
-        dst_address = w.dst_address - 1
-        remap_matrix = w.remap_matrix[:, 0]
-        w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
+    # CDO style weights
+    src_address = w.src_address - 1
+    dst_address = w.dst_address - 1
+    remap_matrix = w.remap_matrix[:, 0]
+    w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
 
     # Create a sparse array from the weights
     sparse_weights_delayed = dask.delayed(sparse.COO)(
