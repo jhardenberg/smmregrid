@@ -33,7 +33,7 @@ jobs:
         environment-file: environment.yml
         environment-name: smmregrid
         cache-downloads: true
-        cache-environment: true
+        cache-environment: false
         condarc: |
           channels:
             - conda-forge

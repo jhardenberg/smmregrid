@@ -42,17 +42,15 @@ from .dimension import remove_degenerate_axes
 from .cdo_weights import cdo_generate_weights
 from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
-import logging
-
-# set up logger
-loggy = logging.getLogger(__name__)
+from .log import setup_logger
 
 # default spatial dimensions and vertical coordinates
 default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
                       'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem']
 
 
-def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_dims=None):
+def apply_weights(source_data, weights, weights_matrix=None,
+                  masked=True, space_dims=None, loglevel='WARNING'):
     """
     Apply the CDO weights ``weights`` to ``source_data``, performing a regridding operation
 
@@ -65,6 +63,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     Returns:
         xarray.DataArray: Regridded version of the source dataset
     """
+
+    loggy = setup_logger(level=loglevel, name='smmregrid.apply_weights')
 
     # Understand immediately if we need to return something or not
     # This is done if we have bounds variables
@@ -117,7 +117,8 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     if not any(x in source_data.dims for x in space_dims):
         loggy.error("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
         loggy.error(space_dims)
-        sys.exit('Dimensions mismatch')
+        loggy.error('smmregrid can identify only %s', source_data.dims)
+        raise KeyError('Dimensions mismatch')
 
     # Find dimensions to keep
     nd = sum([(d not in space_dims) for d in source_data.dims])
@@ -242,12 +243,15 @@ class Regridder(object):
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', space_dims=None, vert_coord=None, transpose=True,
-                 cdo='cdo', level_idx="idx_"):
+                 cdo='cdo', level_idx="idx_", loglevel='WARNING'):
 
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
             )
+        
+        self.loggy = setup_logger(level=loglevel, name='smmregrid.regrid')
+        self.loglevel = loglevel
 
         self.transpose = transpose
 
@@ -339,7 +343,7 @@ class Regridder(object):
             version of the source variable
         """
 
-        loggy.debug('3D DataArray access: variable is %s', source_data.name)
+        self.loggy.debug('3D DataArray access: variable is %s', source_data.name)
 
         # CDO 2.2.0 fix
         if "numLinks" in self.weights.dims:
@@ -361,8 +365,7 @@ class Regridder(object):
             levlist = list(range(0, source_data.coords[self.vert_coord].values.size))
 
         data3d_list = []
-        for lev in range(0, len(levlist)):
-            levidx = levlist[lev]
+        for lev, levidx in enumerate(levlist):
             xa = source_data.isel(**{self.vert_coord: lev})
             wa = self.weights.isel(**{self.vert_coord: levidx})
             nl = wa.link_length.values
@@ -371,7 +374,8 @@ class Regridder(object):
             mm = self.masked[levidx]
             data3d_list.append(apply_weights(
                 xa, wa, weights_matrix=wm,
-                masked=mm, space_dims=self.space_dims)
+                masked=mm, space_dims=self.space_dims,
+                loglevel=self.loglevel)
             )
         data3d = xarray.concat(data3d_list, dim=self.vert_coord)
 
@@ -388,7 +392,7 @@ class Regridder(object):
 
             return data3d
         else:
-            sys.exit('Cannot process this source data, are you sure it is an xarray?')
+            raise ValueError('Cannot process this source data, are you sure it is an xarray?')
 
     def regrid2d(self, source_data):
         """Regrid ``source_data`` to match the target grid, 2D version
@@ -401,10 +405,10 @@ class Regridder(object):
             :class:`xarray.DataArray` with a regridded
             version of the source variable
         """
-        loggy.debug('2D DataArray access: variables is %s', source_data.name)
+        self.loggy.debug('2D DataArray access: variables is %s', source_data.name)
         return apply_weights(
             source_data, self.weights, weights_matrix=self.weights_matrix,
-            masked=self.masked, space_dims=self.space_dims
+            masked=self.masked, space_dims=self.space_dims, loglevel=self.loglevel
         )
 
 
