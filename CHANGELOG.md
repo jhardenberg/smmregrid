@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 - Allow for `cdo_options` and move from `extra` to `cdo_extra` (#31)
 - Refactor the logging (#31)
+- Remove remnants from ESMF support (#30)
 
 ## [v0.0.6]
 
