@@ -21,10 +21,9 @@
 To apply a regridding you will need a set of weights mapping from the source
 grid to the target grid.
 
-Regridding weights can be generated online using ESMF_RegridWeightGen
-(:func:`esmf_generate_weights`) or CDO (:func:`cdo_generate_weights`), or
-offline by calling these programs externally (this is recommended especially
-for large grids, using ESMF_REgridWeightGen in MPI mode).
+Regridding weights can be generated online using CDO (:func:`cdo_generate_weights`),
+or offline by calling these programs externally (this is recommended especially
+for large grids).
 
 Once calculated :func:`regrid` will apply these weights using a Dask sparse
 matrix multiply, maintaining chunking in dimensions other than lat and lon.
@@ -47,7 +46,7 @@ from .log import setup_logger
 
 # default spatial dimensions and vertical coordinates
 default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                     'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem']
+                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem']
 
 
 def apply_weights(source_data, weights, weights_matrix=None,
@@ -90,43 +89,26 @@ def apply_weights(source_data, weights, weights_matrix=None,
     # array, multiplied by the weights matrix, then unstacked back into a 2d
     # array
 
-    # if w.title.startswith("ESMF"):
-    if "S" in w.variables:
-        # ESMF style weights
-        # src_address = w.col - 1
-        # dst_address = w.row - 1
-        # remap_matrix = w.S
-        # w_shape = (w.sizes["n_a"], w.sizes["n_b"])
+    # CDO style weights
+    # src_address = w.src_address - 1
+    # dst_address = w.dst_address - 1
+    # remap_matrix = w.remap_matrix[:, 0]
+    # w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
 
-        dst_grid_shape = w.dst_grid_dims.values
-        dst_grid_center_lat = w.yc_b.data.reshape(dst_grid_shape[::-1])
-        dst_grid_center_lon = w.xc_b.data.reshape(dst_grid_shape[::-1])
+    dst_grid_shape = w.dst_grid_dims.values
+    dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(
+        # dst_grid_shape[::-1], order="C"
+        dst_grid_shape[::-1]
+    )
+    dst_grid_center_lon = w.dst_grid_center_lon.data.reshape(
+        # dst_grid_shape[::-1], order="C"
+        dst_grid_shape[::-1]
+    )
 
-        dst_mask = w.mask_b
+    dst_mask = w.dst_grid_imask
+    # src_mask = w.src_grid_imask
 
-        axis_scale = 1  # Weight lat/lon in degrees
-
-    else:
-        # CDO style weights
-        # src_address = w.src_address - 1
-        # dst_address = w.dst_address - 1
-        # remap_matrix = w.remap_matrix[:, 0]
-        # w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
-
-        dst_grid_shape = w.dst_grid_dims.values
-        dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(
-            # dst_grid_shape[::-1], order="C"
-            dst_grid_shape[::-1]
-        )
-        dst_grid_center_lon = w.dst_grid_center_lon.data.reshape(
-            # dst_grid_shape[::-1], order="C"
-            dst_grid_shape[::-1]
-        )
-
-        dst_mask = w.dst_grid_imask
-        # src_mask = w.src_grid_imask
-
-        axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
+    axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
     # Dimension on which we can produce the interpolation
     if space_dims is None:
@@ -144,7 +126,6 @@ def apply_weights(source_data, weights, weights_matrix=None,
     kept_shape = list(source_data.shape[0:nd])
     kept_dims = list(source_data.dims[0:nd])
     loggy.info('Dimension kept: %s', kept_dims)
-    #loggy.info(kept_dims)
 
     if weights_matrix is None:
         weights_matrix = compute_weights_matrix(weights)
@@ -176,7 +157,7 @@ def apply_weights(source_data, weights, weights_matrix=None,
 
         # apply the mask
         target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
-    
+
     # after the tensordot, bring the NaN back in
     # Use greater than 1e19 to avoid numerical noise from interpolation.
     target_dask = xarray.where(target_dask > 1e19, numpy.nan, target_dask)
@@ -240,15 +221,15 @@ class Regridder(object):
     Supply either both ``source_grid`` and ``dest_grid`` or just ``weights``.
 
     For large grids you may wish to pre-calculate the weights using
-    ESMF_RegridWeightGen, if not supplied ``weights`` will be calculated from
+    CDO, if not supplied ``weights`` will be calculated from
     ``source_grid`` and ``dest_grid`` using CDO's genbil function.
 
     Weights may be pre-computed by an external program, or created using
-    :func:`cdo_generate_weights` or :func:`esmf_generate_weights`
+    :func:`cdo_generate_weights`.
 
     Args:
-        source_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Source grid / sample dataset
-        target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample dataset
+        source_grid (:class:`xarray.DataArray`): Source grid / sample dataset
+        target_grid (:class:`xarray.DataArray`): Target grid / sample dataset
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
         vert_coord (str): Name of the vertical coordinate.
                           If provided, 3D weights are generated (default: None)
@@ -374,7 +355,7 @@ class Regridder(object):
         # be treated in a smarter way
         if ("bnds" in source_data.name or "bounds" in source_data.name):
             return source_data
-        
+
         # If a special additional coordinate is present pick correct levels from weights
         coord = next((coord for coord in source_data.coords if coord.startswith(self.level_idx)), None)
         if coord:  # if a coordinate starting with level_idx is found
