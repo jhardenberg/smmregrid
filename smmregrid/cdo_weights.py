@@ -4,12 +4,12 @@ import os
 import sys
 import tempfile
 import subprocess
+import logging
 from multiprocessing import Process, Manager
 import numpy
 import xarray
 from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
-import logging
 
 # set up logger
 loggy = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def worker(wlist, nnn, *args, **kwargs):
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
-                         gridpath=None, extra=None, vert_coord=None, cdo="cdo", nproc=1):
+                         gridpath=None, cdo_extra=None, cdo_options=None, vert_coord=None, cdo="cdo", nproc=1):
     """Generate the weights using CDO, handling both 2D and 3D cases"""
 
     # Check if there is a vertical coordinate for 3d oceanic data
@@ -40,7 +40,8 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
             remap_area_min=remap_area_min,
             icongridpath=icongridpath,
             gridpath=gridpath,
-            extra=extra,
+            cdo_extra=cdo_extra,
+            cdo_options=cdo_options,
             cdo=cdo,
             nproc=nproc)
 
@@ -53,12 +54,12 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         return xarray.merge([weights, masked_xa])
 
     else:  # we are 3D
-        if extra:
+        if cdo_extra:
             # make sure extra is a flat list if it is not already
-            if not isinstance(extra, list):
+            if not isinstance(cdo_extra, list):
                 extra = [extra]
         else:
-            extra = []
+            cdo_extra = []
 
         if isinstance(source_grid, str):
             sgrid = xarray.open_dataset(source_grid)
@@ -82,7 +83,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
             processes = []
             for lev in block:
                 loggy.info("Generating level: %s", str(lev))
-                extra2 = [f"-sellevidx,{lev+1}"]
+                cdo_extra_vertical = [f"-sellevidx,{lev+1}"]
                 ppp = Process(target=worker,
                               args=(wlist, lev, source_grid, target_grid),
                               kwargs=dict(method=method,
@@ -91,7 +92,8 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                                           remap_area_min=remap_area_min,
                                           icongridpath=icongridpath,
                                           gridpath=gridpath,
-                                          extra=extra + extra2,
+                                          cdo_extra=cdo_extra + cdo_extra_vertical,
+                                          cdo_options=cdo_options,
                                           cdo=cdo,
                                           nproc=nproc))
                 ppp.start()
@@ -114,7 +116,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
 
 def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=True,
                            remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
-                           gridpath=None, extra=None, cdo="cdo", nproc=1):
+                           gridpath=None, cdo_extra=None, cdo_options=None, cdo="cdo", nproc=1):
     """
     Generate weights for regridding using CDO
 
@@ -141,7 +143,8 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         remap_area_min (float): Minimum destination area fraction
         gridpath (str): where to store downloaded grids
         icongridpath (str): location of ICON grids (e.g. /pool/data/ICON)
-        extra: command(s) to apply to source grid before weight generation (can be a list)
+        cdo_extra: command(s) to apply to source grid before weight generation (can be a list)
+        cdo_options: command(s) to apply to cdo (can be a list)
         cdo: the command to launch cdo ["cdo"]
         nproc: number of processes to use for weight generation (NOT USED!)
 
@@ -189,42 +192,26 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         env["CDO_ICON_GRIDS"] = icongridpath
 
     try:
-        # Run CDO
-        if extra:
-            # make sure extra is a flat list if it is not already
-            if not isinstance(extra, list):
-                extra = [extra]
 
-            subprocess.check_output(
-                [
-                    cdo,
-                    f"gen{method},{tgrid}"
-                ] + extra +
-                [
-                    sgrid,
-                    weight_file.name,
-                ],
-                stderr=subprocess.STDOUT,
-                env=env,
-            )
-        else:
-            subprocess.check_output(
-                [
-                    cdo,
-                    f"gen{method},{tgrid}",
-                    sgrid,
-                    weight_file.name,
-                ],
-                stderr=subprocess.STDOUT,
-                env=env,
-            )
+        # condense cdo options
+        cdo_extra = cdo_extra if isinstance(cdo_extra, list) else ([cdo_extra] if cdo_extra else [])
+        cdo_options = cdo_options if isinstance(cdo_options, list) else ([cdo_options] if cdo_options else [])
+
+        # call to subprocess in compact way
+        subprocess.check_output(
+            [cdo] + cdo_options +
+            [f"gen{method},{tgrid}"] + cdo_extra +
+            [sgrid, weight_file.name],
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
 
         # Grab the weights file it outputs as a xarray.Dataset
         weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
         return weights
 
     except subprocess.CalledProcessError as err:
-        # Print the CDO error message
+
         print(err.output.decode(), file=sys.stderr)
         raise
 

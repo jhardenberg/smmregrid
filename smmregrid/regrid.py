@@ -132,10 +132,13 @@ def apply_weights(source_data, weights, weights_matrix=None, masked=True, space_
     if space_dims is None:
         space_dims = default_space_dims
 
+    print(source_data)
+
     if not any(x in source_data.dims for x in space_dims):
         loggy.error("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
         loggy.error(space_dims)
-        sys.exit('Dimensions mismatch')
+        loggy.error('smmregrid can identify only %s', source_data.dims)
+        raise KeyError('Dimensions mismatch')
 
     # Find dimensions to keep
     nd = sum([(d not in space_dims) for d in source_data.dims])
