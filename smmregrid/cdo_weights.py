@@ -210,11 +210,18 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         cdo_extra = cdo_extra if isinstance(cdo_extra, list) else ([cdo_extra] if cdo_extra else [])
         cdo_options = cdo_options if isinstance(cdo_options, list) else ([cdo_options] if cdo_options else [])
 
+        command = [
+            cdo,
+            *cdo_options,
+            f"gen{method},{tgrid}",  # Method and target grid
+            *cdo_extra,
+            sgrid,
+            weight_file.name
+        ]
+
         # call to subprocess in compact way
         subprocess.check_output(
-            [cdo] + cdo_options +
-            [f"gen{method},{tgrid}"] + cdo_extra +
-            [sgrid, weight_file.name],
+            command,
             stderr=subprocess.STDOUT,
             env=env,
         )
