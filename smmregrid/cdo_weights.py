@@ -4,15 +4,13 @@ import os
 import sys
 import tempfile
 import subprocess
-import logging
 from multiprocessing import Process, Manager
 import numpy
 import xarray
 from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
+from .log import setup_logger
 
-# set up logger
-loggy = logging.getLogger(__name__)
 
 
 def worker(wlist, nnn, *args, **kwargs):
@@ -22,8 +20,12 @@ def worker(wlist, nnn, *args, **kwargs):
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
-                         gridpath=None, cdo_extra=None, cdo_options=None, vert_coord=None, cdo="cdo", nproc=1):
+                         gridpath=None, cdo_extra=None, cdo_options=None, vert_coord=None, 
+                         cdo="cdo", nproc=1, loglevel='warning'):
     """Generate the weights using CDO, handling both 2D and 3D cases"""
+
+    loggy = setup_logger(level=loglevel, name='smmregrid.cdo_generate_weights')
+
 
     # Check if there is a vertical coordinate for 3d oceanic data
     if not vert_coord:
@@ -116,7 +118,8 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
 
 def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=True,
                            remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
-                           gridpath=None, cdo_extra=None, cdo_options=None, cdo="cdo", nproc=1):
+                           gridpath=None, cdo_extra=None, cdo_options=None, cdo="cdo", 
+                           nproc=1):
     """
     Generate weights for regridding using CDO
 
