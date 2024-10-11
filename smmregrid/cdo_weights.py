@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 import subprocess
+import warnings
 from multiprocessing import Process, Manager
 import numpy
 import xarray
@@ -20,12 +21,22 @@ def worker(wlist, nnn, *args, **kwargs):
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
-                         gridpath=None, cdo_extra=None, cdo_options=None, vert_coord=None, 
+                         gridpath=None, extra=None, cdo_extra=None, cdo_options=None, vert_coord=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
     """Generate the weights using CDO, handling both 2D and 3D cases"""
 
     loggy = setup_logger(level=loglevel, name='smmregrid.cdo_generate_weights')
 
+    # Check for deprecated 'extra' argument
+    if extra is not None:
+        warnings.warn(
+            "'extra' is deprecated and will be removed in future versions. "
+            "Please use 'cdo_extra' instead.",
+            DeprecationWarning
+        )
+        # If cdo_extra is not provided, use the value from extra
+        if cdo_extra is None:
+            cdo_extra = extra
 
     # Check if there is a vertical coordinate for 3d oceanic data
     if not vert_coord:
@@ -56,12 +67,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         return xarray.merge([weights, masked_xa])
 
     else:  # we are 3D
-        if cdo_extra:
-            # make sure extra is a flat list if it is not already
-            if not isinstance(cdo_extra, list):
-                extra = [extra]
-        else:
-            cdo_extra = []
+        cdo_extra = cdo_extra if isinstance(cdo_extra, list) else ([cdo_extra] if cdo_extra else [])
 
         if isinstance(source_grid, str):
             sgrid = xarray.open_dataset(source_grid)
@@ -88,16 +94,18 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                 cdo_extra_vertical = [f"-sellevidx,{lev+1}"]
                 ppp = Process(target=worker,
                               args=(wlist, lev, source_grid, target_grid),
-                              kwargs=dict(method=method,
-                                          extrapolate=extrapolate,
-                                          remap_norm=remap_norm,
-                                          remap_area_min=remap_area_min,
-                                          icongridpath=icongridpath,
-                                          gridpath=gridpath,
-                                          cdo_extra=cdo_extra + cdo_extra_vertical,
-                                          cdo_options=cdo_options,
-                                          cdo=cdo,
-                                          nproc=nproc))
+                              kwargs={
+                                    "method": method,
+                                    "extrapolate": extrapolate,
+                                    "remap_norm": remap_norm,
+                                    "remap_area_min": remap_area_min,
+                                    "icongridpath": icongridpath,
+                                    "gridpath": gridpath,
+                                    "cdo_extra": cdo_extra + cdo_extra_vertical,
+                                    "cdo_options": cdo_options,
+                                    "cdo": cdo,
+                                    "nproc": nproc
+                                })
                 ppp.start()
                 processes.append(ppp)
 
@@ -111,14 +119,16 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         weights = mask_weights(weights, weights_matrix, vert_coord)
         masked = check_mask(weights, vert_coord)
         masked = [int(x) for x in masked]  # convert to list of int
-        masked_xa = xarray.DataArray(masked, coords={vert_coord: range(0, len(masked))}, name="dst_grid_masked")
+        masked_xa = xarray.DataArray(masked, 
+                                     coords={vert_coord: range(0, len(masked))},
+                                     name="dst_grid_masked")
 
         return xarray.merge([weights, masked_xa])
 
 
 def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=True,
                            remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
-                           gridpath=None, cdo_extra=None, cdo_options=None, cdo="cdo", 
+                           gridpath=None, cdo_extra=None, cdo_options=None, cdo="cdo",
                            nproc=1):
     """
     Generate weights for regridding using CDO
@@ -187,7 +197,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         env["REMAP_EXTRAPOLATE"] = "off"
 
     env["CDO_REMAP_NORM"] = remap_norm
-    env["REMAP_AREA_MIN"] = "%f" % (remap_area_min)
+    env["REMAP_AREA_MIN"] = f"{remap_area_min:f}"
 
     if gridpath:
         env["CDO_DOWNLOAD_PATH"] = gridpath

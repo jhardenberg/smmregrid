@@ -384,8 +384,7 @@ class Regridder(object):
             levlist = list(range(0, source_data.coords[self.vert_coord].values.size))
 
         data3d_list = []
-        for lev in range(0, len(levlist)):
-            levidx = levlist[lev]
+        for lev, levidx in enumerate(levlist):
             xa = source_data.isel(**{self.vert_coord: lev})
             wa = self.weights.isel(**{self.vert_coord: levidx})
             nl = wa.link_length.values
@@ -394,7 +393,7 @@ class Regridder(object):
             mm = self.masked[levidx]
             data3d_list.append(apply_weights(
                 xa, wa, weights_matrix=wm,
-                masked=mm, space_dims=self.space_dims, 
+                masked=mm, space_dims=self.space_dims,
                 loglevel=self.loglevel)
             )
         data3d = xarray.concat(data3d_list, dim=self.vert_coord)
@@ -412,7 +411,7 @@ class Regridder(object):
 
             return data3d
         else:
-            sys.exit('Cannot process this source data, are you sure it is an xarray?')
+            raise ValueError('Cannot process this source data, are you sure it is an xarray?')
 
     def regrid2d(self, source_data):
         """Regrid ``source_data`` to match the target grid, 2D version

@@ -11,10 +11,20 @@ INDIR = 'tests/data'
 tfile = os.path.join(INDIR, 'r360x180.nc')
 rfile = os.path.join(INDIR, 'regional.nc')
 
+# test for healpix with extra and options
+@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+def test_healpix_extra(method):
+    wfield = cdo_generate_weights(os.path.join(INDIR, 'healpix_0.nc'), tfile,
+                                  method = method, cdo_extra = '-setgrid,hp1_nested',
+                                  cdo_options='--force', loglevel='debug')
+    interpolator = Regridder(weights=wfield, loglevel='debug')
+    xfield = xarray.open_mfdataset(os.path.join(INDIR, 'healpix_0.nc'))
+    rfield = interpolator.regrid(xfield)
+    assert rfield['tas'].shape == (2, 180, 360)
 
 # test to verify that NaN are preserved
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
-def test_nan_preserve(method): 
+def test_nan_preserve(method):
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     xfield['tas'][1,:,:] = numpy.nan
     wfield = cdo_generate_weights(xfield, tfile, method = method, loglevel='debug')
@@ -100,4 +110,3 @@ def test_full_plev_gaussian(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'ua-ecearth.nc'), tfile,
                            remap_method=method, init_method='grids')
     assert fff is True
-
