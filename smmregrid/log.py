@@ -13,7 +13,7 @@ def setup_logger(level=None, name=None):
     logger = logging.getLogger(name)  # Create a logger specific to your module
 
     if logger.handlers:
-        logger.warning('Logging is already setup with name %s', name)
+        #logger.warning('Logging is already setup with name %s', name)
         if level != logging.getLevelName(logger.getEffectiveLevel()):
             logger.setLevel(loglev)
             logger.info('Updating the log_level to %s', loglev)
