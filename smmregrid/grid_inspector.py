@@ -38,7 +38,7 @@ class GridInspector():
         if grid_key not in self.grids:
             self.grids[grid_key] = {
                 'variables': [],
-                'dimensions': grid_key,
+                'dims': grid_key,
                 'horizontal_dims': self._identify_horizontal_dims(grid_key),
                 'vertical_dims': self._identify_vertical_dims(grid_key),
                 'time_dims': self._identify_time_dims(grid_key)
