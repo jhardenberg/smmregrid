@@ -41,7 +41,6 @@ from .dimension import remove_degenerate_axes
 from .cdo_weights import cdo_generate_weights
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
-from .util import find_vert_coords
 from .gridinspector import GridInspector
 
 # default spatial dimensions and vertical coordinates
@@ -76,7 +75,7 @@ class Regridder(object):
     """
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', horizontal_dims=None, vertical_dim=None, transpose=True,
+                 method='con', transpose=True,
                  cdo='cdo', level_index="idx_", loglevel='WARNING'):
 
         if (source_grid is None or target_grid is None) and (weights is None):
@@ -103,11 +102,11 @@ class Regridder(object):
             if not self.grids[0].dims:
                 self.loggy.warning('Missing weights dimension information, support only single-gridtype datasets')
 
-            # # TODO: this has to set somehow else
-            # if not vertical_dim:
-            #    self.vertical_dim = find_vert_coords(self.weights)
-            # else:
-            #    self.vertical_dim = vertical_dim
+            # to check if this is reallly needed
+            if weights.coords:
+                self.grids[0].vertical_dim = list(weights.coords)[0]
+
+
         else:
 
             # need to open the dataset: TODO: verify what is the most efficient way
@@ -200,7 +199,7 @@ class Regridder(object):
             self.loggy.warning('Assuming gridtype from data to be the same from weights')
             self.grids[0].dims = datagridtype.dims
             self.grids[0].horizontal_dims = datagridtype.horizontal_dims
-            self.grids[0].vertical_dim = datagridtype.vertical_dim
+            #self.grids[0].vertical_dim = datagridtype.vertical_dim
 
         # if the current grid is not available in the Regrid gridtype
         if datagridtype not in self.grids:
@@ -469,7 +468,7 @@ class Regridder(object):
 
 
 
-def regrid(source_data, target_grid=None, weights=None, vertical_dim=None, transpose=True, cdo='cdo'):
+def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo'):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
     to the target grid because it re-generates the weights each time you call
@@ -480,8 +479,6 @@ def regrid(source_data, target_grid=None, weights=None, vertical_dim=None, trans
     Args:
         source_data (:class:`xarray.DataArray`): Source variable
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample variable
-        vertical_dim (str): Name of the vertical coordinate.
-                          If provided, 3D weights are generated (default: None)
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
         transpose (bool): If True, transpose the output so that the vertical
                           coordinate is just before the other spatial coordinates (default: True)
@@ -492,8 +489,7 @@ def regrid(source_data, target_grid=None, weights=None, vertical_dim=None, trans
     """
 
 
-    regridder = Regridder(source_data, target_grid=target_grid, weights=weights,
-                          vertical_dim=vertical_dim, cdo=cdo, transpose=transpose)
+    regridder = Regridder(source_data, target_grid=target_grid, weights=weights, cdo=cdo, transpose=transpose)
     return regridder.regrid(source_data)
 
 

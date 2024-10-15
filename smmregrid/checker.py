@@ -57,11 +57,13 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     # method with automatic creation of weights
     if init_method == 'grids':
         interpolator = Regridder(source_grid=finput, target_grid=ftarget,
-                                 method=remap_method, vertical_dim=vertical_dim)
+                                 method=remap_method)
     if init_method == 'weights':
         wfield = cdo_generate_weights(finput, ftarget,
                                       method=remap_method, vertical_dim=vertical_dim)
-        interpolator = Regridder(weights=wfield, vertical_dim=vertical_dim)
+        interpolator = Regridder(weights=wfield)
+    else:
+        raise KeyError('Unsupported init method')
     rfield = interpolator.regrid(xfield)
 
     if access == 'Dataset':
@@ -99,15 +101,20 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
         cdofield = cdofield[cdovar[0]]
 
     # compute weights
-    wfield = cdo_generate_weights(finput, ftarget,
-                                  method=remap_method, vertical_dim=vertical_dim)
+    if vertical_dim == 'plev':
+        wfield = cdo_generate_weights(finput, ftarget,
+                                  method=remap_method)    
+    else:
+        wfield = cdo_generate_weights(finput, ftarget,
+                                    method=remap_method, 
+                                    vertical_dim=vertical_dim)
     
     # Pass full 3D weights
-    interpolator = Regridder(weights=wfield, vertical_dim=vertical_dim)
+    interpolator = Regridder(weights=wfield)
 
-    # Add a helper idx_3d coordinate
-    idx = list(range(0, len(xfield.coords[vertical_dim])))
-    xfield = xfield.assign_coords(idx_3d=(vertical_dim, idx))
+    # Add a helper idx_3d coordinate (unclear why it was here)
+    #idx = list(range(0, len(xfield.coords[vertical_dim])))
+    #xfield = xfield.assign_coords(idx_3d=(vertical_dim, idx))
 
     # subselect some levels
     xfield = xfield.isel(**{vertical_dim: levels})
