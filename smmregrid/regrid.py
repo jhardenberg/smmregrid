@@ -111,9 +111,11 @@ class Regridder(object):
 
             # need to open the dataset: TODO: verify what is the most efficient way
             if isinstance(source_grid, str):
-                source_grid = xarray.open_dataset(source_grid)
+                source_grid_array = xarray.open_dataset(source_grid)
+            else:
+                source_grid_array = source_grid
 
-            grid_info = GridInspector(source_grid, clean=True, loglevel=self.loglevel)
+            grid_info = GridInspector(source_grid_array, clean=True, loglevel=self.loglevel)
             self.grids = grid_info.get_grid_info()
 
             for gridtype in self.grids:
@@ -121,6 +123,7 @@ class Regridder(object):
                 self.loggy.debug('Horizontal dimension is %s', gridtype.horizontal_dims)
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
 
+                # alwys prefer to pass file (i.e. source_grid) when possible to cdo_generate_weights
                 gridtype.weights = cdo_generate_weights(source_grid, target_grid, method=method,
                                                         vertical_dim=gridtype.vertical_dim,
                                                         cdo=cdo, loglevel=loglevel)
