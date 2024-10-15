@@ -24,7 +24,7 @@ def find_var(xfield):
 
 
 def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
-                     init_method='grids', vert_coord=None):
+                     init_method='grids', vertical_dim=None):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests."""
@@ -57,11 +57,11 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     # method with automatic creation of weights
     if init_method == 'grids':
         interpolator = Regridder(source_grid=finput, target_grid=ftarget,
-                                 method=remap_method, vert_coord=vert_coord)
+                                 method=remap_method, vertical_dim=vertical_dim)
     if init_method == 'weights':
         wfield = cdo_generate_weights(finput, ftarget,
-                                      method=remap_method, vert_coord=vert_coord)
-        interpolator = Regridder(weights=wfield, vert_coord=vert_coord)
+                                      method=remap_method, vertical_dim=vertical_dim)
+        interpolator = Regridder(weights=wfield, vertical_dim=vertical_dim)
     rfield = interpolator.regrid(xfield)
 
     if access == 'Dataset':
@@ -73,7 +73,7 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     return checker
 
 
-def check_cdo_regrid_levels(finput, ftarget, vert_coord, levels, remap_method='con', access='Dataset'):
+def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method='con', access='Dataset'):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
@@ -87,7 +87,7 @@ def check_cdo_regrid_levels(finput, ftarget, vert_coord, levels, remap_method='c
     cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True)
 
     # Keep only some levels
-    cdofield = cdofield.isel(**{vert_coord: levels})
+    cdofield = cdofield.isel(**{vertical_dim: levels})
 
     # var as the one which have time and not have bnds (could work)
     smmvar = find_var(xfield)
@@ -100,17 +100,17 @@ def check_cdo_regrid_levels(finput, ftarget, vert_coord, levels, remap_method='c
 
     # compute weights
     wfield = cdo_generate_weights(finput, ftarget,
-                                  method=remap_method, vert_coord=vert_coord)
+                                  method=remap_method, vertical_dim=vertical_dim)
     
     # Pass full 3D weights
-    interpolator = Regridder(weights=wfield, vert_coord=vert_coord)
+    interpolator = Regridder(weights=wfield, vertical_dim=vertical_dim)
 
     # Add a helper idx_3d coordinate
-    idx = list(range(0, len(xfield.coords[vert_coord])))
-    xfield = xfield.assign_coords(idx_3d=(vert_coord, idx))
+    idx = list(range(0, len(xfield.coords[vertical_dim])))
+    xfield = xfield.assign_coords(idx_3d=(vertical_dim, idx))
 
     # subselect some levels
-    xfield = xfield.isel(**{vert_coord: levels})
+    xfield = xfield.isel(**{vertical_dim: levels})
 
     # Regrid level selection
     rfield = interpolator.regrid(xfield)
