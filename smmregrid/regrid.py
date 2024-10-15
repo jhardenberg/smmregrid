@@ -43,10 +43,6 @@ from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weig
 from .log import setup_logger
 from .gridinspector import GridInspector
 
-# default spatial dimensions and vertical coordinates
-#default_horizontal_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-#                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem']
-
 
 class Regridder(object):
     """Set up the regridding operation
@@ -76,7 +72,7 @@ class Regridder(object):
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', transpose=True,
-                 cdo='cdo', level_index="idx_", loglevel='WARNING'):
+                 cdo='cdo', loglevel='WARNING'):
 
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
@@ -265,8 +261,7 @@ class Regridder(object):
 
             return data3d
         else:
-            #TODO: WTF is this? Where it comes from?
-            raise ValueError('Cannot process this source data, are you sure it is an xarray?')
+            raise ValueError(f'Cannot transpose output dimensions {data3d.dims} over {target_horizontal_dims}')
 
     def regrid2d(self, source_data, datagridtype):
         """Regrid ``source_data`` to match the target grid, 2D version
