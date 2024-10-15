@@ -8,20 +8,16 @@ import warnings
 from multiprocessing import Process, Manager
 import numpy
 import xarray
-from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
-
-
 
 def worker(wlist, nnn, *args, **kwargs):
     """Run a worker process"""
     wlist[nnn] = cdo_generate_weights2d(*args, **kwargs).compute()
 
-
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
-                         gridpath=None, extra=None, cdo_extra=None, cdo_options=None, vert_coord=None,
+                         gridpath=None, extra=None, cdo_extra=None, cdo_options=None, vertical_dim=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
     """Generate the weights using CDO, handling both 2D and 3D cases"""
 
@@ -38,12 +34,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         if cdo_extra is None:
             cdo_extra = extra
 
-    # Check if there is a vertical coordinate for 3d oceanic data
-    if not vert_coord:
-        vert_coord = find_vert_coords(source_grid)
-        loggy.info('vert_coord is %s', str(vert_coord))
-
-    if not vert_coord:  # Are we 2D? Use default method
+    if not vertical_dim:  # Are we 2D? Use default method
         weights = cdo_generate_weights2d(
             source_grid,
             target_grid,
@@ -60,8 +51,8 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
 
         # Precompute destination weights mask
         weights_matrix = compute_weights_matrix(weights)
-        weights = mask_weights(weights, weights_matrix, vert_coord)
-        masked = int(check_mask(weights, vert_coord))
+        weights = mask_weights(weights, weights_matrix, vertical_dim)
+        masked = int(check_mask(weights, vertical_dim))
         masked_xa = xarray.DataArray(masked, name="dst_grid_masked")
 
         return xarray.merge([weights, masked_xa])
@@ -74,7 +65,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         else:
             sgrid = source_grid
 
-        nvert = sgrid[vert_coord].values.size
+        nvert = sgrid[vertical_dim].values.size
         # print(nvert)
 
         # for lev in range(0, nvert):
@@ -112,15 +103,15 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
             for proc in processes:
                 proc.join()
 
-        weights = weightslist_to_3d(wlist, vert_coord)
+        weights = weightslist_to_3d(wlist, vertical_dim)
 
         # Precompute destination weights mask
-        weights_matrix = compute_weights_matrix3d(weights, vert_coord)
-        weights = mask_weights(weights, weights_matrix, vert_coord)
-        masked = check_mask(weights, vert_coord)
+        weights_matrix = compute_weights_matrix3d(weights, vertical_dim)
+        weights = mask_weights(weights, weights_matrix, vertical_dim)
+        masked = check_mask(weights, vertical_dim)
         masked = [int(x) for x in masked]  # convert to list of int
         masked_xa = xarray.DataArray(masked, 
-                                     coords={vert_coord: range(0, len(masked))},
+                                     coords={vertical_dim: range(0, len(masked))},
                                      name="dst_grid_masked")
 
         return xarray.merge([weights, masked_xa])
@@ -244,7 +235,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         weight_file.close()
 
 
-def weightslist_to_3d(ds_list, vert_coord='lev'):
+def weightslist_to_3d(ds_list, vertical_dim='lev'):
     """
     Function to combine a list of 2D cdo weights into a 3D one adding a vertical coordinate lev
     """
@@ -257,7 +248,7 @@ def weightslist_to_3d(ds_list, vert_coord='lev'):
     dim_values = range(len(ds_list))
     nl = [ds.src_address.size for ds in ds_list]
     nl0 = max(nl)
-    nlda = xarray.DataArray(nl, coords={vert_coord: range(0, len(nl))}, name="link_length")
+    nlda = xarray.DataArray(nl, coords={vertical_dim: range(0, len(nl))}, name="link_length")
     new_array = []
     varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
     ds0 = ds_list[0].drop_vars(varlist)
@@ -267,5 +258,5 @@ def weightslist_to_3d(ds_list, vert_coord='lev'):
         xplist = [x[vname].pad(**{links_dim: (0, nl0 - nl1), "mode": 'constant', "constant_values": 0})
                   for vname in varlist]
         xmerged = xarray.merge(xplist)
-        new_array.append(xmerged.assign_coords({vert_coord: d}))
-    return xarray.merge([nlda, ds0, xarray.concat(new_array, vert_coord)])
+        new_array.append(xmerged.assign_coords({vertical_dim: d}))
+    return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim)])

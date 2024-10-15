@@ -34,20 +34,19 @@ multiple datasets.
 
 
 import math
-import sys
 import xarray
 import numpy
 import dask.array
 from .dimension import remove_degenerate_axes
 from .cdo_weights import cdo_generate_weights
-from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
-from .grid_inspector import GridInspector
+from .util import find_vert_coords
+from .gridinspector import GridInspector
 
 # default spatial dimensions and vertical coordinates
-default_space_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem']
+#default_horizontal_dims = ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
+#                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem']
 
 
 class Regridder(object):
@@ -66,93 +65,80 @@ class Regridder(object):
         source_grid (:class:`xarray.DataArray`): Source grid / sample dataset
         target_grid (:class:`xarray.DataArray`): Target grid / sample dataset
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
-        vert_coord (str): Name of the vertical coordinate.
+        vertical_dim (str): Name of the vertical coordinate.
                           If provided, 3D weights are generated (default: None)
-        level_idx (str): Prefix of helper vertical coordinate with original level indices.
+        level_index (str): Prefix of helper vertical coordinate with original level indices.
                          If provided, 3D weights are selected from those levels (default: "idx_")
         method (str): Method to use for interpolation (default: 'con')
-        space_dims (list): list of dimensions to interpolate (default: None)
+        horizontal_dims (list): list of dimensions to interpolate (default: None)
         transpose (bool): transpose the output so that the vertical coordinate is
                           just before other spatial coords (dafault: True)
     """
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', space_dims=None, vert_coord=None, transpose=True,
-                 cdo='cdo', level_idx="idx_", loglevel='WARNING'):
+                 method='con', horizontal_dims=None, vertical_dim=None, transpose=True,
+                 cdo='cdo', level_index="idx_", loglevel='WARNING'):
 
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
             )
         
-        self.loggy = setup_logger(level=loglevel, name='smmregrid.regrid')
+        # set up logger
+        self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
-
         self.transpose = transpose
 
         # Is there already a weights file?
         if weights is not None:
-            raise KeyError('This version cannot initialize yet through weigths')
-            #if not isinstance(weights, xarray.Dataset):
-            #    self.weights = xarray.open_mfdataset(weights)
-            #else:
-            #    self.weights = weights
-#
-#            if not vert_coord:
-#                self.vert_coord = find_vert_coords(self.weights)
-#            else:
-#                self.vert_coord = vert_coord
-        else:
             
+            self.loggy.warning('Precomputed weights support only single-gridtype datasets')
+
+            if not isinstance(weights, xarray.Dataset):
+                weights = xarray.open_mfdataset(weights)
+
+            grid_info = GridInspector(weights, cdo_weights=True,
+                                       clean=False, loglevel=loglevel)
+            self.grids = grid_info.get_grid_info()
+            if not self.grids[0].dims:
+                self.loggy.warning('Missing weights dimension information, support only single-gridtype datasets')
+
+            # # TODO: this has to set somehow else
+            # if not vertical_dim:
+            #    self.vertical_dim = find_vert_coords(self.weights)
+            # else:
+            #    self.vertical_dim = vertical_dim
+        else:
+
+            # need to open the dataset: TODO: verify what is the most efficient way
             if isinstance(source_grid, str):
                 source_grid = xarray.open_dataset(source_grid)
-            
-            grid_info = GridInspector(source_grid, clean=True, loglevel=loglevel)
+
+            grid_info = GridInspector(source_grid, clean=True, loglevel=self.loglevel)
             self.grids = grid_info.get_grid_info()
-            self.weights = {}
-            self.vert_coord = {}
 
-            for grid in self.grids:
-                self.loggy.debug('Processing grids %s', grid)
-                self.vert_coord[grid] = self.grids[grid]['vertical_dims']
-                if self.vert_coord[grid]:
-                    self.vert_coord[grid] = self.vert_coord[grid][0]
-                self.loggy.debug('Vertical coordinate is %s', self.vert_coord[grid])
-                #sample_variable = self.grids[grid]['variables'][0]
-                #self.loggy.debug('Sample variable is %s', sample_variable)
-                self.weights[grid] = cdo_generate_weights(source_grid, #[sample_variable],
-                                                          target_grid, method=method,
-                                                          vert_coord=self.vert_coord[grid],
-                                                          cdo=cdo, loglevel=loglevel)
+            for gridtype in self.grids:
+                self.loggy.debug('Processing grids %s', gridtype.dims)
+                self.loggy.debug('Horizontal dimension is %s', gridtype.horizontal_dims)
+                self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
 
-            # Check if there is a vertical coordinate for 3d oceanic data
-            #if not vert_coord:
-            #    self.vert_coord = find_vert_coords(source_grid)
-            #else:
-            #    self.vert_coord = vert_coord
-
-            # Generate the weights with CDO
-            #self.weights = cdo_generate_weights(source_grid, target_grid, method=method,
-            #                                    vert_coord=self.vert_coord, cdo=cdo)
-
-        for grid in self.grids:
-            self.weights_matrix = {}
-            self.masked = {}
-            if self.vert_coord[grid]:
-                self.weights_matrix[grid] = compute_weights_matrix3d(self.weights[grid], self.vert_coord[grid])
+                gridtype.weights = cdo_generate_weights(source_grid, target_grid, method=method,
+                                                        vertical_dim=gridtype.vertical_dim,
+                                                        cdo=cdo, loglevel=loglevel)
+    
+        for gridtype in self.grids:
+            if gridtype.vertical_dim:
+                gridtype.weights_matrix = compute_weights_matrix3d(gridtype.weights, gridtype.vertical_dim)
             else:
-                self.weights_matrix[grid] = compute_weights_matrix(self.weights[grid])
+                gridtype.weights_matrix = compute_weights_matrix(gridtype.weights)
 
             # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
-            if "dst_grid_masked" in self.weights[grid].variables:  # has a destination mask been precomputed?
-                self.masked[grid] = self.weights[grid].dst_grid_masked.data  # ok, let's use it
+            if "dst_grid_masked" in gridtype.weights.variables:  # has a destination mask been precomputed?
+                gridtype.masked = gridtype.weights.dst_grid_masked.data  # ok, let's use it
             else:
                 # compute the destination mask now
-                self.weights[grid] = mask_weights(self.weights[grid], self.weights_matrix[grid], self.vert_coord[grid])
-                self.masked[grid] = check_mask(self.weights[grid], self.vert_coord[grid])
-
-        self.space_dims = space_dims
-        self.level_idx = level_idx
+                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.vertical_dim)
+                gridtype.masked = check_mask(gridtype.weights, gridtype.vertical_dim)
 
     def regrid(self, source_data):
         """Regrid ``source_data`` to match the target grid
@@ -180,22 +166,21 @@ class Regridder(object):
             return self.regrid_array(source_data)
 
         else:
-            sys.exit('The object provided is not a Xarray object!')
+            raise TypeError('The object provided is not a Xarray object!')
 
     def regrid_array(self, source_data):
         """Regridding selection through 2d and 3d arrays"""
 
-        grid_inspect = GridInspector(source_data, clean=False, loglevel=self.loglevel)
-        data_grids = grid_inspect.get_grid_info()
-        for mygrid in data_grids.keys():
-            if data_grids[mygrid]['vertical_dims']:
-            #if (self.vert_coord and self.vert_coord in source_data.coords):
+        grid_inspect = GridInspector(source_data, clean=True, loglevel=self.loglevel)
+        datagrids = grid_inspect.get_grid_info()
+        for datagridtype in datagrids:
+            if datagridtype.vertical_dim:
                 # if this is a 3D we specified the vertical coord and it has it
-                return self.regrid3d(source_data, mygrid)
-            else:
-                return self.regrid2d(source_data, mygrid)
+                return self.regrid3d(source_data, datagridtype)
+            # 2d case
+            return self.regrid2d(source_data, datagridtype)
 
-    def regrid3d(self, source_data, mygrid):
+    def regrid3d(self, source_data, datagridtype):
         """Regrid ``source_data`` to match the target grid - 3D version
 
         Args:
@@ -209,19 +194,31 @@ class Regridder(object):
 
         self.loggy.debug('3D DataArray access: variable is %s', source_data.name)
 
-        if mygrid in self.weights:
-            vert_coord = self.vert_coord[mygrid]
-            weights = self.weights[mygrid]
-            weights_matrix = self.weights_matrix[mygrid]
-            masked = self.masked[mygrid]
+        # special case for CDO weights without any dimensional information
+        # we derived this from the regridded data and we use it as it is
+        if self.grids[0].cdo_weights:
+            self.loggy.warning('Assuming gridtype from data to be the same from weights')
+            self.grids[0].dims = datagridtype.dims
+            self.grids[0].horizontal_dims = datagridtype.horizontal_dims
+            self.grids[0].vertical_dim = datagridtype.vertical_dim
 
-        else:
+        # if the current grid is not available in the Regrid gridtype
+        if datagridtype not in self.grids:
             self.loggy.info('%s will be excluded from the output', source_data.name)
             return xarray.DataArray(data=None)
-
+        
+        gridtype = next((grid for grid in self.grids if grid == datagridtype), None)
+        
+        # select the gridtype to be used
+        vertical_dim = gridtype.vertical_dim
+        weights = gridtype.weights
+        weights_matrix = gridtype.weights_matrix
+        masked = gridtype.masked
+        level_index = gridtype.level_index
+        horizontal_dims = gridtype.horizontal_dims
 
         # CDO 2.2.0 fix
-        if "numLinks" in self.weights[mygrid].dims:
+        if "numLinks" in weights.dims:
             links_dim = "numLinks"
         else:
             links_dim = "num_links"
@@ -232,43 +229,44 @@ class Regridder(object):
             return source_data
 
         # If a special additional coordinate is present pick correct levels from weights
-        coord = next((coord for coord in source_data.coords if coord.startswith(self.level_idx)), None)
-        if coord:  # if a coordinate starting with level_idx is found
+        coord = next((coord for coord in source_data.coords if coord.startswith(level_index)), None)
+        if coord:  # if a coordinate starting with level_index is found
             levlist = source_data.coords[coord].values.tolist()
             levlist = [levlist] if numpy.isscalar(levlist) else levlist
         else:
-            levlist = list(range(0, source_data.coords[vert_coord].values.size))
+            levlist = list(range(0, source_data.coords[vertical_dim].values.size))
 
         data3d_list = []
         for lev, levidx in enumerate(levlist):
-            xa = source_data.isel(**{vert_coord: lev})
-            wa = weights.isel(**{vert_coord: levidx})
+            self.loggy.debug('Processing vertical level %s - level_index %s', lev, levidx)
+            xa = source_data.isel(**{vertical_dim: lev})
+            wa = weights.isel(**{vertical_dim: levidx})
             nl = wa.link_length.values
             wa = wa.isel(**{links_dim: slice(0, nl)})
             wm = weights_matrix[levidx]
             mm = masked[levidx]
             data3d_list.append(self.apply_weights(
                 xa, wa, weights_matrix=wm,
-                masked=mm, space_dims=self.space_dims)
+                masked=mm, horizontal_dims=horizontal_dims)
             )
-        data3d = xarray.concat(data3d_list, dim=vert_coord)
+        data3d = xarray.concat(data3d_list, dim=vertical_dim)
 
+        # get dimensional info on target grid. TODO: can be moved at the init?
+        target_gridtypes = GridInspector(data3d, clean=True, loglevel=self.loglevel).get_grid_info()
+        target_horizontal_dims = target_gridtypes[0].horizontal_dims
+    
         if self.transpose:
-            # Make sure that the vertical dimension is just before the spatial ones
-            if self.space_dims is None:
-                space_dims = default_space_dims
-            else:
-                space_dims = self.space_dims
             dims = list(data3d.dims)
-            index = min([i for i, s in enumerate(dims) if s in space_dims])
+            index = min([i for i, s in enumerate(dims) if s in target_horizontal_dims])
             dimst = dims[1:index] + [dims[0]] + dims[index:]
             data3d = data3d.transpose(*dimst)
 
             return data3d
         else:
+            #TODO: WTF is this? Where it comes from?
             raise ValueError('Cannot process this source data, are you sure it is an xarray?')
 
-    def regrid2d(self, source_data, mygrid):
+    def regrid2d(self, source_data, datagridtype):
         """Regrid ``source_data`` to match the target grid, 2D version
 
         Args:
@@ -280,24 +278,33 @@ class Regridder(object):
             version of the source variable
         """
         self.loggy.debug('2D DataArray access: variables is %s', source_data.name)
-        # data_grids = GridInspector(source_data).get_grid_info()
-        # data_variables = GridInspector(source_data).get_variable_grids()
-        # for data_grid in data_grids:
-        #     print(source_data[data_variables])
-        #data_variables = grid_inspect.get_variable_grids()
-        if mygrid in self.weights:
-            weights = self.weights[mygrid]
-            weights_matrix = self.weights_matrix[mygrid]
-        else:
+
+        # special case for CDO weights without any dimensional information
+        # we derived this from the regridded data and we use it as it is
+        if self.grids[0].cdo_weights:
+            self.loggy.warning('Assuming gridtype from data to be the same from weights')
+            self.grids[0].dims = datagridtype.dims
+            self.grids[0].horizontal_dims = datagridtype.horizontal_dims
+            self.grids[0].vertical_dim = datagridtype.vertical_dim
+
+        if datagridtype not in self.grids:
             self.loggy.info('%s will be excluded from the output', source_data.name)
             return xarray.DataArray(data=None)
-
+        
+        # select the gridtype to be used
+        gridtype = next((grid for grid in self.grids if grid == datagridtype), None)
+        
+        weights = gridtype.weights
+        weights_matrix = gridtype.weights_matrix
+        masked = gridtype.masked
+        horizontal_dims = gridtype.horizontal_dims
+        
         return self.apply_weights(
                 source_data, weights, weights_matrix=weights_matrix,
-                masked=self.masked, space_dims=self.space_dims)
+                masked=masked, horizontal_dims=horizontal_dims)
     
     def apply_weights(self, source_data, weights, weights_matrix=None,
-                  masked=True, space_dims=None):
+                  masked=True, horizontal_dims=None):
         """
         Apply the CDO weights ``weights`` to ``source_data``, performing a regridding operation
 
@@ -305,7 +312,7 @@ class Regridder(object):
             source_data (xarray.DataArray): Source dataset
             weights (xarray.DataArray): CDO weights information
             masked (bool): if the DataArray is masked
-            space_dims (list): dimensions on which the interpolation has to be done (e.g.['lon', 'lat'])
+            horizontal_dims (list): dimensions on which the interpolation has to be done (e.g.['lon', 'lat'])
 
         Returns:
             xarray.DataArray: Regridded version of the source dataset
@@ -357,17 +364,17 @@ class Regridder(object):
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
         # Dimension on which we can produce the interpolation
-        if space_dims is None:
-            space_dims = default_space_dims
+        #if horizontal_dims is None:
+        #    horizontal_dims = default_horizontal_dims
 
-        if not any(x in source_data.dims for x in space_dims):
+        if not any(x in source_data.dims for x in horizontal_dims):
             self.loggy.error("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
-            self.loggy.error(space_dims)
+            self.loggy.error(horizontal_dims)
             self.loggy.error('smmregrid can identify only %s', source_data.dims)
             raise KeyError('Dimensions mismatch')
 
         # Find dimensions to keep
-        nd = sum([(d not in space_dims) for d in source_data.dims])
+        nd = sum([(d not in horizontal_dims) for d in source_data.dims])
 
         kept_shape = list(source_data.shape[0:nd])
         kept_dims = list(source_data.dims[0:nd])
@@ -462,7 +469,7 @@ class Regridder(object):
 
 
 
-def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpose=True, cdo='cdo'):
+def regrid(source_data, target_grid=None, weights=None, vertical_dim=None, transpose=True, cdo='cdo'):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
     to the target grid because it re-generates the weights each time you call
@@ -473,7 +480,7 @@ def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpo
     Args:
         source_data (:class:`xarray.DataArray`): Source variable
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample variable
-        vert_coord (str): Name of the vertical coordinate.
+        vertical_dim (str): Name of the vertical coordinate.
                           If provided, 3D weights are generated (default: None)
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
         transpose (bool): If True, transpose the output so that the vertical
@@ -486,7 +493,7 @@ def regrid(source_data, target_grid=None, weights=None, vert_coord=None, transpo
 
 
     regridder = Regridder(source_data, target_grid=target_grid, weights=weights,
-                          vert_coord=vert_coord, cdo=cdo, transpose=transpose)
+                          vertical_dim=vertical_dim, cdo=cdo, transpose=transpose)
     return regridder.regrid(source_data)
 
 
