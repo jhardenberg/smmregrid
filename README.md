@@ -2,6 +2,8 @@
 [![PyTest](https://github.com/jhardenberg/smmregrid/actions/workflows/mambatest.yml/badge.svg)](https://github.com/jhardenberg/smmregrid/actions/workflows/mambatest.yml)
 [![Coverage Status](https://coveralls.io/repos/github/jhardenberg/smmregrid/badge.svg?branch=main)](https://coveralls.io/github/jhardenberg/smmregrid?branch=main)
 [![PyPI version](https://badge.fury.io/py/smmregrid.svg)](https://badge.fury.io/py/smmregrid)
+[![Documentation](https://readthedocs.org/projects/smmregrid/badge/?version=latest)](https://smmregrid.readthedocs.io/en/latest/?badge=latest)
+      
 
 # smmregrid
 A compact regridder using sparse matrix multiplication
