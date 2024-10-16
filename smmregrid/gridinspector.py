@@ -45,7 +45,15 @@ class GridInspector():
         Return basic information about CDO weights
         """
         
-        self.grids.append(GridType(dims=[], weights=self.data))
+        gridtype = GridType(dims=[], weights=self.data)
+
+        # get vertical info from the weights coords if available
+        if self.data.coords:
+            gridtype.vertical_dim = list(self.data.coords)[0]
+
+        self.grids.append(gridtype)
+
+            
 
     def get_grid_info(self):
         """
