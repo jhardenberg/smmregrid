@@ -16,7 +16,6 @@ class GridType:
         GridType object carrying the grid-specific information required by smmregrid
         """
 
-
         # key definitions
         self.dims = dims
         self.horizontal_dims = self._identify_dims('horizontal', DEFAULT_DIMS)
@@ -61,7 +60,6 @@ class GridType:
         """
         bounds_variables = []
 
-
         for var in data.name:
             if (var.endswith('_bnds') or var.endswith('_bounds')) and 'time' not in var:
                 bounds_variables.append(var)
@@ -81,23 +79,19 @@ class GridType:
         Identify the variables in the data that match the given dimensions and
         collect their coordinate information.
         """
-        # Handle Dataset and DataArray separately
+
+        if not isinstance(data, (xr.Dataset, xr.DataArray)):
+            raise TypeError("Unsupported data type. Must be an xarray Dataset or DataArray.")
+
+        # Handle Dataset and DataArray in a unified way
         if isinstance(data, xr.Dataset):
             variables = [var for var in data.data_vars if set(data[var].dims) == set(self.dims)]
-        elif isinstance(data, xr.DataArray):
-            if set(data.dims) == set(self.dims):
-                variables = [data.name]  # Handle DataArray as one variable
-            else:
-                variables = []
-        else:
-            raise TypeError("Unsupported data type. Must be an xarray Dataset or DataArray.")
+        else:  # For DataArray
+            variables = [data.name] if set(data.dims) == set(self.dims) else []
         
         # Populate variables_info with coordinate details
         for variable in variables:
-            if isinstance(data, xr.Dataset):
-                var_data = data[variable]
-            else:
-                var_data = data
+            var_data = data[variable] if isinstance(data, xr.Dataset) else data
             self.variables[variable] = {
                 'coords': list(var_data.coords),
                 'bnds': self._identify_spatial_bounds(var_data)
