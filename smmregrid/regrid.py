@@ -86,33 +86,10 @@ class Regridder(object):
 
         # Is there already a weights file?
         if weights is not None:
+            self.grids = self._gridtype_from_weights(weights)
             
-            self.loggy.warning('Precomputed weights support only single-gridtype datasets')
-
-            if not isinstance(weights, xarray.Dataset):
-                weights = xarray.open_mfdataset(weights)
-
-            grid_info = GridInspector(weights, cdo_weights=True,
-                                       clean=False, loglevel=loglevel)
-            self.grids = grid_info.get_grid_info()
-            if not self.grids[0].dims:
-                self.loggy.warning('Missing weights dimension information, support only single-gridtype datasets')
-
-            # to check if this is reallly needed
-            if weights.coords:
-                self.grids[0].vertical_dim = list(weights.coords)[0]
-
-
         else:
-
-            # need to open the dataset: TODO: verify what is the most efficient way
-            if isinstance(source_grid, str):
-                source_grid_array = xarray.open_dataset(source_grid)
-            else:
-                source_grid_array = source_grid
-
-            grid_info = GridInspector(source_grid_array, clean=True, loglevel=self.loglevel)
-            self.grids = grid_info.get_grid_info()
+            self.grid = self._gridtype_from_data(source_grid)
 
             for gridtype in self.grids:
                 self.loggy.debug('Processing grids %s', gridtype.dims)
@@ -137,6 +114,43 @@ class Regridder(object):
                 # compute the destination mask now
                 gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.vertical_dim)
                 gridtype.masked = check_mask(gridtype.weights, gridtype.vertical_dim)
+
+
+    def _gridtype_from_weights(self, weights):
+        """
+        Initialize the gridtype reading from weights
+        """
+    
+        self.loggy.warning('Precomputed weights support only single-gridtype datasets')
+
+        if not isinstance(weights, xarray.Dataset):
+            weights = xarray.open_mfdataset(weights)
+
+        grid_info = GridInspector(weights, cdo_weights=True,
+                                    clean=False, loglevel=self.loglevel)
+        gridtype = grid_info.get_grid_info()
+        if not gridtype[0].dims:
+            self.loggy.warning('Missing weights dimension information, support only single-gridtype datasets')
+
+        # to check if this is reallly needed
+        if weights.coords:
+            gridtype.vertical_dim = list(weights.coords)[0]
+        
+        return gridtype
+    
+    def _gridtype_from_data(self, source_data):
+        """
+        Initialize the gridtype reading from source_data
+        """
+
+        # need to open the dataset: TODO: verify what is the most efficient way
+        if isinstance(source_data, str):
+            source_grid_array = xarray.open_dataset(source_data)
+        else:
+            source_grid_array = source_data
+
+        grid_info = GridInspector(source_grid_array, clean=True, loglevel=self.loglevel)
+        return grid_info.get_grid_info()
 
     def regrid(self, source_data):
         """Regrid ``source_data`` to match the target grid
