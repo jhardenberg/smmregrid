@@ -8,10 +8,8 @@ import warnings
 from multiprocessing import Process, Manager
 import numpy
 import xarray
-from .util import find_vert_coords
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
-
 
 
 def worker(wlist, nnn, *args, **kwargs):
@@ -21,9 +19,62 @@ def worker(wlist, nnn, *args, **kwargs):
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
-                         gridpath=None, extra=None, cdo_extra=None, cdo_options=None, vert_coord=None,
+                         gridpath=None, extra=None, cdo_extra=None, cdo_options=None, vertical_dim=None,
+                         vert_coord=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
-    """Generate the weights using CDO, handling both 2D and 3D cases"""
+    """
+    Generate weights for regridding using Climate Data Operators (CDO), accommodating both 2D and 3D grid cases.
+
+    Args:
+        source_grid (str or xarray.Dataset): The source grid from which to generate weights. 
+                                              This can be a file path or an xarray dataset.
+        target_grid (str or xarray.Dataset): The target grid to which the source grid will be regridded. 
+                                              This can also be a file path or an xarray dataset.
+        method (str, optional): The remapping method to use. Default is "con" for conservative remapping.
+                                Other options may include 'bilinear', 'nearest', etc.
+        extrapolate (bool, optional): Whether to allow extrapolation beyond the grid boundaries. Defaults to True.
+        remap_norm (str, optional): The normalization method to apply when remapping. 
+                                     Default is "fracarea" which normalizes by fractional area.
+        remap_area_min (float, optional): Minimum area for remapping. Defaults to 0.0.
+        icongridpath (str, optional): Path to the ICON grid if applicable. Defaults to None.
+        gridpath (str, optional): Path to the grid information if applicable. Defaults to None.
+        extra (any, optional): Deprecated. Previously used for additional CDO options. Use `cdo_extra` instead.
+        cdo_extra (list or any, optional): Additional CDO command-line options. Defaults to None.
+        cdo_options (dict, optional): Options for CDO commands. Defaults to None.
+        vertical_dim (str, optional): Name of the vertical dimension in the source grid, if applicable.
+                                       Defaults to None. Use if the grid is 3D.
+        vert_coord (str, optional): Deprecated. Previously used to specify the vertical coordinate.
+                                     Use `vertical_dim` instead.
+        cdo (str, optional): The command to invoke CDO. Default is "cdo".
+        nproc (int, optional): Number of processes to use for parallel processing. Default is 1.
+        loglevel (str, optional): The logging level for messages. Default is 'warning'. Options include 
+                                   'debug', 'info', 'warning', 'error', and 'critical'.
+
+    Returns:
+        xarray.Dataset: A dataset containing the generated weights and a mask indicating which grid cells
+                        were successfully masked. The mask is stored in a variable named "dst_grid_masked".
+
+    Raises:
+        KeyError: If the specified vertical dimension cannot be found in the source grid.
+        Warning: If deprecated arguments `extra` or `vert_coord` are used.
+
+    Notes:
+        This function handles both 2D and 3D grid cases:
+        
+        - For 2D grids (when `vertical_dim` is None), it calls the `cdo_generate_weights2d` function 
+          to generate weights. The weights are then masked based on a precomputed weights matrix.
+          
+        - For 3D grids (when `vertical_dim` is specified), it uses multiprocessing to generate weights 
+          for each vertical level. It requires the vertical dimension to be present in the source grid, 
+          and it will generate a mask indicating valid and invalid weights for each vertical level.
+          
+        The function logs the progress of weight generation, including the length of vertical dimensions 
+        and each level being processed.
+
+        Deprecation Warning: The `extra` and `vert_coord` parameters are deprecated and will be removed in future versions. 
+        Users should migrate to using `cdo_extra` and `vertical_dim`, respectively.
+    """
+    
 
     loggy = setup_logger(level=loglevel, name='smmregrid.cdo_generate_weights')
 
@@ -38,12 +89,18 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         if cdo_extra is None:
             cdo_extra = extra
 
-    # Check if there is a vertical coordinate for 3d oceanic data
-    if not vert_coord:
-        vert_coord = find_vert_coords(source_grid)
-        loggy.info('vert_coord is %s', str(vert_coord))
+        # Check for deprecated 'extra' argument
+    if vert_coord is not None:
+        warnings.warn(
+            "'vert_coord' is deprecated and will be removed in future versions. "
+            "Please use 'vertical_dim' instead.",
+            DeprecationWarning
+        )
+        # If cdo_extra is not provided, use the value from extra
+        if vertical_dim is None:
+            vertical_dim = vert_coord
 
-    if not vert_coord:  # Are we 2D? Use default method
+    if not vertical_dim:  # Are we 2D? Use default method
         weights = cdo_generate_weights2d(
             source_grid,
             target_grid,
@@ -60,8 +117,8 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
 
         # Precompute destination weights mask
         weights_matrix = compute_weights_matrix(weights)
-        weights = mask_weights(weights, weights_matrix, vert_coord)
-        masked = int(check_mask(weights, vert_coord))
+        weights = mask_weights(weights, weights_matrix, vertical_dim)
+        masked = int(check_mask(weights, vertical_dim))
         masked_xa = xarray.DataArray(masked, name="dst_grid_masked")
 
         return xarray.merge([weights, masked_xa])
@@ -74,8 +131,11 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         else:
             sgrid = source_grid
 
-        nvert = sgrid[vert_coord].values.size
-        # print(nvert)
+        if not vertical_dim in sgrid:
+            raise KeyError(f'Cannot find vertical dim {vertical_dim} in {list(sgrid.dims)}')
+
+        nvert = sgrid[vertical_dim].values.size
+        loggy.info('Vertical dimensions has length: %s', nvert)
 
         # for lev in range(0, nvert):
         mgr = Manager()
@@ -91,36 +151,36 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
             processes = []
             for lev in block:
                 loggy.info("Generating level: %s", str(lev))
-                cdo_extra_vertical = [f"-sellevidx,{lev+1}"]
+                cdo_extra_vertical = [f"-sellevidx,{lev + 1}"]
                 ppp = Process(target=worker,
                               args=(wlist, lev, source_grid, target_grid),
                               kwargs={
-                                    "method": method,
-                                    "extrapolate": extrapolate,
-                                    "remap_norm": remap_norm,
-                                    "remap_area_min": remap_area_min,
-                                    "icongridpath": icongridpath,
-                                    "gridpath": gridpath,
-                                    "cdo_extra": cdo_extra + cdo_extra_vertical,
-                                    "cdo_options": cdo_options,
-                                    "cdo": cdo,
-                                    "nproc": nproc
-                                })
+                                  "method": method,
+                                  "extrapolate": extrapolate,
+                                  "remap_norm": remap_norm,
+                                  "remap_area_min": remap_area_min,
+                                  "icongridpath": icongridpath,
+                                  "gridpath": gridpath,
+                                  "cdo_extra": cdo_extra + cdo_extra_vertical,
+                                  "cdo_options": cdo_options,
+                                  "cdo": cdo,
+                                  "nproc": nproc
+                              })
                 ppp.start()
                 processes.append(ppp)
 
             for proc in processes:
                 proc.join()
 
-        weights = weightslist_to_3d(wlist, vert_coord)
+        weights = weightslist_to_3d(wlist, vertical_dim)
 
         # Precompute destination weights mask
-        weights_matrix = compute_weights_matrix3d(weights, vert_coord)
-        weights = mask_weights(weights, weights_matrix, vert_coord)
-        masked = check_mask(weights, vert_coord)
+        weights_matrix = compute_weights_matrix3d(weights, vertical_dim)
+        weights = mask_weights(weights, weights_matrix, vertical_dim)
+        masked = check_mask(weights, vertical_dim)
         masked = [int(x) for x in masked]  # convert to list of int
-        masked_xa = xarray.DataArray(masked, 
-                                     coords={vert_coord: range(0, len(masked))},
+        masked_xa = xarray.DataArray(masked,
+                                     coords={vertical_dim: range(0, len(masked))},
                                      name="dst_grid_masked")
 
         return xarray.merge([weights, masked_xa])
@@ -223,7 +283,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         subprocess.check_output(
             command,
             stderr=subprocess.STDOUT,
-            env=env,
+            env=env
         )
 
         # Grab the weights file it outputs as a xarray.Dataset
@@ -244,7 +304,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         weight_file.close()
 
 
-def weightslist_to_3d(ds_list, vert_coord='lev'):
+def weightslist_to_3d(ds_list, vertical_dim='lev'):
     """
     Function to combine a list of 2D cdo weights into a 3D one adding a vertical coordinate lev
     """
@@ -257,7 +317,7 @@ def weightslist_to_3d(ds_list, vert_coord='lev'):
     dim_values = range(len(ds_list))
     nl = [ds.src_address.size for ds in ds_list]
     nl0 = max(nl)
-    nlda = xarray.DataArray(nl, coords={vert_coord: range(0, len(nl))}, name="link_length")
+    nlda = xarray.DataArray(nl, coords={vertical_dim: range(0, len(nl))}, name="link_length")
     new_array = []
     varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
     ds0 = ds_list[0].drop_vars(varlist)
@@ -267,5 +327,5 @@ def weightslist_to_3d(ds_list, vert_coord='lev'):
         xplist = [x[vname].pad(**{links_dim: (0, nl0 - nl1), "mode": 'constant', "constant_values": 0})
                   for vname in varlist]
         xmerged = xarray.merge(xplist)
-        new_array.append(xmerged.assign_coords({vert_coord: d}))
-    return xarray.merge([nlda, ds0, xarray.concat(new_array, vert_coord)])
+        new_array.append(xmerged.assign_coords({vertical_dim: d}))
+    return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim)])

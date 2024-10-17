@@ -39,19 +39,19 @@ tests = [
     "pytest"
 ]
 
+docs = [
+    "sphinx<7.0",
+    "sphinx-rtd-theme"
+]
+
 notebooks = [
     "ipykernel",
     "matplotlib",
     "jinja2"
 ]
 
-#docs = [
-#    "sphinx",
-#    "sphinx-rtd-theme"
-#]
-
 all = [
-    "smmregrid[tests,notebooks]"
+    "smmregrid[tests,notebooks,docs]"
 ]
 
 [project.urls]

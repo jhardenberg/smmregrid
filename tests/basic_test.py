@@ -13,20 +13,32 @@ rfile = os.path.join(INDIR, 'regional.nc')
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_healpix_extra(method):
     """Test for healpix with cdo_extra and cdo_options"""
+    if method == 'con':
+        options = ['--force']
+    else:
+        options = ['--force', '-f', 'nc']
     wfield = cdo_generate_weights(os.path.join(INDIR, 'healpix_0.nc'), tfile,
                                   method = method, cdo_extra = '-setgrid,hp1_nested',
-                                  cdo_options='--force', loglevel='debug')
+                                  cdo_options=options, loglevel='debug')
     interpolator = Regridder(weights=wfield, loglevel='debug')
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'healpix_0.nc'))
     rfield = interpolator.regrid(xfield)
     assert rfield['tas'].shape == (2, 180, 360)
 
-@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+@pytest.mark.parametrize("method", ['con', 'nn', 'bic'])
 def test_nan_preserve(method):
     """Test to verify that NaN are preserved"""
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     xfield['tas'][1,:,:] = numpy.nan
     wfield = cdo_generate_weights(xfield, tfile, method = method, loglevel='debug')
-    interpolator = Regridder(weights=wfield, loglevel='debug')
+    interpolator = Regridder(weights=wfield, space_dims='pippo', loglevel='debug')
     rfield = interpolator.regrid(xfield)
     assert numpy.isnan(rfield['tas'][1,:,:]).all().compute()
+
+@pytest.mark.parametrize("method", ['nn'])
+def test_datarray(method):
+    """"Minimal test to verify regridding from DataArray"""
+    xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
+    interpolator = Regridder(source_grid=xfield['tas'], target_grid=tfile, loglevel='debug', method = method)
+    interp = interpolator.regrid(source_data=xfield)
+    assert interp['tas'].shape == (12, 180, 360)
