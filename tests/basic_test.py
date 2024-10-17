@@ -31,6 +31,6 @@ def test_nan_preserve(method):
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     xfield['tas'][1,:,:] = numpy.nan
     wfield = cdo_generate_weights(xfield, tfile, method = method, loglevel='debug')
-    interpolator = Regridder(weights=wfield, loglevel='debug')
+    interpolator = Regridder(weights=wfield, space_dims='pippo', loglevel='debug')
     rfield = interpolator.regrid(xfield)
     assert numpy.isnan(rfield['tas'][1,:,:]).all().compute()

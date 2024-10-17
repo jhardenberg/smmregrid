@@ -47,10 +47,10 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     smmvar = find_var(xfield)
     cdovar = find_var(cdofield)
 
-    if len(smmvar) == 1 and access == 'DataArray':
-        xfield = xfield[smmvar[0]]
-    if len(cdovar) == 1 and access == 'DataArray':
-        cdofield = cdofield[cdovar[0]]
+    #if len(smmvar) == 1 and access == 'DataArray':
+    #    xfield = xfield[smmvar[0]]
+    #if len(cdovar) == 1 and access == 'DataArray':
+    #    cdofield = cdofield[cdovar[0]]
 
     # interpolation with smmregrid (CDO-based)
     # method with creation of weights
@@ -98,10 +98,10 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
     smmvar = find_var(xfield)
     cdovar = find_var(cdofield)
 
-    if len(smmvar) == 1 and access == 'DataArray':
-        xfield = xfield[smmvar[0]]
-    if len(cdovar) == 1 and access == 'DataArray':
-        cdofield = cdofield[cdovar[0]]
+    #if len(smmvar) == 1 and access == 'DataArray':
+    #    xfield = xfield[smmvar[0]]
+    #if len(cdovar) == 1 and access == 'DataArray':
+    #    cdofield = cdofield[cdovar[0]]
 
     # compute weights
     if vertical_dim == 'plev':
