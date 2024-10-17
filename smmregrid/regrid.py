@@ -47,41 +47,49 @@ from .gridinspector import GridInspector
 
 
 class Regridder(object):
-    """Set up the regridding operation
-
-    Supply either both ``source_grid`` and ``dest_grid`` or just ``weights``.
-
-    For large grids you may wish to pre-calculate the weights using
-    CDO, if not supplied ``weights`` will be calculated from
-    ``source_grid`` and ``dest_grid`` using CDO's genbil function.
-
-    Weights may be pre-computed by an external program, or created using
-    :func:`cdo_generate_weights`.
-
-    Args:
-        source_grid (:class:`xarray.DataArray`): Source grid / sample dataset
-        target_grid (:class:`xarray.DataArray`): Target grid / sample dataset
-        weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
-        vertical_dim (str): Name of the vertical coordinate.
-                          If provided, 3D weights are generated (default: None)
-        level_index (str): Prefix of helper vertical coordinate with original level indices.
-                         If provided, 3D weights are selected from those levels (default: "idx_")
-        method (str): Method to use for interpolation (default: 'con')
-        horizontal_dims (list): list of dimensions to interpolate (default: None)
-        transpose (bool): transpose the output so that the vertical coordinate is
-                          just before other spatial coords (dafault: True)
-    """
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', transpose=True, vert_coord=None, vertical_dim=None,
                  space_dims=None,
                  cdo='cdo', loglevel='WARNING'):
+        """
+        Initialize the Regridder for performing regridding operations.
+
+        This class allows for regridding between two grids, either by providing 
+        source and target grids or by using pre-computed weights. For large grids, 
+        it is recommended to pre-calculate weights using CDO. If weights are not 
+        supplied, they will be calculated using CDO's `genbil` function based on 
+        the provided source and target grids.
+
+        Pre-computed weights can be generated externally or by using 
+        :func:`cdo_generate_weights`.
+
+        Args:
+            source_grid (xarray.DataArray or str): Source grid dataset or file path.
+            target_grid (xarray.DataArray): Target grid dataset for regridding.
+            weights (xarray.Dataset): Pre-computed interpolation weights.
+            vertical_dim (str): Name of the vertical coordinate for 3D weights generation (default: None).
+            method (str): Interpolation method to use (default: 'con').
+            space_dims (list): List of spatial dimensions to interpolate (default: None).
+            transpose (bool): If True, transpose the output such that the vertical coordinate
+                              is placed just before the other spatial coordinates (default: True).
+            cdo (str): Path to the CDO executable (default: 'cdo').
+            loglevel (str): Logging level for the operation (default: 'WARNING').
+
+        Raises:
+            ValueError: If neither weights nor source and target grids are provided.
+            FileNotFoundError: If the specified source grid file does not exist.
+            KeyError: If no grid types are found in the data.
+
+        Warnings:
+            DeprecationWarning: If deprecated arguments 'vert_coord' or 'space_dims' are used.
+        """
 
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
             )
-
+        
         # Check for deprecated 'vert_coord' argument
         if vert_coord is not None:
             warnings.warn(
@@ -91,7 +99,7 @@ class Regridder(object):
         # If cdo_extra is not provided, use the value from extra
         if vertical_dim is None:
             vertical_dim = vert_coord
-
+        
         # Check for deprecated 'space_dim' argument
         if space_dims is not None:
             warnings.warn(
@@ -103,9 +111,10 @@ class Regridder(object):
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
         self.transpose = transpose
-        self.vertical_dim = [vertical_dim]  # need a list
+        self.vertical_dim = [vertical_dim] #need a list
         if vertical_dim:
             self.loggy.info('Forcing vertical_dim: expecting a single gridtype dataset')
+
 
         # Is there already a weights file?
         if weights is not None:
@@ -122,14 +131,14 @@ class Regridder(object):
 
             self.grids = self._gridtype_from_data(source_grid_array)
 
-            len_grids = len(self.grids)
+            len_grids =  len(self.grids)
             if len_grids == 0:
                 raise KeyError('Cannot find any gridtype in your data, aborting!')
             if len_grids == 1:
                 self.loggy.info('One gridtype found! Standard procedure')
             else:
                 self.loggy.info('%s gridtypes found! We are in uncharted territory!', len_grids)
-
+            
             for gridtype in self.grids:
                 self.loggy.debug('Processing grids %s', gridtype.dims)
                 self.loggy.debug('Horizontal dimension is %s', gridtype.horizontal_dims)
@@ -138,7 +147,7 @@ class Regridder(object):
                 # always prefer to pass file (i.e. source_grid) when possible to cdo_generate_weights
                 # this will limit errors from xarray and speed up CDO itself
                 # it wil work only for single gridtype dataset
-                if isinstance(source_grid, str) and len_grids == 1:
+                if isinstance(source_grid, str) and len_grids==1:
                     source_grid_array_to_cdo = source_grid
                 else:
                     # when feeding from xarray, select the variable and its bounds
@@ -152,7 +161,7 @@ class Regridder(object):
                 gridtype.weights = cdo_generate_weights(source_grid_array_to_cdo, target_grid, method=method,
                                                         vertical_dim=gridtype.vertical_dim,
                                                         cdo=cdo, loglevel=loglevel)
-
+    
         for gridtype in self.grids:
             if gridtype.vertical_dim:
                 gridtype.weights_matrix = compute_weights_matrix3d(gridtype.weights, gridtype.vertical_dim)
@@ -167,46 +176,52 @@ class Regridder(object):
                 gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.vertical_dim)
                 gridtype.masked = check_mask(gridtype.weights, gridtype.vertical_dim)
 
+
     def _gridtype_from_weights(self, weights):
         """
         Initialize the gridtype reading from weights
         """
-
+    
         self.loggy.warning('Precomputed weights support so far single-gridtype datasets')
 
         if not isinstance(weights, xarray.Dataset):
             weights = xarray.open_mfdataset(weights)
 
         grid_info = GridInspector(weights, cdo_weights=True, extra_dims={'vertical': self.vertical_dim},
-                                  clean=False, loglevel=self.loglevel)
+                                    clean=False, loglevel=self.loglevel)
         gridtype = grid_info.get_grid_info()
-        # if not gridtype[0].dims:
+        #if not gridtype[0].dims:
         #    self.loggy.warning('Missing weights dimension information, support only single-gridtype datasets')
-
+        
         return gridtype
-
+    
     def _gridtype_from_data(self, source_grid_array):
         """
         Initialize the gridtype reading from source_data
         """
 
-        grid_info = GridInspector(source_grid_array, extra_dims={'vertical': self.vertical_dim},
+        grid_info = GridInspector(source_grid_array, extra_dims={'vertical': self.vertical_dim}, 
                                   clean=True, loglevel=self.loglevel)
         return grid_info.get_grid_info()
 
     def regrid(self, source_data):
-        """Regrid ``source_data`` to match the target grid
+        """
+        Regrid the provided source data to match the target grid.
+
+        This method applies the regridding process to either a single data array or
+        a dataset containing multiple data variables.
 
         Args:
-            source_data (:class:`xarray.DataArray` or xarray.Dataset): Source
-            variable
+            source_data (xarray.DataArray or xarray.Dataset): The source data to be regridded.
 
         Returns:
-            :class:`xarray.DataArray` or xarray.Dataset with a regridded
-            version of the source variable
+            xarray.DataArray or xarray.Dataset: The regridded data, matching the target grid.
+
+        Raises:
+            TypeError: If the provided source data is neither an xarray DataArray nor Dataset.
         """
 
-        # apply the regridder on each DataArray
+         # apply the regridder on each DataArray
         if isinstance(source_data, xarray.Dataset):
             out = source_data.map(self.regrid_array, keep_attrs=False)
 
@@ -221,9 +236,23 @@ class Regridder(object):
             raise TypeError('The object provided is not a Xarray object!')
 
     def regrid_array(self, source_data):
-        """Regridding selection through 2d and 3d arrays"""
+        """
+        Perform regridding on a single 2D or 3D array.
 
-        grid_inspect = GridInspector(source_data, clean=True,
+        This method decides whether to call the 2D or 3D regridding function based
+        on the dimensions of the source data.
+
+        Args:
+            source_data (xarray.DataArray): The source data array to regrid.
+
+        Returns:
+            xarray.DataArray: The regridded array.
+
+        Raises:
+            ValueError: If the input data does not match expected dimensions.
+        """
+
+        grid_inspect = GridInspector(source_data, clean=True,  
                                      extra_dims={'vertical': self.vertical_dim}, loglevel=self.loglevel)
         datagrids = grid_inspect.get_grid_info()
 
@@ -233,7 +262,7 @@ class Regridder(object):
                 return self.regrid3d(source_data, datagridtype)
             # 2d case
             return self.regrid2d(source_data, datagridtype)
-
+        
     def _get_gridtype(self, datagridtype):
 
         # special case for CDO weights without any dimensional information
@@ -242,22 +271,27 @@ class Regridder(object):
             self.loggy.warning('Assuming gridtype from data to be the same from weights')
             self.grids[0].dims = datagridtype.dims
             self.grids[0].horizontal_dims = datagridtype.horizontal_dims
-
+        
         # match the grid
         gridtype = next((grid for grid in self.grids if grid == datagridtype), None)
 
         return gridtype
 
     def regrid3d(self, source_data, datagridtype):
-        """Regrid ``source_data`` to match the target grid - 3D version
+        """
+        Regrid a 3D source data array to match the target grid.
+
+        This method applies the necessary weights and handles vertical coordinates.
 
         Args:
-            source_data (:class:`xarray.DataArray`): Source
-            variable
+            source_data (xarray.DataArray): The 3D source data to be regridded.
+            datagridtype: The grid type information for the source data.
 
         Returns:
-            :class:`xarray.DataArray` with a regridded
-            version of the source variable
+            xarray.DataArray: The regridded 3D data.
+
+        Raises:
+            ValueError: If there are issues with transposing the output dimensions.
         """
 
         self.loggy.debug('3D DataArray access: variable is %s', source_data.name)
@@ -269,7 +303,7 @@ class Regridder(object):
         if gridtype is None:
             self.loggy.info('%s will be excluded from the output', source_data.name)
             return xarray.DataArray(data=None)
-
+   
         # select the gridtype to be used
         vertical_dim = gridtype.vertical_dim
         weights = gridtype.weights
@@ -315,7 +349,7 @@ class Regridder(object):
         # get dimensional info on target grid. TODO: can be moved at the init?
         target_gridtypes = GridInspector(data3d, clean=True, loglevel=self.loglevel).get_grid_info()
         target_horizontal_dims = target_gridtypes[0].horizontal_dims
-
+    
         if self.transpose:
             dims = list(data3d.dims)
             index = min([i for i, s in enumerate(dims) if s in target_horizontal_dims])
@@ -327,15 +361,17 @@ class Regridder(object):
             raise ValueError(f'Cannot transpose output dimensions {data3d.dims} over {target_horizontal_dims}')
 
     def regrid2d(self, source_data, datagridtype):
-        """Regrid ``source_data`` to match the target grid, 2D version
+        """
+        Regrid a 2D source data array to match the target grid.
+
+        This method applies the necessary weights for 2D data regridding.
 
         Args:
-            source_data (:class:`xarray.DataArray`): Source
-            variable
+            source_data (xarray.DataArray): The 2D source data to be regridded.
+            datagridtype: The grid type information for the source data.
 
         Returns:
-            :class:`xarray.DataArray` with a regridded
-            version of the source variable
+            xarray.DataArray: The regridded 2D data.
         """
         self.loggy.debug('2D DataArray access: variables is %s', source_data.name)
 
@@ -345,28 +381,36 @@ class Regridder(object):
         if gridtype is None:
             self.loggy.info('%s will be excluded from the output', source_data.name)
             return xarray.DataArray(data=None)
-
+        
         return self.apply_weights(
-            source_data,
-            gridtype.weights,
-            weights_matrix=gridtype.weights_matrix,
-            masked=gridtype.masked,
-            horizontal_dims=gridtype.horizontal_dims)
-
+                source_data,  
+                gridtype.weights, 
+                weights_matrix= gridtype.weights_matrix,
+                masked= gridtype.masked, 
+                horizontal_dims=gridtype.horizontal_dims)
+    
     def apply_weights(self, source_data, weights, weights_matrix=None,
-                      masked=True, horizontal_dims=None):
+                  masked=True, horizontal_dims=None):
         """
-        Apply the CDO weights ``weights`` to ``source_data``, performing a regridding operation
+        Apply CDO weights to the source data, performing the regridding operation.
+
+        This method multiplies the source data with the weights matrix to produce
+        the regridded output.
 
         Args:
-            source_data (xarray.DataArray): Source dataset
-            weights (xarray.DataArray): CDO weights information
-            masked (bool): if the DataArray is masked
-            horizontal_dims (list): dimensions on which the interpolation has to be done (e.g.['lon', 'lat'])
+            source_data (xarray.DataArray): The source data to be regridded.
+            weights (xarray.DataArray): The CDO weights for interpolation.
+            weights_matrix (xarray.DataArray, optional): Pre-computed weights matrix (default: None).
+            masked (bool): Indicates if the DataArray is masked (default: True).
+            horizontal_dims (list): List of dimensions for interpolation (e.g., ['lon', 'lat']).
 
         Returns:
-            xarray.DataArray: Regridded version of the source dataset
+            xarray.DataArray: The regridded version of the source dataset.
+
+        Raises:
+            KeyError: If none of the specified horizontal dimensions are found in the DataArray.
         """
+
 
         # Understand immediately if we need to return something or not
         # This is done if we have bounds variables
@@ -413,12 +457,11 @@ class Regridder(object):
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
         # Dimension on which we can produce the interpolation
-        # if horizontal_dims is None:
+        #if horizontal_dims is None:
         #    horizontal_dims = default_horizontal_dims
 
         if not any(x in source_data.dims for x in horizontal_dims):
-            self.loggy.error(
-                "None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
+            self.loggy.error("None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
             self.loggy.error(horizontal_dims)
             self.loggy.error('smmregrid can identify only %s', source_data.dims)
             raise KeyError('Dimensions mismatch')
@@ -518,6 +561,7 @@ class Regridder(object):
         return target_da
 
 
+
 def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo'):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
@@ -537,6 +581,7 @@ def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo
     Returns:
         :class:`xarray.DataArray` with a regridded version of the source variable
     """
+
 
     regridder = Regridder(source_data, target_grid=target_grid, weights=weights, cdo=cdo, transpose=transpose)
     return regridder.regrid(source_data)

@@ -10,7 +10,8 @@ Using PyPi
 
 .. warning::
 
-	Please note that although smmregrid is distributed via PyPi, it depends on packages that currently are available only on conda-forge and on configuration files available from the GitHub repository. 
+    Please note that although smmregrid is distributed via PyPi, it depends on packages that currently are available 
+    only on conda-forge and on configuration files available from the GitHub repository.
     Therefore, the installation via pip requires the creation of a conda environment as well as the clone from the repository.
 
 

@@ -14,7 +14,30 @@ DEFAULT_DIMS = {
 class GridType:
     def __init__(self, dims, extra_dims=None, weights=None):
         """
-        GridType object carrying the grid-specific information required by smmregrid
+        Initializes a GridType object carrying grid-specific information required by smmregrid.
+
+        Args:
+            dims (list): A list of default dimensions for the grid (e.g., ['time', 'lat', 'lon']).
+            extra_dims (dict, optional): A dictionary including keys 'vertical', 'time', and 'horizontal' 
+                                          that can be used to extend the default dimensions. Defaults to None.
+            weights (any, optional): Weights used in regridding. The format and purpose depend on the 
+                                     regridding method. Defaults to None.
+
+        Attributes:
+            dims (list): The dimensions defined for the grid.
+            horizontal_dims (list): The identified horizontal dimensions from the input.
+            vertical_dim (str or None): The identified vertical dimension, if applicable.
+            time_dims (list): The identified time dimensions from the input.
+            variables (dict): A dictionary holding identified variables and their coordinates.
+            bounds (list): A list of bounds variables identified in the dataset.
+            masked (any): Placeholder for masked data (to be defined later).
+            weights (any): The weights associated with the grid, if provided.
+            cdo_weights (bool): A flag indicating if weights are provided.
+            weights_matrix (any): Placeholder for a weights matrix (to be defined later).
+            level_index (str): A string used to identify the index of the levels.
+
+        Raises:
+            ValueError: If multiple vertical dimensions are identified during initialization.
         """
 
         # key definitions
@@ -35,10 +58,18 @@ class GridType:
 
     def _handle_default_dimensions(self, extra_dims):
         """
-        Extend the default dimensions according some vertical or horizontal
+        Extend the default dimensions based on the provided extra dimensions.
 
         Args:
-            extra_dims (dict): Including 'vertical', 'time', 'horizontal' keys
+            extra_dims (dict): A dictionary that can include 'vertical', 'time', and 
+                               'horizontal' keys for extending dimensions.
+
+        Returns:
+            dict: An updated dictionary of default dimensions that includes any extensions specified 
+                  in extra_dims.
+
+        Notes:
+            If extra_dims is None, the default dimensions remain unchanged.
         """
 
         if extra_dims is None:
@@ -51,18 +82,42 @@ class GridType:
         return update_dims
 
     def __eq__(self, other):
-        # so far equality based on dims only
+        """
+        Check for equality between two GridType instances.
+
+        Args:
+            other (GridType): Another GridType instance to compare against.
+
+        Returns:
+            bool: True if the dimensions of both instances are equal, False otherwise.
+        """
         if isinstance(other, GridType):
             return self.dims == other.dims
         return False
 
     def __hash__(self):
+        """
+        Generate a hash value for the GridType instance based on its dimensions.
+
+        Returns:
+            int: A hash value representing the dimensions of the GridType instance.
+        """
         return hash(self.dims)
 
     def _identify_dims(self, axis, default_dims):
         """
-        Generic dimension identifier method.
-        Takes a list of default dimensions to check against.
+        Identify dimensions along a specified axis.
+
+        Args:
+            axis (str): The axis to check ('horizontal', 'vertical', or 'time').
+            default_dims (dict): The dictionary of default dimensions to check against.
+
+        Returns:
+            list or str: A list of identified dimensions or a single identified vertical dimension.
+                          Returns None if no dimensions are identified.
+
+        Raises:
+            ValueError: If more than one vertical dimension is identified.
         """
         identified_dims = list(set(self.dims).intersection(default_dims[axis]))
         if axis == 'vertical':
@@ -74,30 +129,40 @@ class GridType:
 
     def _identify_spatial_bounds(self, data):
         """
-        Find all bounds variables in the dataset by looking for variables
-        with '_bnds' or '_bounds' suffix.
+        Identify bounds variables in the dataset by checking variable names.
+
+        Args:
+            data (xr.Dataset): An xarray dataset containing data variables.
+
+        Returns:
+            list: A list of bounds variable names identified in the dataset.
         """
         bounds_variables = []
 
         for var in data.data_vars:
             if (var.endswith('_bnds') or var.endswith('_bounds')) and 'time' not in var:
-                # store all the bounds fro each grid. not fancy, but effective
-                # boundvar = var.split('_')[0]
-                # if boundvar in self.dims:
                 bounds_variables.append(var)
 
         return bounds_variables
 
     # def identify_sizes(self, data):
     #    """
-    #    Idenfity the sizes of the dataset
+    #    Identify the sizes of the dataset based on the horizontal dimensions.
     #    """
     #
     #    if self.horizontal_dims:
     #        self.horizontal_sizes  = [data.sizes[x] for x in self.horizontal_dims]
 
     def _identify_variable(self, var_data, var_name=None):
-        """Helper function to process individual variables."""
+        """Helper function to process individual variables.
+
+        Args:
+            var_data (xr.DataArray): An xarray DataArray containing variable data.
+            var_name (str, optional): The name of the variable. If None, uses the name from var_data.
+
+        Updates:
+            self.variables: Updates the variables dictionary with the variable's coordinates.
+        """
         if set(var_data.dims) == set(self.dims):
             self.variables[var_name or var_data.name] = {
                 'coords': list(var_data.coords),
@@ -105,8 +170,17 @@ class GridType:
 
     def identify_variables(self, data):
         """
-        Identify the variables in the data that match the given dimensions and
-        collect their coordinate information.
+        Identify variables in the provided data that match the defined dimensions.
+
+        Args:
+            data (xr.Dataset or xr.DataArray): The input data from which to identify variables.
+
+        Raises:
+            TypeError: If the input data is neither an xarray Dataset nor DataArray.
+
+        Updates:
+            self.variables: Updates the variables dictionary with identified variables and their coordinates.
+            self.bounds: Updates the bounds list with identified bounds variables from the dataset.
         """
 
         if not isinstance(data, (xr.Dataset, xr.DataArray)):
@@ -119,8 +193,8 @@ class GridType:
 
         elif isinstance(data, xr.DataArray):
             self._identify_variable(data)
-
-     # def _identify_grid_type(self, grid_key):
+                    
+    # def _identify_grid_type(self, grid_key):
     #     """
     #     Determines the grid type (e.g., structured, unstructured, curvilinear).
     #     This could be expanded based on more detailed metadata inspection.

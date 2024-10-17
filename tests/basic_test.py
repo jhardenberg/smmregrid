@@ -37,6 +37,7 @@ def test_nan_preserve(method):
 
 @pytest.mark.parametrize("method", ['nn'])
 def test_datarray(method):
+    """"Minimal test to verify regridding from DataArray"""
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     interpolator = Regridder(source_grid=xfield['tas'], target_grid=tfile, loglevel='debug', method = method)
     interp = interpolator.regrid(source_data=xfield)

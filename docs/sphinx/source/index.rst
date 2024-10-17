@@ -4,16 +4,11 @@
    contain the root `toctree` directive.
 
 Welcome to smmregrid's documentation!
-===================================
+=====================================
 
 .. toctree::
    :maxdepth: 2
 
    intro
    installation
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`modindex`
+   api
