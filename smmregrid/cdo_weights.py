@@ -18,6 +18,7 @@ def worker(wlist, nnn, *args, **kwargs):
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
                          gridpath=None, extra=None, cdo_extra=None, cdo_options=None, vertical_dim=None,
+                         vert_coord=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
     """Generate the weights using CDO, handling both 2D and 3D cases"""
 
@@ -33,6 +34,17 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         # If cdo_extra is not provided, use the value from extra
         if cdo_extra is None:
             cdo_extra = extra
+
+        # Check for deprecated 'extra' argument
+    if vert_coord is not None:
+        warnings.warn(
+            "'vert_coord' is deprecated and will be removed in future versions. "
+            "Please use 'vertical_dim' instead.",
+            DeprecationWarning
+        )
+        # If cdo_extra is not provided, use the value from extra
+        if vertical_dim is None:
+            vertical_dim = vert_coord
 
     if not vertical_dim:  # Are we 2D? Use default method
         weights = cdo_generate_weights2d(

@@ -35,6 +35,7 @@ multiple datasets.
 
 import math
 import os
+import warnings
 import xarray
 import numpy
 import dask.array
@@ -72,7 +73,7 @@ class Regridder(object):
     """
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', transpose=True,
+                 method='con', transpose=True, vert_coord=None, space_dims=None,
                  cdo='cdo', loglevel='WARNING'):
 
         if (source_grid is None or target_grid is None) and (weights is None):
@@ -80,6 +81,19 @@ class Regridder(object):
                 "Either weights or source_grid/target_grid must be supplied"
             )
         
+        # Check for deprecated 'vert_coord' argument
+        if vert_coord is not None:
+            warnings.warn(
+                "'vert_coord' is deprecated and is no longer used by smmregrid. It will be removed in future versions",
+                DeprecationWarning
+            )
+                # Check for deprecated 'vert_coord' argument
+        if space_dims is not None:
+            warnings.warn(
+                "'space_dims' is deprecated and is no longer used by smmregrid. It will be removed in future versions",
+                DeprecationWarning
+            )
+
         # set up logger
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
