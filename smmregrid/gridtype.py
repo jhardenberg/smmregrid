@@ -4,11 +4,12 @@ import xarray as xr
 # default spatial dimensions and vertical coordinates
 DEFAULT_DIMS = {
     'horizontal':  ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                      'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
-                      'nav_lon', 'nav_lat'],
+                    'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
+                    'nav_lon', 'nav_lat'],
     'vertical': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
     'time': ['time']
 }
+
 
 class GridType:
     def __init__(self, dims, extra_dims=None, weights=None):
@@ -45,10 +46,10 @@ class GridType:
 
         update_dims = DEFAULT_DIMS
         for dim in extra_dims.keys():
-            if  extra_dims[dim]:
+            if extra_dims[dim]:
                 update_dims[dim] = update_dims[dim] + extra_dims[dim]
         return update_dims
-                     
+
     def __eq__(self, other):
         # so far equality based on dims only
         if isinstance(other, GridType):
@@ -65,12 +66,12 @@ class GridType:
         """
         identified_dims = list(set(self.dims).intersection(default_dims[axis]))
         if axis == 'vertical':
-            if len(identified_dims)>1:
+            if len(identified_dims) > 1:
                 raise ValueError(f'Only one vertical dimension can be processed at the time: check {identified_dims}')
-            if len(identified_dims)==1:
-                identified_dims=identified_dims[0] #unlist the single vertical dimension
+            if len(identified_dims) == 1:
+                identified_dims = identified_dims[0]  # unlist the single vertical dimension
         return identified_dims if identified_dims else None
-    
+
     def _identify_spatial_bounds(self, data):
         """
         Find all bounds variables in the dataset by looking for variables
@@ -81,13 +82,13 @@ class GridType:
         for var in data.data_vars:
             if (var.endswith('_bnds') or var.endswith('_bounds')) and 'time' not in var:
                 # store all the bounds fro each grid. not fancy, but effective
-                #boundvar = var.split('_')[0]
-                #if boundvar in self.dims:
+                # boundvar = var.split('_')[0]
+                # if boundvar in self.dims:
                 bounds_variables.append(var)
 
         return bounds_variables
-    
-    #def identify_sizes(self, data):
+
+    # def identify_sizes(self, data):
     #    """
     #    Idenfity the sizes of the dataset
     #    """
@@ -115,16 +116,16 @@ class GridType:
             for var in data.data_vars:
                 self._identify_variable(data[var], var)
             self.bounds = self._identify_spatial_bounds(data)
-        
+
         elif isinstance(data, xr.DataArray):
             self._identify_variable(data)
-    
+
      # def _identify_grid_type(self, grid_key):
     #     """
     #     Determines the grid type (e.g., structured, unstructured, curvilinear).
     #     This could be expanded based on more detailed metadata inspection.
     #     """
-    #     horizontal_dims = self._identify_horizontal_dims(grid_key)      
+    #     horizontal_dims = self._identify_horizontal_dims(grid_key)
     #     if 'mesh' in self.dataset.attrs.get('grid_type', '').lower():
     #         return 'unstructured'
     #     elif any('lat' in coord and 'lon' in coord for coord in horizontal_dims):

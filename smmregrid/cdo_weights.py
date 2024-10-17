@@ -11,9 +11,11 @@ import xarray
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 
+
 def worker(wlist, nnn, *args, **kwargs):
     """Run a worker process"""
     wlist[nnn] = cdo_generate_weights2d(*args, **kwargs).compute()
+
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", remap_area_min=0.0, icongridpath=None,
@@ -79,7 +81,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
 
         if not vertical_dim in sgrid:
             raise KeyError(f'Cannot find vertical dim {vertical_dim} in {list(sgrid.dims)}')
- 
+
         nvert = sgrid[vertical_dim].values.size
         loggy.info('Vertical dimensions has length: %s', nvert)
 
@@ -101,17 +103,17 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                 ppp = Process(target=worker,
                               args=(wlist, lev, source_grid, target_grid),
                               kwargs={
-                                    "method": method,
-                                    "extrapolate": extrapolate,
-                                    "remap_norm": remap_norm,
-                                    "remap_area_min": remap_area_min,
-                                    "icongridpath": icongridpath,
-                                    "gridpath": gridpath,
-                                    "cdo_extra": cdo_extra + cdo_extra_vertical,
-                                    "cdo_options": cdo_options,
-                                    "cdo": cdo,
-                                    "nproc": nproc
-                                })
+                                  "method": method,
+                                  "extrapolate": extrapolate,
+                                  "remap_norm": remap_norm,
+                                  "remap_area_min": remap_area_min,
+                                  "icongridpath": icongridpath,
+                                  "gridpath": gridpath,
+                                  "cdo_extra": cdo_extra + cdo_extra_vertical,
+                                  "cdo_options": cdo_options,
+                                  "cdo": cdo,
+                                  "nproc": nproc
+                              })
                 ppp.start()
                 processes.append(ppp)
 
@@ -125,7 +127,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         weights = mask_weights(weights, weights_matrix, vertical_dim)
         masked = check_mask(weights, vertical_dim)
         masked = [int(x) for x in masked]  # convert to list of int
-        masked_xa = xarray.DataArray(masked, 
+        masked_xa = xarray.DataArray(masked,
                                      coords={vertical_dim: range(0, len(masked))},
                                      name="dst_grid_masked")
 
@@ -187,7 +189,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         source_grid_file = tempfile.NamedTemporaryFile()
         source_grid.to_netcdf(source_grid_file.name)
         sgrid = source_grid_file.name
-    
+
     if isinstance(target_grid, str):
         tgrid = target_grid
     else:

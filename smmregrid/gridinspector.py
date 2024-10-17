@@ -4,13 +4,14 @@ import xarray as xr
 from smmregrid.log import setup_logger
 from .gridtype import GridType
 
+
 class GridInspector():
 
     def __init__(self, data, cdo_weights=False, extra_dims=None,
                  clean=True, loglevel='warning'):
         """
         GridInspector class to detect information on the data, based on GridType class
-        
+
         Parameters:
         data (xr.Datase or xr.DataArray): The input dataset.
         clean (bool): apply the cleaning of grids which are assumed to be not relevant
@@ -25,7 +26,7 @@ class GridInspector():
         self.cdo_weights = cdo_weights
         self.clean = clean
         self.grids = []  # List to hold all grids info
-    
+
     def _inspect_grids(self):
         """
         Inspects the dataset and identifies different grids.
@@ -41,14 +42,14 @@ class GridInspector():
 
         for gridtype in self.grids:
             gridtype.identify_variables(self.data)
-            #gridtype.identify_sizes(self.data)
+            # gridtype.identify_sizes(self.data)
 
     def _inspect_dataarray_grid(self, data_array):
         """
         Helper method to inspect a single DataArray and identify its grid type.
         """
         grid_key = tuple(data_array.dims)
-        gridtype = GridType(dims=grid_key,extra_dims=self.extra_dims)
+        gridtype = GridType(dims=grid_key, extra_dims=self.extra_dims)
         if gridtype not in self.grids:
             self.grids.append(gridtype)
 
@@ -56,7 +57,7 @@ class GridInspector():
         """
         Return basic information about CDO weights
         """
-        
+
         gridtype = GridType(dims=[], weights=self.data)
 
         # get vertical info from the weights coords if available
@@ -82,7 +83,7 @@ class GridInspector():
         if self.clean:
             self._clean_grids()
 
-        #self.loggy.info('Grids that have been identifed are: %s', self.grids.)
+        # self.loggy.info('Grids that have been identifed are: %s', self.grids.)
         for gridtype in self.grids:
             self.loggy.debug('More details on gridtype %s:', gridtype.dims)
             if gridtype.horizontal_dims:
@@ -92,7 +93,7 @@ class GridInspector():
             self.loggy.debug('    Variables are: %s', list(gridtype.variables.keys()))
             self.loggy.debug('    Bounds are: %s', gridtype.bounds)
         return self.grids
-    
+
     def _clean_grids(self):
         """
         Remove degenerate grids which are used by not relevant variables
@@ -108,11 +109,11 @@ class GridInspector():
             if any('bounds' in variable for variable in gridtype.variables):
                 removed.append(gridtype)  # Add to removed list
                 self.loggy.info('Removing the grid defined by %s with variables containing "bounds"', gridtype.dims)
-    
+
         for remove in removed:
             self.grids.remove(remove)
 
-    #def get_variable_grids(self):
+    # def get_variable_grids(self):
     #    """
     #    Return a dictionary with the variable - grids pairs
     #    """

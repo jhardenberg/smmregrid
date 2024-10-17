@@ -47,9 +47,9 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     smmvar = find_var(xfield)
     cdovar = find_var(cdofield)
 
-    #if len(smmvar) == 1 and access == 'DataArray':
+    # if len(smmvar) == 1 and access == 'DataArray':
     #    xfield = xfield[smmvar[0]]
-    #if len(cdovar) == 1 and access == 'DataArray':
+    # if len(cdovar) == 1 and access == 'DataArray':
     #    cdofield = cdofield[cdovar[0]]
 
     # interpolation with smmregrid (CDO-based)
@@ -98,26 +98,26 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
     smmvar = find_var(xfield)
     cdovar = find_var(cdofield)
 
-    #if len(smmvar) == 1 and access == 'DataArray':
+    # if len(smmvar) == 1 and access == 'DataArray':
     #    xfield = xfield[smmvar[0]]
-    #if len(cdovar) == 1 and access == 'DataArray':
+    # if len(cdovar) == 1 and access == 'DataArray':
     #    cdofield = cdofield[cdovar[0]]
 
     # compute weights
     if vertical_dim == 'plev':
         wfield = cdo_generate_weights(finput, ftarget,
-                                  method=remap_method)    
+                                      method=remap_method)
     else:
         wfield = cdo_generate_weights(finput, ftarget,
-                                    method=remap_method, 
-                                    vertical_dim=vertical_dim)
-    
+                                      method=remap_method,
+                                      vertical_dim=vertical_dim)
+
     # Pass full 3D weights
     interpolator = Regridder(weights=wfield)
 
     # Add a helper idx_3d coordinate (unclear why it was here)
-    #idx = list(range(0, len(xfield.coords[vertical_dim])))
-    #xfield = xfield.assign_coords(idx_3d=(vertical_dim, idx))
+    # idx = list(range(0, len(xfield.coords[vertical_dim])))
+    # xfield = xfield.assign_coords(idx_3d=(vertical_dim, idx))
 
     # subselect some levels
     xfield = xfield.isel(**{vertical_dim: levels})
