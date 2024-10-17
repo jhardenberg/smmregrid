@@ -114,7 +114,9 @@ class Regridder(object):
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
 
                 # always prefer to pass file (i.e. source_grid) when possible to cdo_generate_weights
-                if isinstance(source_grid, str):
+                # this will limit errors from xarray and speed up CDO itself
+                # it wil work only for single gridtype dataset
+                if isinstance(source_grid, str) and len_grids==1:
                     source_grid_array_to_cdo = source_grid
                 else:
                     # when feeding from xarray, select the variable and its bounds
