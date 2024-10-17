@@ -11,19 +11,19 @@ DEFAULT_DIMS = {
 }
 
 class GridType:
-    def __init__(self, dims, weights=None):
+    def __init__(self, dims, extra_dims=None, weights=None):
         """
         GridType object carrying the grid-specific information required by smmregrid
         """
 
         # key definitions
         self.dims = dims
-        self.horizontal_dims = self._identify_dims('horizontal', DEFAULT_DIMS)
-        self.vertical_dim = self._identify_dims('vertical', DEFAULT_DIMS)
-        self.time_dims = self._identify_dims('time', DEFAULT_DIMS)
+        default_dims = self._handle_default_dimensions(extra_dims)
+        self.horizontal_dims = self._identify_dims('horizontal', default_dims)
+        self.vertical_dim = self._identify_dims('vertical', default_dims)
+        self.time_dims = self._identify_dims('time', default_dims)
         self.variables = {}
         self.bounds = []
-        #self.horizontal_sizes = None
 
         # used by Regrid class
         self.masked = None
@@ -31,7 +31,23 @@ class GridType:
         self.cdo_weights = bool(weights)
         self.weights_matrix = None
         self.level_index = "idx_"
-    
+
+    def _handle_default_dimensions(self, extra_dims):
+        """
+        Extend the default dimensions according some vertical or horizontal
+
+        Args:
+            extra_dims (dict): Including 'vertical', 'time', 'horizontal' keys
+        """
+
+        if extra_dims is None:
+            return DEFAULT_DIMS
+
+        update_dims = DEFAULT_DIMS
+        for dim in extra_dims.keys():
+            update_dims[dim] = update_dims[dim] + extra_dims[dim]
+        return update_dims
+                     
     def __eq__(self, other):
         # so far equality based on dims only
         if isinstance(other, GridType):

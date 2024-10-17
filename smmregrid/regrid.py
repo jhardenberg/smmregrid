@@ -73,7 +73,8 @@ class Regridder(object):
     """
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', transpose=True, vert_coord=None, space_dims=None,
+                 method='con', transpose=True, vert_coord=None, vertical_dim=None,
+                 space_dims=None,
                  cdo='cdo', loglevel='WARNING'):
 
         if (source_grid is None or target_grid is None) and (weights is None):
@@ -84,10 +85,14 @@ class Regridder(object):
         # Check for deprecated 'vert_coord' argument
         if vert_coord is not None:
             warnings.warn(
-                "'vert_coord' is deprecated and is no longer used by smmregrid. It will be removed in future versions",
+                "'vert_coord' is deprecated and is no longer used by smmregrid. Please use 'vertical_dim'",
                 DeprecationWarning
             )
-                # Check for deprecated 'vert_coord' argument
+        # If cdo_extra is not provided, use the value from extra
+        if vertical_dim is None:
+            vertical_dim = vert_coord
+        
+        # Check for deprecated 'space_dim' argument
         if space_dims is not None:
             warnings.warn(
                 "'space_dims' is deprecated and is no longer used by smmregrid. It will be removed in future versions",
@@ -98,6 +103,10 @@ class Regridder(object):
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
         self.transpose = transpose
+        self.vertical_dim = [vertical_dim] #need a list
+        if vertical_dim:
+            self.loggy.info('Forcing vertical_dim: expecting a single gridtype dataset')
+
 
         # Is there already a weights file?
         if weights is not None:
@@ -165,7 +174,7 @@ class Regridder(object):
         if not isinstance(weights, xarray.Dataset):
             weights = xarray.open_mfdataset(weights)
 
-        grid_info = GridInspector(weights, cdo_weights=True,
+        grid_info = GridInspector(weights, cdo_weights=True, extra_dims={'vertical': self.vertical_dim},
                                     clean=False, loglevel=self.loglevel)
         gridtype = grid_info.get_grid_info()
         #if not gridtype[0].dims:
@@ -178,7 +187,8 @@ class Regridder(object):
         Initialize the gridtype reading from source_data
         """
 
-        grid_info = GridInspector(source_grid_array, clean=True, loglevel=self.loglevel)
+        grid_info = GridInspector(source_grid_array, extra_dims={'vertical': self.vertical_dim}, 
+                                  clean=True, loglevel=self.loglevel)
         return grid_info.get_grid_info()
 
     def regrid(self, source_data):
@@ -210,7 +220,8 @@ class Regridder(object):
     def regrid_array(self, source_data):
         """Regridding selection through 2d and 3d arrays"""
 
-        grid_inspect = GridInspector(source_data, clean=True, loglevel=self.loglevel)
+        grid_inspect = GridInspector(source_data, clean=True,  
+                                     extra_dims={'vertical': self.vertical_dim}, loglevel=self.loglevel)
         datagrids = grid_inspect.get_grid_info()
 
         for datagridtype in datagrids:

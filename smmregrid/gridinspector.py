@@ -6,7 +6,8 @@ from .gridtype import GridType
 
 class GridInspector():
 
-    def __init__(self, data, cdo_weights=False, clean=True, loglevel='warning'):
+    def __init__(self, data, cdo_weights=False, extra_dims=None,
+                 clean=True, loglevel='warning'):
         """
         GridInspector class to detect information on the data, based on GridType class
         
@@ -14,10 +15,12 @@ class GridInspector():
         data (xr.Datase or xr.DataArray): The input dataset.
         clean (bool): apply the cleaning of grids which are assumed to be not relevant
         cdo_weights (bool): if the data provided are cdo weights instead of data to be regridded
+        extra_dims(dict): Extra dimensions to be added passed to GridType
         loglevel: The loglevel that you want you use
         """
         self.loggy = setup_logger(name='smmregrid.GridInspect', level=loglevel)
         self.loglevel = loglevel
+        self.extra_dims = extra_dims
         self.data = data
         self.cdo_weights = cdo_weights
         self.clean = clean
@@ -45,7 +48,7 @@ class GridInspector():
         Helper method to inspect a single DataArray and identify its grid type.
         """
         grid_key = tuple(data_array.dims)
-        gridtype = GridType(dims=grid_key)
+        gridtype = GridType(dims=grid_key,extra_dims=self.extra_dims)
         if gridtype not in self.grids:
             self.grids.append(gridtype)
 
@@ -85,7 +88,7 @@ class GridInspector():
             if gridtype.horizontal_dims:
                 self.loggy.debug('    Space dims are: %s', gridtype.horizontal_dims)
             if gridtype.vertical_dim:
-                self.loggy.debug('    Vertical dims are: %s', gridtype.vertical_dim)
+                self.loggy.debug('    Vertical dims is: %s', gridtype.vertical_dim)
             self.loggy.debug('    Variables are: %s', list(gridtype.variables.keys()))
             self.loggy.debug('    Bounds are: %s', gridtype.bounds)
         return self.grids
