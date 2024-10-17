@@ -34,6 +34,7 @@ multiple datasets.
 
 
 import math
+import os
 import xarray
 import numpy
 import dask.array
@@ -88,21 +89,38 @@ class Regridder(object):
         if weights is not None:
             self.grids = self._gridtype_from_weights(weights)
         else:
-            self.grids = self._gridtype_from_data(source_grid)
+
+            if isinstance(source_grid, str):
+                if os.path.isfile(source_grid):
+                    source_grid_array = xarray.open_dataset(source_grid)
+                else:
+                    raise FileNotFoundError(f'Cannot find grid file {source_grid}')
+            else:
+                source_grid_array = source_grid
+
+            self.grids = self._gridtype_from_data(source_grid_array)
 
             len_grids =  len(self.grids)
             if len_grids == 0:
                 raise KeyError('Cannot find any gridtype in your data, aborting!')
+            if len_grids == 1:
+                self.loggy.info('One gridtype found! Standard procedure')
+            else:
+                self.loggy.info('%s gridtypes found! We are in uncharted territory!', len_grids)
             
             for gridtype in self.grids:
                 self.loggy.debug('Processing grids %s', gridtype.dims)
                 self.loggy.debug('Horizontal dimension is %s', gridtype.horizontal_dims)
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
-                #self.loggy.debug('Variables that share this gridtype are %s', list(gridtype.variables.keys()))
-                #self.loggy.debug('Bounds associated are are %s', list(gridtype.bounds))
 
                 # always prefer to pass file (i.e. source_grid) when possible to cdo_generate_weights
-                gridtype.weights = cdo_generate_weights(source_grid, target_grid, method=method,
+                if isinstance(source_grid, str):
+                    source_grid_array_to_cdo = source_grid
+                else:
+                    # when feeding from xarray, select the variable and its bounds
+                    source_grid_array_to_cdo = source_grid_array[[list(gridtype.variables.keys())[0]] + gridtype.bounds]
+
+                gridtype.weights = cdo_generate_weights(source_grid_array_to_cdo, target_grid, method=method,
                                                         vertical_dim=gridtype.vertical_dim,
                                                         cdo=cdo, loglevel=loglevel)
     
@@ -139,16 +157,10 @@ class Regridder(object):
         
         return gridtype
     
-    def _gridtype_from_data(self, source_data):
+    def _gridtype_from_data(self, source_grid_array):
         """
         Initialize the gridtype reading from source_data
         """
-
-        # need to open the dataset: TODO: verify what is the most efficient way
-        if isinstance(source_data, str):
-            source_grid_array = xarray.open_dataset(source_data)
-        else:
-            source_grid_array = source_data
 
         grid_info = GridInspector(source_grid_array, clean=True, loglevel=self.loglevel)
         return grid_info.get_grid_info()
