@@ -3,9 +3,9 @@ import xarray as xr
 
 # default spatial dimensions and vertical coordinates
 DEFAULT_DIMS = {
-    'horizontal':  ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                    'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
-                    'nav_lon', 'nav_lat'],
+    'horizontal': ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
+                   'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
+                   'nav_lon', 'nav_lat'],
     'vertical': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
     'time': ['time']
 }

@@ -99,7 +99,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
             processes = []
             for lev in block:
                 loggy.info("Generating level: %s", str(lev))
-                cdo_extra_vertical = [f"-sellevidx,{lev+1}"]
+                cdo_extra_vertical = [f"-sellevidx,{lev + 1}"]
                 ppp = Process(target=worker,
                               args=(wlist, lev, source_grid, target_grid),
                               kwargs={
