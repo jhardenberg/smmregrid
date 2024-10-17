@@ -13,9 +13,13 @@ rfile = os.path.join(INDIR, 'regional.nc')
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_healpix_extra(method):
     """Test for healpix with cdo_extra and cdo_options"""
+    if method == 'con':
+        options = ['--force']
+    else:
+        options = ['--force', '-f', 'nc']
     wfield = cdo_generate_weights(os.path.join(INDIR, 'healpix_0.nc'), tfile,
                                   method = method, cdo_extra = '-setgrid,hp1_nested',
-                                  cdo_options='--force', loglevel='debug')
+                                  cdo_options=options, loglevel='debug')
     interpolator = Regridder(weights=wfield, loglevel='debug')
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'healpix_0.nc'))
     rfield = interpolator.regrid(xfield)

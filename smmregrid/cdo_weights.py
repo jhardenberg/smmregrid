@@ -229,7 +229,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         subprocess.check_output(
             command,
             stderr=subprocess.STDOUT,
-            env=env,
+            env=env
         )
 
         # Grab the weights file it outputs as a xarray.Dataset
