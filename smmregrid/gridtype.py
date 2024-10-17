@@ -22,6 +22,7 @@ class GridType:
         self.vertical_dim = self._identify_dims('vertical', DEFAULT_DIMS)
         self.time_dims = self._identify_dims('time', DEFAULT_DIMS)
         self.variables = {}
+        self.bounds = []
         #self.horizontal_sizes = None
 
         # used by Regrid class
@@ -60,9 +61,11 @@ class GridType:
         """
         bounds_variables = []
 
-        for var in data.name:
+        for var in data.data_vars:
             if (var.endswith('_bnds') or var.endswith('_bounds')) and 'time' not in var:
-                bounds_variables.append(var)
+                boundvar = var.split('_')[0]
+                if boundvar in self.dims:
+                    bounds_variables.append(var)
 
         return bounds_variables
     
@@ -74,6 +77,13 @@ class GridType:
     #    if self.horizontal_dims:
     #        self.horizontal_sizes  = [data.sizes[x] for x in self.horizontal_dims]
 
+    def _identify_variable(self, var_data, var_name=None):
+        """Helper function to process individual variables."""
+        if set(var_data.dims) == set(self.dims):
+            self.variables[var_name or var_data.name] = {
+                'coords': list(var_data.coords),
+            }
+
     def identify_variables(self, data):
         """
         Identify the variables in the data that match the given dimensions and
@@ -83,19 +93,13 @@ class GridType:
         if not isinstance(data, (xr.Dataset, xr.DataArray)):
             raise TypeError("Unsupported data type. Must be an xarray Dataset or DataArray.")
 
-        # Handle Dataset and DataArray in a unified way
         if isinstance(data, xr.Dataset):
-            variables = [var for var in data.data_vars if set(data[var].dims) == set(self.dims)]
-        else:  # For DataArray
-            variables = [data.name] if set(data.dims) == set(self.dims) else []
+            for var in data.data_vars:
+                self._identify_variable(data[var], var)
+            self.bounds = self._identify_spatial_bounds(data)
         
-        # Populate variables_info with coordinate details
-        for variable in variables:
-            var_data = data[variable] if isinstance(data, xr.Dataset) else data
-            self.variables[variable] = {
-                'coords': list(var_data.coords),
-                'bnds': self._identify_spatial_bounds(var_data)
-            }
+        elif isinstance(data, xr.DataArray):
+            self._identify_variable(data)
     
      # def _identify_grid_type(self, grid_key):
     #     """

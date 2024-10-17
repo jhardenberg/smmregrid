@@ -65,8 +65,11 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
         else:
             sgrid = source_grid
 
+        if not vertical_dim in sgrid:
+            raise KeyError(f'Cannot find vertical dim {vertical_dim} in {list(sgrid.dims)}')
+ 
         nvert = sgrid[vertical_dim].values.size
-        # print(nvert)
+        loggy.info('Vertical dimensions has length: %s', nvert)
 
         # for lev in range(0, nvert):
         mgr = Manager()
@@ -172,7 +175,7 @@ def cdo_generate_weights2d(source_grid, target_grid, method="con", extrapolate=T
         source_grid_file = tempfile.NamedTemporaryFile()
         source_grid.to_netcdf(source_grid_file.name)
         sgrid = source_grid_file.name
-
+    
     if isinstance(target_grid, str):
         tgrid = target_grid
     else:

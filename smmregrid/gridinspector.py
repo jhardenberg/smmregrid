@@ -86,7 +86,8 @@ class GridInspector():
                 self.loggy.debug('    Space dims are: %s', gridtype.horizontal_dims)
             if gridtype.vertical_dim:
                 self.loggy.debug('    Vertical dims are: %s', gridtype.vertical_dim)
-            self.loggy.debug('    Variables are: %s', gridtype.variables)
+            self.loggy.debug('    Variables are: %s', list(gridtype.variables.keys()))
+            self.loggy.debug('    Bounds are: %s', gridtype.bounds)
         return self.grids
     
     def _clean_grids(self):

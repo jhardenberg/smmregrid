@@ -87,16 +87,21 @@ class Regridder(object):
         # Is there already a weights file?
         if weights is not None:
             self.grids = self._gridtype_from_weights(weights)
-            
         else:
             self.grids = self._gridtype_from_data(source_grid)
 
+            len_grids =  len(self.grids)
+            if len_grids == 0:
+                raise KeyError('Cannot find any gridtype in your data, aborting!')
+            
             for gridtype in self.grids:
                 self.loggy.debug('Processing grids %s', gridtype.dims)
                 self.loggy.debug('Horizontal dimension is %s', gridtype.horizontal_dims)
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
+                #self.loggy.debug('Variables that share this gridtype are %s', list(gridtype.variables.keys()))
+                #self.loggy.debug('Bounds associated are are %s', list(gridtype.bounds))
 
-                # alwys prefer to pass file (i.e. source_grid) when possible to cdo_generate_weights
+                # always prefer to pass file (i.e. source_grid) when possible to cdo_generate_weights
                 gridtype.weights = cdo_generate_weights(source_grid, target_grid, method=method,
                                                         vertical_dim=gridtype.vertical_dim,
                                                         cdo=cdo, loglevel=loglevel)
