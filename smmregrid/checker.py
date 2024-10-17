@@ -30,7 +30,10 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     by CDO remap command. This function is used for tests."""
 
     # define files and open input file
-    xfield = xr.open_mfdataset(finput)
+    if isinstance(finput, str):
+        xfield = xr.open_mfdataset(finput)
+    else:
+        xfield = finput
 
     # var as the last available
     # myvar = list(xfield.data_vars)[-1]
