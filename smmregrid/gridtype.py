@@ -63,9 +63,10 @@ class GridType:
 
         for var in data.data_vars:
             if (var.endswith('_bnds') or var.endswith('_bounds')) and 'time' not in var:
-                boundvar = var.split('_')[0]
-                if boundvar in self.dims:
-                    bounds_variables.append(var)
+                # store all the bounds fro each grid. not fancy, but effective
+                #boundvar = var.split('_')[0]
+                #if boundvar in self.dims:
+                bounds_variables.append(var)
 
         return bounds_variables
     
