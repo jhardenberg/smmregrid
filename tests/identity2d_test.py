@@ -2,6 +2,7 @@
 
 import os
 import pytest
+import xarray as xr
 from smmregrid.checker import check_cdo_regrid
 
 INDIR = 'tests/data'
@@ -26,7 +27,8 @@ def test_gaussian_reduced(method):
 # test for gaussian grids as EC-Earth cmor
 @pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
 def test_gaussian_regular(method):
-    fff = check_cdo_regrid(os.path.join(INDIR, 'tas-ecearth.nc'), tfile,
+    xfield = xr.open_dataset(os.path.join(INDIR, 'tas-ecearth.nc'))
+    fff = check_cdo_regrid(xfield, tfile,
                            remap_method=method)
     assert fff is True
 
