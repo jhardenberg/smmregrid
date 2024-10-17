@@ -2,9 +2,6 @@
 
 import dask.array
 import sparse
-import logging
-
-loggy = logging.getLogger(__name__)
 
 
 def compute_weights_matrix3d(weights, vert_coord='lev'):
@@ -91,27 +88,3 @@ def check_mask(weights, vert_coord=None):
         out = (check != 1).data
 
     return out
-
-
-# def check_mask_old(weights, vert_coord=None):
-#     """Old version: check if the target mask is empty or full and
-#     return a bool to be passed to the regridder.
-#     Handle the 3d case"""
-
-#     if vert_coord is not None:
-#         result = []
-#         for nlev in range(len(weights[vert_coord])):
-#             w = weights['dst_grid_imask'].loc[{vert_coord: nlev}]
-#             v = w.sum() / len(w)
-#             if v == 1:
-#                 result.append(False)
-#             else:
-#                 result.append(True)
-#         return result
-#     else:
-#         w = weights['dst_grid_imask']
-#         v = w.sum() / len(w)
-#         if v == 1:
-#             return False
-#         else:
-#             return True
