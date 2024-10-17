@@ -143,7 +143,12 @@ class Regridder(object):
                     source_grid_array_to_cdo = source_grid
                 else:
                     # when feeding from xarray, select the variable and its bounds
-                    source_grid_array_to_cdo = source_grid_array[[list(gridtype.variables.keys())[0]] + gridtype.bounds]
+                    if isinstance(source_grid_array, xarray.Dataset):
+                        stored_vars = [list(gridtype.variables.keys())[0]] + gridtype.bounds
+                        self.loggy.debug('Storing variables %s', stored_vars)
+                        source_grid_array_to_cdo = source_grid_array[stored_vars]
+                    else:
+                        source_grid_array_to_cdo = source_grid_array
 
                 gridtype.weights = cdo_generate_weights(source_grid_array_to_cdo, target_grid, method=method,
                                                         vertical_dim=gridtype.vertical_dim,

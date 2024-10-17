@@ -45,7 +45,8 @@ class GridType:
 
         update_dims = DEFAULT_DIMS
         for dim in extra_dims.keys():
-            update_dims[dim] = update_dims[dim] + extra_dims[dim]
+            if  extra_dims[dim]:
+                update_dims[dim] = update_dims[dim] + extra_dims[dim]
         return update_dims
                      
     def __eq__(self, other):

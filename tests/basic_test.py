@@ -25,7 +25,7 @@ def test_healpix_extra(method):
     rfield = interpolator.regrid(xfield)
     assert rfield['tas'].shape == (2, 180, 360)
 
-@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+@pytest.mark.parametrize("method", ['con', 'nn', 'bic'])
 def test_nan_preserve(method):
     """Test to verify that NaN are preserved"""
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
@@ -34,3 +34,10 @@ def test_nan_preserve(method):
     interpolator = Regridder(weights=wfield, space_dims='pippo', loglevel='debug')
     rfield = interpolator.regrid(xfield)
     assert numpy.isnan(rfield['tas'][1,:,:]).all().compute()
+
+@pytest.mark.parametrize("method", ['nn'])
+def test_datarray(method):
+    xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
+    interpolator = Regridder(source_grid=xfield['tas'], target_grid=tfile, loglevel='debug', method = method)
+    interp = interpolator.regrid(source_data=xfield)
+    assert interp['tas'].shape == (12, 180, 360)
