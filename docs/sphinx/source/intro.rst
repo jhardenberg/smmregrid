@@ -4,19 +4,21 @@ Introduction
 A compact regridder using sparse matrix multiplication
 ------------------------------------------------------
 
-The regridder uses efficiently sparse matrix multiplication with dask plus some manipulation of the coordinates.
-It provides a way to interpolate data - also starting from precomputed weights - inside python environment
+`smmregrid` is a tool meant to work into python environment to perform efficiently regridding operation of dask-enable xarray.Dataset and xarray.DataArray.
+It uses sparse matrix multiplication with basic manipulation of the coordinates and uses CDO as a backend to provide the computation of weights. 
+It can work from source and target grids, but most importantly it can also start from precomputed weights.
 
-Please note that this tool is not thought as "another interpolation tool", but rather a method to apply pre-computed weights (with CDO) within the python environment. 
+Please note that `smmregrid` is not meant to be "another interpolation tool", but rather a method to apply pre-computed weights within the python environment. 
 The speedup is estimated to be about ~1.5 to ~5 times compared to CDO itself, slightly lower if then files are written to the disk. 
 
 2D and 3D data are supported on all the grids supported by CDO (including gaussian reduced, healpix or unstructured grids with cell corners), both xarray.Dataset and xarray.DataArray can be used. 
+It relies on the `GridType()` class which identify the properties of each xarray.DataArray, detecting time, horizontal and vertical coordinates.
 
-Masks are treated in a simple way but correctly transfered. 
+Masks are treated in a simple way but correctly transfered from source to target grid. 
 
-3D weights are computed specifically for oceanic grids in order to guarantee precise mask handling.
+A specific treatment for mask changing along the vertical dimension can be applied through the `vertical_dim` keyword. 
+Indeed, 3D weights are computed specifically for each level and then stored together in specific files so that it guarantees precise mask handling.
 
-Attributes are conserved.
 
 .. warning ::
 
