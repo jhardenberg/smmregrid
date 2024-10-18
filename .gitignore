@@ -3,3 +3,4 @@ dist
 __pycache__
 *.idx
 docs/sphinx/build
+.coverage*
