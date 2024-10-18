@@ -13,7 +13,7 @@ def setup_logger(level=None, name=None):
     logger = logging.getLogger(name)  # Create a logger specific to your module
 
     if logger.handlers:
-        logger.warning('Logging is already setup with name %s', name)
+        # logger.warning('Logging is already setup with name %s', name)
         if level != logging.getLevelName(logger.getEffectiveLevel()):
             logger.setLevel(loglev)
             logger.info('Updating the log_level to %s', loglev)
@@ -30,11 +30,12 @@ def setup_logger(level=None, name=None):
 
     # Create a handler for the logger
     handler = logging.StreamHandler()
-    #handler.setLevel(loglev)  # Set the desired log level for the handler
+    # handler.setLevel(loglev)  # Set the desired log level for the handler
     handler.setFormatter(formatter)  # Assign the formatter to the handler
     logger.addHandler(handler)  # Add the handler to the logger
 
     return logger
+
 
 def convert_logger(loglev=None):
     """Convert a string or integer to a valid logging level"""

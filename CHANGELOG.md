@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [v0.1.0]
+
+- Refactoring of the grid handling to possibly support more complex data structures (#33)
+- Introduction of `GridType()` class to handle possible multiple grids in the future (#33)
+- Introduction of `GridInspector()` class to investigate properties of a Dataset/DataArray (#33)
+- Minimal documentatio via Sphinx available through ReadTheDocs (#33)
+
 ## [v0.0.7]
 
 - Allow for `cdo_options` and move from `extra` to `cdo_extra` (#31)
