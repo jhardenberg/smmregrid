@@ -26,14 +26,14 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
     Generate weights for regridding using Climate Data Operators (CDO), accommodating both 2D and 3D grid cases.
 
     Args:
-        source_grid (str or xarray.Dataset): The source grid from which to generate weights. 
+        source_grid (str or xarray.Dataset): The source grid from which to generate weights.
                                               This can be a file path or an xarray dataset.
-        target_grid (str or xarray.Dataset): The target grid to which the source grid will be regridded. 
+        target_grid (str or xarray.Dataset): The target grid to which the source grid will be regridded.
                                               This can also be a file path or an xarray dataset.
         method (str, optional): The remapping method to use. Default is "con" for conservative remapping.
                                 Other options may include 'bilinear', 'nearest', etc.
         extrapolate (bool, optional): Whether to allow extrapolation beyond the grid boundaries. Defaults to True.
-        remap_norm (str, optional): The normalization method to apply when remapping. 
+        remap_norm (str, optional): The normalization method to apply when remapping.
                                      Default is "fracarea" which normalizes by fractional area.
         remap_area_min (float, optional): Minimum area for remapping. Defaults to 0.0.
         icongridpath (str, optional): Path to the ICON grid if applicable. Defaults to None.
@@ -47,7 +47,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                                      Use `vertical_dim` instead.
         cdo (str, optional): The command to invoke CDO. Default is "cdo".
         nproc (int, optional): Number of processes to use for parallel processing. Default is 1.
-        loglevel (str, optional): The logging level for messages. Default is 'warning'. Options include 
+        loglevel (str, optional): The logging level for messages. Default is 'warning'. Options include
                                    'debug', 'info', 'warning', 'error', and 'critical'.
 
     Returns:
@@ -60,21 +60,20 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
 
     Notes:
         This function handles both 2D and 3D grid cases:
-        
-        - For 2D grids (when `vertical_dim` is None), it calls the `cdo_generate_weights2d` function 
+
+        - For 2D grids (when `vertical_dim` is None), it calls the `cdo_generate_weights2d` function
           to generate weights. The weights are then masked based on a precomputed weights matrix.
-          
-        - For 3D grids (when `vertical_dim` is specified), it uses multiprocessing to generate weights 
-          for each vertical level. It requires the vertical dimension to be present in the source grid, 
+
+        - For 3D grids (when `vertical_dim` is specified), it uses multiprocessing to generate weights
+          for each vertical level. It requires the vertical dimension to be present in the source grid,
           and it will generate a mask indicating valid and invalid weights for each vertical level.
-          
-        The function logs the progress of weight generation, including the length of vertical dimensions 
+
+        The function logs the progress of weight generation, including the length of vertical dimensions
         and each level being processed.
 
-        Deprecation Warning: The `extra` and `vert_coord` parameters are deprecated and will be removed in future versions. 
+        Deprecation Warning: The `extra` and `vert_coord` parameters are deprecated and will be removed in future versions.
         Users should migrate to using `cdo_extra` and `vertical_dim`, respectively.
     """
-    
 
     loggy = setup_logger(level=loglevel, name='smmregrid.cdo_generate_weights')
 

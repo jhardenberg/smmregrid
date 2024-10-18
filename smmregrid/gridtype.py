@@ -18,9 +18,9 @@ class GridType:
 
         Args:
             dims (list): A list of default dimensions for the grid (e.g., ['time', 'lat', 'lon']).
-            extra_dims (dict, optional): A dictionary including keys 'vertical', 'time', and 'horizontal' 
+            extra_dims (dict, optional): A dictionary including keys 'vertical', 'time', and 'horizontal'
                                           that can be used to extend the default dimensions. Defaults to None.
-            weights (any, optional): Weights used in regridding. The format and purpose depend on the 
+            weights (any, optional): Weights used in regridding. The format and purpose depend on the
                                      regridding method. Defaults to None.
 
         Attributes:
@@ -61,11 +61,11 @@ class GridType:
         Extend the default dimensions based on the provided extra dimensions.
 
         Args:
-            extra_dims (dict): A dictionary that can include 'vertical', 'time', and 
+            extra_dims (dict): A dictionary that can include 'vertical', 'time', and
                                'horizontal' keys for extending dimensions.
 
         Returns:
-            dict: An updated dictionary of default dimensions that includes any extensions specified 
+            dict: An updated dictionary of default dimensions that includes any extensions specified
                   in extra_dims.
 
         Notes:
@@ -193,7 +193,7 @@ class GridType:
 
         elif isinstance(data, xr.DataArray):
             self._identify_variable(data)
-                    
+
     # def _identify_grid_type(self, grid_key):
     #     """
     #     Determines the grid type (e.g., structured, unstructured, curvilinear).
