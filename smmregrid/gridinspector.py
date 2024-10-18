@@ -13,11 +13,11 @@ class GridInspector():
         GridInspector class to detect information on the data, based on GridType class
 
         Parameters:
-        data (xr.Datase or xr.DataArray): The input dataset.
-        clean (bool): apply the cleaning of grids which are assumed to be not relevant
-        cdo_weights (bool): if the data provided are cdo weights instead of data to be regridded
-        extra_dims(dict): Extra dimensions to be added passed to GridType
-        loglevel: The loglevel that you want you use
+            data (xr.Datase or xr.DataArray): The input dataset.
+            clean (bool): apply the cleaning of grids which are assumed to be not relevant for regridding purposes
+            cdo_weights (bool): if the data provided are cdo weights instead of data to be regridded
+            extra_dims(dict): Extra dimensions to be added and passed to GridType
+            loglevel: The loglevel that you want you use
         """
         self.loggy = setup_logger(name='smmregrid.GridInspect', level=loglevel)
         self.loglevel = loglevel

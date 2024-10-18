@@ -20,8 +20,8 @@ class GridType:
             dims (list): A list of default dimensions for the grid (e.g., ['time', 'lat', 'lon']).
             extra_dims (dict, optional): A dictionary including keys 'vertical', 'time', and 'horizontal'
                                           that can be used to extend the default dimensions. Defaults to None.
-            weights (any, optional): Weights used in regridding. The format and purpose depend on the
-                                     regridding method. Defaults to None.
+            weights (any, optional): CDO weights used in regridding. It will initiale the object in a different
+                                         way assuming single-gridtype objects. Defaults to None.
 
         Attributes:
             dims (list): The dimensions defined for the grid.
