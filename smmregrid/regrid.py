@@ -50,7 +50,7 @@ class Regridder(object):
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', transpose=True, vert_coord=None, vertical_dim=None,
-                 space_dims=None,
+                 space_dims=None, horizontal_dims=None,
                  cdo='cdo', loglevel='WARNING'):
         """
         Initialize the Regridder for performing regridding operations.
@@ -69,8 +69,8 @@ class Regridder(object):
             target_grid (xarray.DataArray): Target grid dataset for regridding.
             weights (xarray.Dataset): Pre-computed interpolation weights.
             vertical_dim (str): Name of the vertical coordinate for 3D weights generation (default: None).
+            horizontal_dims (list): List of spatial dimensions to interpolate (default: None).
             method (str): Interpolation method to use (default: 'con').
-            space_dims (list): List of spatial dimensions to interpolate (default: None).
             transpose (bool): If True, transpose the output such that the vertical coordinate
                               is placed just before the other spatial coordinates (default: True).
             cdo (str): Path to the CDO executable (default: 'cdo').
@@ -103,17 +103,23 @@ class Regridder(object):
         # Check for deprecated 'space_dim' argument
         if space_dims is not None:
             warnings.warn(
-                "'space_dims' is deprecated and is no longer used by smmregrid. It will be removed in future versions",
+                "'space_dims' is deprecated and is no longer used by smmregrid. Please use 'horizontal_dims'",
                 DeprecationWarning
             )
+                # If cdo_extra is not provided, use the value from extra
+        if horizontal_dims is None:
+            horizontal_dims = space_dims
 
         # set up logger
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
         self.transpose = transpose
-        self.vertical_dim = [vertical_dim]  # need a list
+        self.vertical_dim = [vertical_dim] if isinstance(vertical_dim, str) else vertical_dim
+        self.horizontal_dims = [horizontal_dims] if isinstance(horizontal_dims, str) else horizontal_dims
         if vertical_dim:
             self.loggy.info('Forcing vertical_dim from input: expecting a single-gridtype dataset')
+        if horizontal_dims:
+            self.loggy.info('Forcing horizontal_dim from input: expecting a single-gridtype dataset')
 
         # Is there already a weights file?
         if weights is not None:
@@ -158,7 +164,7 @@ class Regridder(object):
                         source_grid_array_to_cdo = source_grid_array
 
                 gridtype.weights = cdo_generate_weights(source_grid_array_to_cdo, target_grid, method=method,
-                                                        vertical_dim=gridtype.vertical_dim,
+                                                        vertical_dim=gridtype.vertical_dim, 
                                                         cdo=cdo, loglevel=loglevel)
 
         for gridtype in self.grids:
@@ -188,8 +194,6 @@ class Regridder(object):
         grid_info = GridInspector(weights, cdo_weights=True, extra_dims={'vertical': self.vertical_dim},
                                   clean=False, loglevel=self.loglevel)
         gridtype = grid_info.get_grid_info()
-        # if not gridtype[0].dims:
-        #    self.loggy.warning('Missing weights dimension information, support only single-gridtype datasets')
 
         return gridtype
 
@@ -197,8 +201,8 @@ class Regridder(object):
         """
         Initialize the gridtype reading from source_data
         """
-
-        grid_info = GridInspector(source_grid_array, extra_dims={'vertical': self.vertical_dim},
+        extra_dims = {'vertical': self.vertical_dim, 'horizontal': self.horizontal_dims}
+        grid_info = GridInspector(source_grid_array, extra_dims=extra_dims,
                                   clean=True, loglevel=self.loglevel)
         return grid_info.get_grid_info()
 

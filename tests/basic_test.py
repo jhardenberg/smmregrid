@@ -42,3 +42,12 @@ def test_datarray(method):
     interpolator = Regridder(source_grid=xfield['tas'], target_grid=tfile, loglevel='debug', method = method)
     interp = interpolator.regrid(source_data=xfield)
     assert interp['tas'].shape == (12, 180, 360)
+
+@pytest.mark.parametrize("method", ['bil'])
+def test_horizontal_dims(method):
+    """"Minimal test to verify regridding with horizontal_dims coords"""
+    xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
+    interpolator = Regridder(source_grid=xfield, target_grid=tfile, loglevel='debug',
+                             method = method, horizontal_dims=['lon', 'lat'])
+    interp = interpolator.regrid(source_data=xfield)
+    assert interp['tas'].shape == (12, 180, 360)
