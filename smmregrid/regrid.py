@@ -50,7 +50,7 @@ class Regridder(object):
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', transpose=True, vert_coord=None, vertical_dim=None,
-                 space_dims=None, horizontal_dims=None,
+                 space_dims=None, horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  cdo='cdo', loglevel='WARNING'):
         """
         Initialize the Regridder for performing regridding operations.
@@ -74,6 +74,8 @@ class Regridder(object):
             transpose (bool): If True, transpose the output such that the vertical coordinate
                               is placed just before the other spatial coordinates (default: True).
             cdo (str): Path to the CDO executable (default: 'cdo').
+            cdo_extra (str): Extra command to be passed to CDO
+            cdo_options(str): Extra options to be passed to CDO
             loglevel (str): Logging level for the operation (default: 'WARNING').
 
         Raises:
@@ -164,8 +166,9 @@ class Regridder(object):
                         source_grid_array_to_cdo = source_grid_array
 
                 gridtype.weights = cdo_generate_weights(source_grid_array_to_cdo, target_grid, method=method,
-                                                        vertical_dim=gridtype.vertical_dim, 
-                                                        cdo=cdo, loglevel=loglevel)
+                                                        vertical_dim=gridtype.vertical_dim,
+                                                        cdo=cdo, cdo_options=cdo_options,
+                                                        cdo_extra=cdo_extra, loglevel=loglevel)
 
         for gridtype in self.grids:
             if gridtype.vertical_dim:

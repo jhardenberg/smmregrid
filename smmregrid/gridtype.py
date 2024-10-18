@@ -28,6 +28,7 @@ class GridType:
             horizontal_dims (list): The identified horizontal dimensions from the input.
             vertical_dim (str or None): The identified vertical dimension, if applicable.
             time_dims (list): The identified time dimensions from the input.
+            other_dims (list): The dimensions which are there but are not identified automatically.
             variables (dict): A dictionary holding identified variables and their coordinates.
             bounds (list): A list of bounds variables identified in the dataset.
             masked (any): Placeholder for masked data (to be defined later).
@@ -46,6 +47,7 @@ class GridType:
         self.horizontal_dims = self._identify_dims('horizontal', default_dims)
         self.vertical_dim = self._identify_dims('vertical', default_dims)
         self.time_dims = self._identify_dims('time', default_dims)
+        self.other_dims = self._identify_other_dims()
         self.variables = {}
         self.bounds = []
 
@@ -88,11 +90,11 @@ class GridType:
         Args:
             other (GridType): Another GridType instance to compare against.
 
-        Returns:
-            bool: True if the dimensions of both instances are equal, False otherwise.
+         Returns:
+        bool: True if both horizontal_dims and vertical_dims are equal for both instances, False otherwise.
         """
         if isinstance(other, GridType):
-            return self.dims == other.dims
+            return self.horizontal_dims == other.horizontal_dims and self.vertical_dim == other.vertical_dim and self.other_dims == other.other_dims
         return False
 
     def __hash__(self):
@@ -102,7 +104,7 @@ class GridType:
         Returns:
             int: A hash value representing the dimensions of the GridType instance.
         """
-        return hash(self.dims)
+        return hash((self.horizontal_dims, self.vertical_dim, self.other_dims))
 
     def _identify_dims(self, axis, default_dims):
         """
@@ -126,6 +128,22 @@ class GridType:
             if len(identified_dims) == 1:
                 identified_dims = identified_dims[0]  # unlist the single vertical dimension
         return identified_dims if identified_dims else None
+    
+    def _identify_other_dims(self):
+        """
+        Calculate and return the dimensions that are not part of horizontal_dims, vertical_dim, or time_dims.
+
+        Returns:
+            set: A set of unused dimensions that are not part of horizontal, vertical, or time dimensions.
+        """
+        # Safely convert identified dimensions to sets, handling None values
+        horizontal_dims = set(self.horizontal_dims) if self.horizontal_dims else set()
+        vertical_dim = {self.vertical_dim} if self.vertical_dim else set()  # Use {} for single value
+        time_dims = set(self.time_dims) if self.time_dims else set()
+
+        # Return the unused dimensions by subtracting used dimensions from all dimensions
+        return set(self.dims) - (horizontal_dims | vertical_dim | time_dims)
+
 
     def _identify_spatial_bounds(self, data):
         """
