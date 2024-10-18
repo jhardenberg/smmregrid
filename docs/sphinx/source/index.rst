@@ -11,4 +11,5 @@ Welcome to smmregrid's documentation!
 
    intro
    installation
+   usage
    api
