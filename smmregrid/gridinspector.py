@@ -26,6 +26,8 @@ class GridInspector():
         self.cdo_weights = cdo_weights
         self.clean = clean
         self.grids = []  # List to hold all grids info
+        self.loggy.debug('Extra_dims are %s', extra_dims)
+        self.loggy.debug('Clean flag is %s and cdo_weights init is %s', clean, cdo_weights)
 
     def _inspect_grids(self):
         """
@@ -62,6 +64,7 @@ class GridInspector():
 
         # get vertical info from the weights coords if available
         if self.data.coords:
+            self.loggy.debug('Vertical dimension read from weights and assigned to %s', list(self.data.coords)[0])
             gridtype.vertical_dim = list(self.data.coords)[0]
 
         self.grids.append(gridtype)

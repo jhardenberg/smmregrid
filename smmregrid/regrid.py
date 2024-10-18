@@ -116,12 +116,13 @@ class Regridder(object):
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
         self.transpose = transpose
-        self.vertical_dim = [vertical_dim] if isinstance(vertical_dim, str) else vertical_dim
-        self.horizontal_dims = [horizontal_dims] if isinstance(horizontal_dims, str) else horizontal_dims
+        vertical_dim = [vertical_dim] if isinstance(vertical_dim, str) else vertical_dim
+        horizontal_dims = [horizontal_dims] if isinstance(horizontal_dims, str) else horizontal_dims
         if vertical_dim:
             self.loggy.info('Forcing vertical_dim from input: expecting a single-gridtype dataset')
         if horizontal_dims:
             self.loggy.info('Forcing horizontal_dim from input: expecting a single-gridtype dataset')
+        self.extra_dims = {'vertical': vertical_dim, 'horizontal': horizontal_dims}
 
         # Is there already a weights file?
         if weights is not None:
@@ -194,9 +195,13 @@ class Regridder(object):
         if not isinstance(weights, xarray.Dataset):
             weights = xarray.open_mfdataset(weights)
 
-        grid_info = GridInspector(weights, cdo_weights=True, extra_dims={'vertical': self.vertical_dim},
+        grid_info = GridInspector(weights, cdo_weights=True, extra_dims=self.extra_dims,
                                   clean=False, loglevel=self.loglevel)
         gridtype = grid_info.get_grid_info()
+
+        # the vertical dimension has to show up into the extra dimensions
+        # to cover the case that it is not a standard dimension: possibly better implementation available
+        self.extra_dims['vertical'] = [gridtype[0].vertical_dim]
 
         return gridtype
 
@@ -204,8 +209,7 @@ class Regridder(object):
         """
         Initialize the gridtype reading from source_data
         """
-        extra_dims = {'vertical': self.vertical_dim, 'horizontal': self.horizontal_dims}
-        grid_info = GridInspector(source_grid_array, extra_dims=extra_dims,
+        grid_info = GridInspector(source_grid_array, extra_dims=self.extra_dims,
                                   clean=True, loglevel=self.loglevel)
         return grid_info.get_grid_info()
 
@@ -257,8 +261,9 @@ class Regridder(object):
             ValueError: If the input data does not match expected dimensions.
         """
 
+        self.loggy.debug('Getting GridType from source_data')
         grid_inspect = GridInspector(source_data, clean=True,
-                                     extra_dims={'vertical': self.vertical_dim},
+                                     extra_dims=self.extra_dims,
                                      loglevel=self.loglevel)
         datagrids = grid_inspect.get_grid_info()
 
@@ -277,6 +282,7 @@ class Regridder(object):
             self.loggy.info('Assuming gridtype from data to be the same from weights')
             self.grids[0].dims = datagridtype.dims
             self.grids[0].horizontal_dims = datagridtype.horizontal_dims
+            self.grids[0].other_dims = datagridtype.other_dims
 
         # match the grid
         gridtype = next((grid for grid in self.grids if grid == datagridtype), None)
