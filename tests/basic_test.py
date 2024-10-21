@@ -43,7 +43,7 @@ def test_datarray(method):
     interp = interpolator.regrid(source_data=xfield)
     assert interp['tas'].shape == (12, 180, 360)
 
-@pytest.mark.parametrize("method", ['bil'])
+@pytest.mark.parametrize("method", ['dis', 'con'])
 def test_horizontal_dims(method):
     """"Minimal test to verify regridding with horizontal_dims coords"""
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
@@ -51,3 +51,12 @@ def test_horizontal_dims(method):
                              method = method, horizontal_dims=['lon', 'lat'])
     interp = interpolator.regrid(source_data=xfield.isel(time=0))
     assert interp['tas'].shape == (180, 360)
+
+@pytest.mark.parametrize("method", ['bil', 'con'])
+def test_toward_healpix(method):
+    """"Testing toward healpix string-defined-grid grid"""
+    xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
+    interpolator = Regridder(source_grid=xfield, target_grid='hp16_nested', loglevel='debug',
+                             method = method, cdo_options='--force')
+    interp = interpolator.regrid(source_data=xfield)
+    assert interp['tas'].shape == (12, 3072)

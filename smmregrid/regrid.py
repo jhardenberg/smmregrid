@@ -14,7 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Modified slightly by Jost von Hardenberg <jost.hardenberg@polito.it>
+# Refactored  by Jost von Hardenberg <jost.hardenberg@polito.it> 
+# and Paolo Davini <paolo.davini@cnr.it>
 
 """Dask-aware regridding
 
@@ -457,7 +458,6 @@ class Regridder(object):
 
         src_cdo_grid = w.attrs['source_grid']
         dst_cdo_grid = w.attrs['dest_grid']
-
         self.loggy.info('AInterpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
 
         dst_grid_shape = w.dst_grid_dims.values

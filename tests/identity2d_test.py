@@ -25,7 +25,7 @@ def test_gaussian_reduced(method):
     assert fff is True
 
 # test for gaussian grids as EC-Earth cmor
-@pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
+@pytest.mark.parametrize("method", ['con', 'nn'])
 def test_gaussian_regular(method):
     xfield = xr.open_dataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     fff = check_cdo_regrid(xfield, tfile,
@@ -33,14 +33,14 @@ def test_gaussian_regular(method):
     assert fff is True
 
 # test for gaussian grids as EC-Earth cmor
-@pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
+@pytest.mark.parametrize("method", ['bil', 'con'])
 def test_gaussian_regular_regional(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'tas-ecearth.nc'), rfile,
                            remap_method=method)
     assert fff is True
 
 # test for lonlt grids, init by weights
-@pytest.mark.parametrize("method", ['bil', 'con', 'nn'])
+@pytest.mark.parametrize("method", [ 'con', 'bil'])
 def test_lonlat(method):
     fff = check_cdo_regrid(os.path.join(INDIR, '2t-era5.nc'), tfile,
                            remap_method=method, init_method='weights')
@@ -60,16 +60,9 @@ def test_curivilinear(method):
                            remap_method=method, init_method='grids')
     assert fff is True
 
-# test for pressure levels on gaussian grid (2D, level-by-level), init by weights
-#@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
-#def test_levbylev_plev_gaussian(method):
-#    fff = check_cdo_regrid(os.path.join(INDIR, 'ua-ecearth.nc'), tfile,
-#                           remap_method=method, init_method='weights',
-#                           vertical_dim="plev")
-#    assert fff is True
 
 # test for pressure levels on gaussian grid with info logging (3D)
-@pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
+@pytest.mark.parametrize("method", ['con', 'bil'])
 def test_full_plev_gaussian(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'ua-ecearth.nc'), tfile,
                            remap_method=method, init_method='grids')

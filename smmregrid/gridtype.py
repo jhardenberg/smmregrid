@@ -20,7 +20,7 @@ class GridType:
             dims (list): A list of default dimensions for the grid (e.g., ['time', 'lat', 'lon']).
             extra_dims (dict, optional): A dictionary including keys 'vertical', 'time', and 'horizontal'
                                           that can be used to extend the default dimensions. Defaults to None.
-            weights (any, optional): CDO weights used in regridding. It will initiale the object in a different
+            weights (any, optional): CDO weights used in regridding. It will initiate the object in a different
                                          way assuming single-gridtype objects. Defaults to None.
 
         Attributes:
@@ -90,8 +90,8 @@ class GridType:
         Args:
             other (GridType): Another GridType instance to compare against.
 
-         Returns:
-        bool: True if both horizontal_dims and vertical_dims are equal for both instances, False otherwise.
+        Returns:
+            bool: True if both horizontal_dims, vertical_dims and other_dims are equal for both instances, False otherwise.
         """
         if isinstance(other, GridType):
             return self.horizontal_dims == other.horizontal_dims and self.vertical_dim == other.vertical_dim and self.other_dims == other.other_dims
@@ -158,7 +158,7 @@ class GridType:
         bounds_variables = []
 
         for var in data.data_vars:
-            if (var.endswith('_bnds') or var.endswith('_bounds')) and 'time' not in var:
+            if (var.endswith('_bnds') or var.endswith('_bounds') or var == 'vertices') and 'time' not in var:
                 bounds_variables.append(var)
 
         return bounds_variables
@@ -211,18 +211,3 @@ class GridType:
 
         elif isinstance(data, xr.DataArray):
             self._identify_variable(data)
-
-    # def _identify_grid_type(self, grid_key):
-    #     """
-    #     Determines the grid type (e.g., structured, unstructured, curvilinear).
-    #     This could be expanded based on more detailed metadata inspection.
-    #     """
-    #     horizontal_dims = self._identify_horizontal_dims(grid_key)
-    #     if 'mesh' in self.dataset.attrs.get('grid_type', '').lower():
-    #         return 'unstructured'
-    #     elif any('lat' in coord and 'lon' in coord for coord in horizontal_dims):
-    #         return 'regular'
-    #     elif 'curvilinear' in self.dataset.attrs.get('grid_type', '').lower():
-    #         return 'curvilinear'
-    #     else:
-    #         return 'unknown'
