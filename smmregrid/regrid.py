@@ -452,13 +452,19 @@ class Regridder(object):
         # remap_matrix = w.remap_matrix[:, 0]
         # w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
 
+        src_grid_rank = w.src_grid_rank
+        dst_grid_rank = w.dst_grid_rank
+
+        src_cdo_grid = w.attrs['source_grid']
+        dst_cdo_grid = w.attrs['dest_grid']
+
+        self.loggy.info('AInterpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
+
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(
-            # dst_grid_shape[::-1], order="C"
             dst_grid_shape[::-1]
         )
         dst_grid_center_lon = w.dst_grid_center_lon.data.reshape(
-            # dst_grid_shape[::-1], order="C"
             dst_grid_shape[::-1]
         )
 
@@ -467,9 +473,6 @@ class Regridder(object):
 
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
-        # Dimension on which we can produce the interpolation
-        # if horizontal_dims is None:
-        #    horizontal_dims = default_horizontal_dims
 
         if not any(x in source_data.dims for x in horizontal_dims):
             self.loggy.error(
@@ -477,14 +480,15 @@ class Regridder(object):
             self.loggy.error(horizontal_dims)
             self.loggy.error('smmregrid can identify only %s', source_data.dims)
             raise KeyError('Dimensions mismatch')
+        
+        self.loggy.info('Regridding from %s to %s', source_data.shape, dst_grid_shape)
 
         # Find dimensions to keep
         nd = sum([(d not in horizontal_dims) for d in source_data.dims])
 
         kept_shape = list(source_data.shape[0:nd])
         kept_dims = list(source_data.dims[0:nd])
-        self.loggy.info('Dimension kept: %s', kept_dims)
-
+        self.loggy.debug('Dimension to be ignored: %s', kept_dims)
         if weights_matrix is None:
             weights_matrix = compute_weights_matrix(weights)
 
@@ -494,12 +498,14 @@ class Regridder(object):
             source_array = dask.array.reshape(source_array, kept_shape + [-1])
         else:
             source_array = numpy.reshape(source_array, kept_shape + [-1])
-
+        self.loggy.debug('Source array after reshape is: %s', source_array.shape)
+    
         # Handle input mask
         dask.array.ma.set_fill_value(source_array, 1e20)
         source_array = dask.array.ma.fix_invalid(source_array)
         source_array = dask.array.ma.filled(source_array)
 
+        self.loggy.debug('Tensordot!')
         target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
         # define and compute the new mask
@@ -512,6 +518,7 @@ class Regridder(object):
             target_mask = numpy.broadcast_to(
                 target_mask.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
             )
+            self.loggy.debug('Reshaped mask with %s', target_mask.shape)
 
             # apply the mask
             target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
@@ -520,15 +527,24 @@ class Regridder(object):
         # Use greater than 1e19 to avoid numerical noise from interpolation.
         target_dask = xarray.where(target_dask > 1e19, numpy.nan, target_dask)
 
+        if len(dst_grid_rank) == 2:
+            tgt_shape = [dst_grid_shape[1], dst_grid_shape[0]]
+            tgt_dims = ["i", "j"]
+        elif len(dst_grid_rank) == 1:
+            tgt_shape  = [dst_grid_shape[0]]
+            tgt_dims = ['cell']
+        else:
+            raise ValueError('Unknown dimensional target grid')
+
         # reshape the target DataArray
         target_dask = dask.array.reshape(
-            target_dask, kept_shape + [dst_grid_shape[1], dst_grid_shape[0]]
+            target_dask, kept_shape + tgt_shape
         )
 
         # Create a new DataArray for the output
         target_da = xarray.DataArray(
             target_dask,
-            dims=kept_dims + ["i", "j"],
+            dims=kept_dims + tgt_dims,
             coords={
                 k: v
                 for k, v in source_data.coords.items()
@@ -537,8 +553,8 @@ class Regridder(object):
             name=source_data.name,
         )
 
-        target_da.coords["lat"] = xarray.DataArray(dst_grid_center_lat, dims=["i", "j"])
-        target_da.coords["lon"] = xarray.DataArray(dst_grid_center_lon, dims=["i", "j"])
+        target_da.coords["lat"] = xarray.DataArray(dst_grid_center_lat, dims=tgt_dims)
+        target_da.coords["lon"] = xarray.DataArray(dst_grid_center_lon, dims=tgt_dims)
 
         # Clean up coordinates
         target_da.coords["lat"] = remove_degenerate_axes(target_da.lat)
@@ -549,7 +565,7 @@ class Regridder(object):
         target_da.coords["lon"] = numpy.round(target_da.lon * axis_scale, 10)
 
         # If a regular grid drop the 'i' and 'j' dimensions
-        if target_da.coords["lat"].ndim == 1 and target_da.coords["lon"].ndim == 1:
+        if tgt_dims == ['i', 'j'] and target_da.coords["lat"].ndim == 1 and target_da.coords["lon"].ndim == 1:
             target_da = target_da.swap_dims({"i": "lat", "j": "lon"})
 
         # Add metadata to the coordinates
