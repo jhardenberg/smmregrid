@@ -326,4 +326,4 @@ def weightslist_to_3d(ds_list, vertical_dim='lev'):
                   for vname in varlist]
         xmerged = xarray.merge(xplist)
         new_array.append(xmerged.assign_coords({vertical_dim: d}))
-    return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim)])
+    return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim)], combine_attrs = 'no_conflicts')
