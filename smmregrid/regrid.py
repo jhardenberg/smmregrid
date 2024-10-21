@@ -452,7 +452,7 @@ class Regridder(object):
         # remap_matrix = w.remap_matrix[:, 0]
         # w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
 
-        src_grid_rank = w.src_grid_rank
+        #src_grid_rank = w.src_grid_rank
         dst_grid_rank = w.dst_grid_rank
 
         src_cdo_grid = w.attrs['source_grid']
