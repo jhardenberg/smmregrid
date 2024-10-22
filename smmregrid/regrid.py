@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Refactored  by Jost von Hardenberg <jost.hardenberg@polito.it> 
+# Refactored  by Jost von Hardenberg <jost.hardenberg@polito.it>
 # and Paolo Davini <paolo.davini@cnr.it>
 
 """Dask-aware regridding
@@ -109,7 +109,7 @@ class Regridder(object):
                 "'space_dims' is deprecated and is no longer used by smmregrid. Please use 'horizontal_dims'",
                 DeprecationWarning
             )
-                # If cdo_extra is not provided, use the value from extra
+            # If cdo_extra is not provided, use the value from extra
         if horizontal_dims is None:
             horizontal_dims = space_dims
 
@@ -453,7 +453,7 @@ class Regridder(object):
         # remap_matrix = w.remap_matrix[:, 0]
         # w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
 
-        #src_grid_rank = w.src_grid_rank
+        # src_grid_rank = w.src_grid_rank
         dst_grid_rank = w.dst_grid_rank
 
         src_cdo_grid = w.attrs['source_grid']
@@ -473,14 +473,13 @@ class Regridder(object):
 
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
-
         if not any(x in source_data.dims for x in horizontal_dims):
             self.loggy.error(
                 "None of dimensions on which we can interpolate is found in the DataArray. Does your DataArray include any of these?")
             self.loggy.error(horizontal_dims)
             self.loggy.error('smmregrid can identify only %s', source_data.dims)
             raise KeyError('Dimensions mismatch')
-        
+
         self.loggy.info('Regridding from %s to %s', source_data.shape, dst_grid_shape)
 
         # Find dimensions to keep
@@ -499,7 +498,7 @@ class Regridder(object):
         else:
             source_array = numpy.reshape(source_array, kept_shape + [-1])
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
-    
+
         # Handle input mask
         dask.array.ma.set_fill_value(source_array, 1e20)
         source_array = dask.array.ma.fix_invalid(source_array)
@@ -531,7 +530,7 @@ class Regridder(object):
             tgt_shape = [dst_grid_shape[1], dst_grid_shape[0]]
             tgt_dims = ["i", "j"]
         elif len(dst_grid_rank) == 1:
-            tgt_shape  = [dst_grid_shape[0]]
+            tgt_shape = [dst_grid_shape[0]]
             tgt_dims = ['cell']
         else:
             raise ValueError('Unknown dimensional target grid')

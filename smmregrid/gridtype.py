@@ -128,7 +128,7 @@ class GridType:
             if len(identified_dims) == 1:
                 identified_dims = identified_dims[0]  # unlist the single vertical dimension
         return identified_dims if identified_dims else None
-    
+
     def _identify_other_dims(self):
         """
         Calculate and return the dimensions that are not part of horizontal_dims, vertical_dim, or time_dims.
@@ -143,7 +143,6 @@ class GridType:
 
         # Return the unused dimensions by subtracting used dimensions from all dimensions
         return set(self.dims) - (horizontal_dims | vertical_dim | time_dims)
-
 
     def _identify_spatial_bounds(self, data):
         """

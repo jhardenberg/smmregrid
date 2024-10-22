@@ -100,8 +100,8 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
 
     # compute weights
     wfield = cdo_generate_weights(finput, ftarget,
-                                      method=remap_method,
-                                      vertical_dim=vertical_dim, loglevel='debug')
+                                  method=remap_method,
+                                  vertical_dim=vertical_dim, loglevel='debug')
 
     # Pass full 3D weights
     interpolator = Regridder(weights=wfield, loglevel='debug')
