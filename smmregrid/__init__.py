@@ -1,7 +1,7 @@
 """smmregrid module"""
 
 from .regrid import Regridder, regrid
-from .cdo_weights import cdo_generate_weights
+from .cdogenerate import cdo_generate_weights
 from .gridtype import GridType
 from .gridinspector import GridInspector
 

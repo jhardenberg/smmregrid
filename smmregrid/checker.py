@@ -4,8 +4,6 @@ import numpy as np
 import xarray as xr
 from cdo import Cdo
 from smmregrid import Regridder, cdo_generate_weights
-
-
 cdo = Cdo()
 
 
@@ -24,7 +22,7 @@ def find_var(xfield):
 
 
 def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
-                     init_method='grids', vertical_dim=None):
+                     init_method='grids', vertical_dim=None, extrapolate=True):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests."""
@@ -35,12 +33,16 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     else:
         xfield = finput
 
+    # convert extrapolation to cdo!
+    cdoextrapolate = 'on' if extrapolate else 'off'
+
     # var as the last available
     # myvar = list(xfield.data_vars)[-1]
 
     # interpolation with pure CDO
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
-    cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True)
+    cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True,
+                                env={'REMAP_EXTRAPOLATE': cdoextrapolate})
     # print(cdofield)
 
     # var as the one which have time and not have bnds (could work)
@@ -78,7 +80,8 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     return checker
 
 
-def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method='con', access='Dataset'):
+def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method='con',
+                            access='Dataset', extrapolate=True):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
@@ -87,9 +90,13 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
     # define files and open input file
     xfield = xr.open_mfdataset(finput)
 
+    # convert extrapolate to CDO
+    cdoextrapolate = 'on' if extrapolate else 'off'
+
     # interpolation with pure CDO
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
-    cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True)
+    cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True,
+                                env={'REMAP_EXTRAPOLATE': cdoextrapolate})
 
     # Keep only some levels
     cdofield = cdofield.isel(**{vertical_dim: levels})

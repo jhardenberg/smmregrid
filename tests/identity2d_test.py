@@ -55,7 +55,7 @@ def test_unstructured(method):
 
 # test for curvilinear grid
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
-def test_curivilinear(method):
+def test_curvilinear(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'onlytos-ipsl.nc'), tfile,
                            remap_method=method, init_method='grids')
     assert fff is True

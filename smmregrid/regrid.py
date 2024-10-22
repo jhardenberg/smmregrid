@@ -41,7 +41,7 @@ import xarray
 import numpy
 import dask.array
 from .dimension import remove_degenerate_axes
-from .cdo_weights import cdo_generate_weights
+from .cdogenerate import cdo_generate_weights
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .gridinspector import GridInspector
