@@ -2,6 +2,7 @@
 
 import os
 import sys
+import re
 import copy
 import tempfile
 import subprocess
@@ -63,6 +64,20 @@ class CdoGenerate():
         if cdo_icon_grids:
             self.env["CDO_ICON_GRIDS"] = cdo_icon_grids
 
+    def _check_gridfile(self, filename):
+        """Check if a grid is a file, a cdo string or xarray object"""
+
+        if filename is None:
+            return None
+        if isinstance(filename, xarray.Dataset):
+            return "xarray"
+        if isinstance(filename, str):
+            if os.path.exists(filename):
+                return "file"
+            return "grid"
+        else:
+            raise TypeError(f'Unsuported format for {filename}')
+        
     @staticmethod
     def _deprecated_argument(old, new, oldname='var1', newname='var2'):
 
@@ -87,6 +102,17 @@ class CdoGenerate():
             raise ValueError('The remap method provided is not supported!')
         if remap_norm not in ["fracarea", "destarea"]:
             raise ValueError('The remap normalization provided is not supported!')
+    
+    @staticmethod
+    def _prepare_grid(grid):
+        """Helper function to prepare grid (file or dataset)."""
+
+        if isinstance(grid, str):
+            return grid
+
+        grid_file = tempfile.NamedTemporaryFile(delete=False)
+        grid.to_netcdf(grid_file.name)
+        return grid_file.name
 
     def weights(self, method="con", extrapolate=True,
             remap_norm="fracarea", remap_area_min=0.0,
@@ -287,21 +313,10 @@ class CdoGenerate():
         finally:
             weight_file.close()
 
-
-    def _prepare_grid(self, grid):
-        """Helper function to prepare grid (file or dataset)."""
-
-        if isinstance(grid, str):
-            return grid
-
-        grid_file = tempfile.NamedTemporaryFile(delete=False)
-        grid.to_netcdf(grid_file.name)
-        return grid_file.name
-
-    def _remove_tmpfile(self, tmpfile):
-        """Helper function to clean the tempfile grid (file or dataset)."""
-        if not isinstance(tmpfile, str):
-            os.remove(tmpfile.name)
+    # def _remove_tmpfile(self, tmpfile):
+    #     """Helper function to clean the tempfile grid (file or dataset)."""
+    #     if not isinstance(tmpfile, str):
+    #         os.remove(tmpfile.name)
 
     def weightslist_to_3d(self, ds_list, vertical_dim='lev'):
         """Combine a list of 2D CDO weights into a 3D one."""
@@ -325,6 +340,63 @@ class CdoGenerate():
 
         return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim)],
                             combine_attrs='no_conflicts')
+    
+    def areas(self, target=False):
+        """Generate source areas or target areas"""
+        
+        if not target:
+            self.loggy.info('Generating areas for source grid!')
+            return self._areas(self.source_grid, cdo_extra=self.cdo_extra, cdo_options=self.cdo_options)
+        if self.target_grid:
+            self.loggy.info('Generating areas for target grid!')
+            return self._areas(self.target_grid)
+        
+        raise ValueError('Cannot generate any area for target grid since it is undefined')
+
+            
+    def _areas(self, filename, cdo_extra=None, cdo_options=None):
+        """Generate areas in a similar way of what done for weights"""
+
+        # safety listing
+        cdo_extra = cdo_extra if isinstance(cdo_extra, list) else ([cdo_extra] if cdo_extra else [])
+        cdo_options = cdo_options if isinstance(cdo_options, list) else ([cdo_options] if cdo_options else [])
+
+        # Make some temporary files that we'll feed to CDO
+        areas_file = tempfile.NamedTemporaryFile()
+
+        # prepare grid
+        if self._check_gridfile(filename) == 'grid':
+            self.loggy.info('CDO grid as %s to be used for area generation', filename)
+            sgrid = f"-const,1,{filename}"
+        else:
+            sgrid = self._prepare_grid(filename)
+
+        try:
+            self.loggy.info("Additional CDO commands: %s", cdo_extra)
+            self.loggy.info("Additional CDO options: %s", cdo_options)
+
+            command = [
+                self.cdo,
+                *cdo_options + ["-f", "nc4"],
+                "gridarea",
+                *cdo_extra,
+                sgrid,
+                areas_file.name
+            ]
+            self.loggy.debug("Final CDO command: %s", command)
+            subprocess.check_output(command, stderr=subprocess.STDOUT, env=self.env)
+
+            areas = xarray.open_dataset(areas_file.name, engine="netcdf4")
+            areas.cell_area.attrs['units'] = 'm2'
+            areas.cell_area.attrs['standard_name'] = 'area'
+            areas.cell_area.attrs['long_name'] = 'area of grid cell'
+            return areas
+    
+        except subprocess.CalledProcessError as err:
+            print(err.output.decode(), file=sys.stderr)
+            raise
+        finally:
+            areas_file.close()
 
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
