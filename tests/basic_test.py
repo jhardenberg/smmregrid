@@ -4,7 +4,8 @@ import os
 import pytest
 import xarray
 import numpy
-from smmregrid.checker import cdo_generate_weights, Regridder
+from smmregrid import Regridder, cdo_generate_weights
+
 
 INDIR = 'tests/data'
 tfile = os.path.join(INDIR, 'r360x180.nc')

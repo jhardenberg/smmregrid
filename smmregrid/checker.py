@@ -3,7 +3,7 @@
 import numpy as np
 import xarray as xr
 from cdo import Cdo
-from smmregrid import Regridder, cdo_generate_weights
+from smmregrid import Regridder, CdoGenerate
 cdo = Cdo()
 
 
@@ -64,8 +64,7 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
         interpolator = Regridder(source_grid=finput, target_grid=ftarget,
                                  method=remap_method, vertical_dim=vertical_dim)
     elif init_method == 'weights':
-        wfield = cdo_generate_weights(finput, ftarget,
-                                      method=remap_method, vertical_dim=vertical_dim)
+        wfield = CdoGenerate(finput, ftarget).weights(method=remap_method, vertical_dim=vertical_dim)
         interpolator = Regridder(weights=wfield)
     else:
         raise KeyError('Unsupported init method')
@@ -106,9 +105,8 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
     cdovar = find_var(cdofield)
 
     # compute weights
-    wfield = cdo_generate_weights(finput, ftarget,
-                                  method=remap_method,
-                                  vertical_dim=vertical_dim, loglevel='debug')
+    wfield = CdoGenerate(finput, ftarget, loglevel='debug').weights(
+        method=remap_method, vertical_dim=vertical_dim)
 
     # Pass full 3D weights
     interpolator = Regridder(weights=wfield, loglevel='debug')

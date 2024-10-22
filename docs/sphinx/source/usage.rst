@@ -14,8 +14,8 @@ and then activate the `Regridder()` class and run the `.regrid()` method on the 
 
 .. code-block:: python 
 
-    from smmregrid import Regridder, cdo_generate_weights
-    weights = cdo_generate_weights(filein, target_grid)
+    from smmregrid import Regridder, CdoGenerate
+    weights = CdoGenerate(filein, target_grid).weights()
     interpolator = Regridder(weights=wfield)
     myfile = interpolator.regrid(xfield[var])
 

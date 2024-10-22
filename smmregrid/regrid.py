@@ -22,7 +22,7 @@
 To apply a regridding you will need a set of weights mapping from the source
 grid to the target grid.
 
-Regridding weights can be generated online using CDO (:func:`cdo_generate_weights`),
+Regridding weights can be generated online using CDO (:class:`CdoGenerate`),
 or offline by calling these programs externally (this is recommended especially
 for large grids).
 
@@ -41,7 +41,7 @@ import xarray
 import numpy
 import dask.array
 from .dimension import remove_degenerate_axes
-from .cdogenerate import cdo_generate_weights
+from .cdogenerate import CdoGenerate
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .gridinspector import GridInspector
@@ -63,7 +63,7 @@ class Regridder(object):
         the provided source and target grids.
 
         Pre-computed weights can be generated externally or by using
-        :func:`cdo_generate_weights`.
+        :class:`CdoGenerate()`.
 
         Args:
             source_grid (xarray.DataArray or str): Source grid dataset or file path.
@@ -153,7 +153,7 @@ class Regridder(object):
                 self.loggy.debug('Horizontal dimension is %s', gridtype.horizontal_dims)
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
 
-                # always prefer to pass file (i.e. source_grid) when possible to cdo_generate_weights
+                # always prefer to pass file (i.e. source_grid) when possible to CdoGenerate()
                 # this will limit errors from xarray and speed up CDO itself
                 # it wil work only for single-gridtype dataset
                 if isinstance(source_grid, str) and len_grids == 1:
@@ -167,10 +167,10 @@ class Regridder(object):
                     else:
                         source_grid_array_to_cdo = source_grid_array
 
-                gridtype.weights = cdo_generate_weights(source_grid_array_to_cdo, target_grid, method=method,
-                                                        vertical_dim=gridtype.vertical_dim,
-                                                        cdo=cdo, cdo_options=cdo_options,
-                                                        cdo_extra=cdo_extra, loglevel=loglevel)
+                generator = CdoGenerate(source_grid_array_to_cdo, target_grid, 
+                                               cdo=cdo, cdo_options=cdo_options,
+                                               cdo_extra=cdo_extra, loglevel=loglevel)
+                gridtype.weights = generator.weights(method=method, vertical_dim=gridtype.vertical_dim)
 
         for gridtype in self.grids:
             if gridtype.vertical_dim:
