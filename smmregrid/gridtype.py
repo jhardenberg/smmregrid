@@ -12,6 +12,8 @@ DEFAULT_DIMS = {
 
 
 class GridType:
+    """Fundamental GridType object"""
+
     def __init__(self, dims, extra_dims=None, weights=None):
         """
         Initializes a GridType object carrying grid-specific information required by smmregrid.
@@ -80,7 +82,7 @@ class GridType:
         update_dims = DEFAULT_DIMS
         for dim in extra_dims.keys():
             if extra_dims[dim]:
-                update_dims[dim] = update_dims[dim] + extra_dims[dim]
+                update_dims[dim] = list(set(update_dims[dim] + extra_dims[dim]))
         return update_dims
 
     def __eq__(self, other):

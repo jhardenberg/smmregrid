@@ -6,6 +6,7 @@ from .gridtype import GridType
 
 
 class GridInspector():
+    """Class to investigate data and detect its GridType() object"""
 
     def __init__(self, data, cdo_weights=False, extra_dims=None,
                  clean=True, loglevel='warning'):
@@ -14,7 +15,8 @@ class GridInspector():
 
         Parameters:
             data (xr.Datase or xr.DataArray): The input dataset.
-            clean (bool): apply the cleaning of grids which are assumed to be not relevant for regridding purposes
+            clean (bool): apply the cleaning of grids which are assumed to be not relevant 
+                          for regridding purposes (e.g. bounds)
             cdo_weights (bool): if the data provided are cdo weights instead of data to be regridded
             extra_dims(dict): Extra dimensions to be added and passed to GridType
             loglevel: The loglevel that you want you use
@@ -64,7 +66,8 @@ class GridInspector():
 
         # get vertical info from the weights coords if available
         if self.data.coords:
-            self.loggy.debug('Vertical dimension read from weights and assigned to %s', list(self.data.coords)[0])
+            self.loggy.debug('Vertical dimension read from weights and assigned to %s',
+                             list(self.data.coords)[0])
             gridtype.vertical_dim = list(self.data.coords)[0]
 
         self.grids.append(gridtype)
@@ -108,10 +111,12 @@ class GridInspector():
             # Check if any variable in the grid contains 'bnds'
             if any('bnds' in variable for variable in gridtype.variables):
                 removed.append(gridtype)  # Add to removed list
-                self.loggy.info('Removing the grid defined by %s with variables containing "bnds"', gridtype.dims)
+                self.loggy.info('Removing the grid defined by %s with variables containing "bnds"',
+                                gridtype.dims)
             if any('bounds' in variable for variable in gridtype.variables):
                 removed.append(gridtype)  # Add to removed list
-                self.loggy.info('Removing the grid defined by %s with variables containing "bounds"', gridtype.dims)
+                self.loggy.info('Removing the grid defined by %s with variables containing "bounds"',
+                                gridtype.dims)
 
         for remove in removed:
             self.grids.remove(remove)

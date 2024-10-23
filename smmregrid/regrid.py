@@ -48,6 +48,7 @@ from .gridinspector import GridInspector
 
 
 class Regridder(object):
+    """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', transpose=True, vert_coord=None, vertical_dim=None,
@@ -69,11 +70,14 @@ class Regridder(object):
             source_grid (xarray.DataArray or str): Source grid dataset or file path.
             target_grid (xarray.DataArray): Target grid dataset for regridding.
             weights (xarray.Dataset): Pre-computed interpolation weights.
-            vertical_dim (str): Name of the vertical coordinate for 3D weights generation (default: None).
-            horizontal_dims (list): List of spatial dimensions to interpolate (default: None).
+            vertical_dim (str): Name of the vertical coordinate for 
+                                3D weights generation (default: None).
+            horizontal_dims (list): List of spatial dimensions to 
+                                    interpolate (default: None).
             method (str): Interpolation method to use (default: 'con').
-            transpose (bool): If True, transpose the output such that the vertical coordinate
-                              is placed just before the other spatial coordinates (default: True).
+            transpose (bool): If True, transpose the output such that 
+                              the vertical coordinate is placed just before the 
+                              other spatial coordinates (default: True).
             cdo (str): Path to the CDO executable (default: 'cdo').
             cdo_extra (str): Extra command to be passed to CDO
             cdo_options(str): Extra options to be passed to CDO
@@ -167,20 +171,23 @@ class Regridder(object):
                     else:
                         source_grid_array_to_cdo = source_grid_array
 
-                generator = CdoGenerate(source_grid_array_to_cdo, target_grid, 
+                generator = CdoGenerate(source_grid_array_to_cdo, target_grid,
                                                cdo=cdo, cdo_options=cdo_options,
                                                cdo_extra=cdo_extra, loglevel=loglevel)
-                gridtype.weights = generator.weights(method=method, vertical_dim=gridtype.vertical_dim)
+                gridtype.weights = generator.weights(method=method,
+                                                     vertical_dim=gridtype.vertical_dim)
 
         for gridtype in self.grids:
             if gridtype.vertical_dim:
-                gridtype.weights_matrix = compute_weights_matrix3d(gridtype.weights, gridtype.vertical_dim)
+                gridtype.weights_matrix = compute_weights_matrix3d(gridtype.weights,
+                                                                   gridtype.vertical_dim)
             else:
                 gridtype.weights_matrix = compute_weights_matrix(gridtype.weights)
 
             # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
-            if "dst_grid_masked" in gridtype.weights.variables:  # has a destination mask been precomputed?
-                gridtype.masked = gridtype.weights.dst_grid_masked.data  # ok, let's use it
+            # has a destination mask been precomputed?
+            if "dst_grid_masked" in gridtype.weights.variables: 
+                gridtype.masked = gridtype.weights.dst_grid_masked.data 
             else:
                 # compute the destination mask now
                 gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.vertical_dim)

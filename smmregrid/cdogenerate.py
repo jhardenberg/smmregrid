@@ -2,7 +2,6 @@
 
 import os
 import sys
-import re
 import copy
 import tempfile
 import subprocess
@@ -12,6 +11,7 @@ import numpy
 import xarray
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
+from .util import check_gridfile
 
 
 class CdoGenerate():
@@ -33,12 +33,16 @@ class CdoGenerate():
             loglevel (str, optional): The logging level for messages. Default is 'warning'. 
                                       Options include 'debug', 'info', 'warning', 
                                       'error', and 'critical'.
-            extra (any, optional): Deprecated. Previously used for additional CDO options. Use `cdo_extra` instead.
-            cdo_extra (list or any, optional): Additional CDO command-line options. Defaults to None.
-            cdo_options (dict, optional): Options for CDO commands. Defaults to None.
+            extra (list, optional): Deprecated. Previously used for additional CDO options. 
+                                   Use `cdo_extra` instead.
+            cdo_extra (list, optional): Additional CDO command-line options. 
+                                               Defaults to None.
+            cdo_options (list, optional): Options for CDO commands. Defaults to None.
             cdo (str, optional): The command to invoke CDO. Default is "cdo".
-            cdo_icon_grids (str, optional): Path to the ICON grid if applicable. Defaults to None.
-            cdo_download_path (str, optional): Path to the grid information if applicable. Defaults to None.
+            cdo_icon_grids (str, optional): Path to the ICON grid 
+                                            if applicable. Defaults to None.
+            cdo_download_path (str, optional): Path to the grid download path 
+                                                if applicable. Defaults to None.
         """
 
         self.loggy = setup_logger(level=loglevel, name='smmregrid.CdoGenerate')
@@ -52,8 +56,6 @@ class CdoGenerate():
 
         # assign the two grids
         self.source_grid = source_grid
-        if target_grid is None:
-            self.loggy.info('Target grid not specified, cannot provide any regridding')
         self.target_grid = target_grid
 
         # assign cdo bin file and get envrinment file
@@ -64,20 +66,6 @@ class CdoGenerate():
         if cdo_icon_grids:
             self.env["CDO_ICON_GRIDS"] = cdo_icon_grids
 
-    def _check_gridfile(self, filename):
-        """Check if a grid is a file, a cdo string or xarray object"""
-
-        if filename is None:
-            return None
-        if isinstance(filename, xarray.Dataset):
-            return "xarray"
-        if isinstance(filename, str):
-            if os.path.exists(filename):
-                return "file"
-            return "grid"
-        else:
-            raise TypeError(f'Unsuported format for {filename}')
-        
     @staticmethod
     def _deprecated_argument(old, new, oldname='var1', newname='var2'):
 
@@ -118,12 +106,15 @@ class CdoGenerate():
             remap_norm="fracarea", remap_area_min=0.0,
             vert_coord=None, vertical_dim=None, nproc=1):
         """
-        Generate weights for regridding using Climate Data Operators (CDO), accommodating both 2D and 3D grid cases.
+        Generate weights for regridding using Climate Data Operators (CDO), 
+        accommodating both 2D and 3D grid cases.
 
         Args:
-            method (str, optional): The remapping method to use. Default is "con" for conservative remapping.
+            method (str, optional): The remapping method to use. 
+                                    Default is "con" for conservative remapping.
                                     Other options may include 'bil', 'nearest', etc.
-            extrapolate (bool, optional): Whether to allow extrapolation beyond the grid boundaries. Defaults to True.
+            extrapolate (bool, optional): Whether to allow extrapolation beyond the grid boundaries. 
+                                          Defaults to True.
             remap_norm (str, optional): The normalization method to apply when remapping.
                                         Default is "fracarea" which normalizes by fractional area.
             remap_area_min (float, optional): Minimum area for remapping. Defaults to 0.0.
@@ -134,8 +125,10 @@ class CdoGenerate():
                                         Use `vertical_dim` instead.
 
         Returns:
-            xarray.Dataset: A dataset containing the generated weights and a mask indicating which grid cells
-                            were successfully masked. The mask is stored in a variable named "dst_grid_masked".
+            xarray.Dataset: A dataset containing the generated weights 
+                            and a mask indicating which grid cells
+                            were successfully masked. 
+                            The mask is stored in a variable named "dst_grid_masked".
 
         Raises:
             KeyError: If the specified vertical dimension cannot be found in the source grid.
@@ -158,11 +151,15 @@ class CdoGenerate():
             Users should migrate to using `cdo_extra` and `vertical_dim`, respectively.
 
         """
+        if self.target_grid is None:
+            raise TypeError('Target grid is not specified, cannot provide any regridding')
+
         # verify that method and normalization are suitable
         self._safe_check(method, remap_norm)
 
         # vertical dimension
-        vertical_dim = self._deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
+        vertical_dim = self._deprecated_argument(vert_coord, vertical_dim, 
+                                                 'vert_coord', 'vertical_dim')
 
         # Generate weights for 2D or 3D grid based on vertical_dim presence
         if not vertical_dim:
@@ -343,15 +340,18 @@ class CdoGenerate():
     
     def areas(self, target=False):
         """Generate source areas or target areas"""
-        
+
         if not target:
             self.loggy.info('Generating areas for source grid!')
-            return self._areas(self.source_grid, cdo_extra=self.cdo_extra, cdo_options=self.cdo_options)
+            return self._areas(self.source_grid, cdo_extra=self.cdo_extra,
+                               cdo_options=self.cdo_options)
+
         if self.target_grid:
+            
             self.loggy.info('Generating areas for target grid!')
             return self._areas(self.target_grid)
-        
-        raise ValueError('Cannot generate any area for target grid since it is undefined')
+
+        raise TypeError('Target grid is not specified, cannot provide any area')
 
             
     def _areas(self, filename, cdo_extra=None, cdo_options=None):
@@ -365,7 +365,7 @@ class CdoGenerate():
         areas_file = tempfile.NamedTemporaryFile()
 
         # prepare grid
-        if self._check_gridfile(filename) == 'grid':
+        if check_gridfile(filename) == 'grid':
             self.loggy.info('CDO grid as %s to be used for area generation', filename)
             sgrid = f"-const,1,{filename}"
         else:
