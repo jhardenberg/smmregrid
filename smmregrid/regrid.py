@@ -36,7 +36,6 @@ multiple datasets.
 
 import math
 import os
-import warnings
 import xarray
 import numpy
 import dask.array
@@ -45,6 +44,7 @@ from .cdogenerate import CdoGenerate
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .gridinspector import GridInspector
+from .util import deprecated_argument
 
 
 class Regridder(object):
@@ -97,26 +97,9 @@ class Regridder(object):
                 "Either weights or source_grid/target_grid must be supplied"
             )
 
-        # Check for deprecated 'vert_coord' argument
-        if vert_coord is not None:
-            warnings.warn(
-                "'vert_coord' is deprecated and is no longer used by smmregrid. Please use 'vertical_dim'",
-                DeprecationWarning
-            )
-        # If cdo_extra is not provided, use the value from extra
-        if vertical_dim is None:
-            vertical_dim = vert_coord
-
-        # Check for deprecated 'space_dim' argument
-        if space_dims is not None:
-            warnings.warn(
-                "'space_dims' is deprecated and is no longer used by smmregrid. Please use 'horizontal_dims'",
-                DeprecationWarning
-            )
-            # If cdo_extra is not provided, use the value from extra
-        if horizontal_dims is None:
-            horizontal_dims = space_dims
-
+        vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
+        horizontal_dims = deprecated_argument(space_dims, horizontal_dims, 'space_dims', 'horizontal_dims')
+       
         # set up logger
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel

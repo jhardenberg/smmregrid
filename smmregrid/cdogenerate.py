@@ -11,7 +11,7 @@ import numpy
 import xarray
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
-from .util import check_gridfile
+from .util import check_gridfile, deprecated_argument
 
 
 class CdoGenerate():
@@ -48,7 +48,7 @@ class CdoGenerate():
         self.loggy = setup_logger(level=loglevel, name='smmregrid.CdoGenerate')
 
         # deprecation warning
-        cdo_extra = self._deprecated_argument(extra, cdo_extra, 'extra', 'cdo_extra')
+        cdo_extra = deprecated_argument(extra, cdo_extra, 'extra', 'cdo_extra')
 
         # cdo options and extra, ensure they are lists
         self.cdo_extra = cdo_extra if isinstance(cdo_extra, list) else ([cdo_extra] if cdo_extra else [])
@@ -65,21 +65,6 @@ class CdoGenerate():
             self.env["CDO_DOWNLOAD_PATH"] = cdo_download_path
         if cdo_icon_grids:
             self.env["CDO_ICON_GRIDS"] = cdo_icon_grids
-
-    @staticmethod
-    def _deprecated_argument(old, new, oldname='var1', newname='var2'):
-
-        # Check for deprecated 'new' argument
-        if old is not None:
-            warnings.warn(
-                f"{oldname} is deprecated and will be removed in future versions. "
-                f"Please use {newname} instead.",
-                DeprecationWarning
-            )
-            # If new is not provided, use the value from old
-            if new is None:
-                new = old
-        return new
 
     @staticmethod
     def _safe_check(method, remap_norm):
@@ -158,8 +143,7 @@ class CdoGenerate():
         self._safe_check(method, remap_norm)
 
         # vertical dimension
-        vertical_dim = self._deprecated_argument(vert_coord, vertical_dim, 
-                                                 'vert_coord', 'vertical_dim')
+        vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
 
         # Generate weights for 2D or 3D grid based on vertical_dim presence
         if not vertical_dim:

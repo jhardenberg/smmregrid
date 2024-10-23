@@ -2,6 +2,7 @@
 
 import re
 import os
+import warnings
 import xarray
 
 # Define CDO regex patterns for each grid type (updated at CDO 2.4.4)
@@ -45,3 +46,19 @@ def check_gridfile(filename):
         raise FileNotFoundError(f"Cannot find {filename} on disk")
 
     raise TypeError(f'Unsuported format for {filename}')
+
+
+def deprecated_argument(old, new, oldname='var1', newname='var2'):
+    """Utility to provide warning in case of deprecated argument"""
+
+    # Check for deprecated 'old' argument
+    if old is not None:
+        warnings.warn(
+            f"{oldname} is deprecated and will be removed in future versions. "
+            f"Please use {newname} instead.",
+            DeprecationWarning
+        )
+        # If new is not provided, use the value from old
+        if new is None:
+            new = old
+    return new
