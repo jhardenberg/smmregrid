@@ -2,7 +2,6 @@
 
 import os
 import pytest
-
 from smmregrid import CdoGenerate
 
 
@@ -28,3 +27,18 @@ def test_basic_areas_source(filename, shape, kind):
     earth_surface = area.cell_area.values.sum()/1e6
     assert area.cell_area.shape == shape
     assert earth_surface == pytest.approx(compare_surface, abs=TOLERANCE)
+
+@pytest.mark.parametrize("filename,shape", [
+    (os.path.join(INDIR, 'r360x180.nc'), (180, 360)),
+    ('hp32', (12288,)),
+    ('r180x90', (90, 180,)),
+    (os.path.join(INDIR, 'tas-healpix2.nc'), (12288,))
+])
+def test_basic_areas_target(filename, shape):
+    """Basic test for area generation from source file"""
+    infile = os.path.join(INDIR, 'r360x180.nc')
+    generator = CdoGenerate(infile, filename, loglevel='debug')
+    area = generator.areas(target=True)
+    earth_surface = area.cell_area.values.sum()/1e6
+    assert area.cell_area.shape == shape
+    assert earth_surface == pytest.approx(EARTH_SURFACE, abs=TOLERANCE)

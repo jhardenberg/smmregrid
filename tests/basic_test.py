@@ -4,12 +4,11 @@ import os
 import pytest
 import xarray
 import numpy
-from smmregrid import Regridder, CdoGenerate
+from smmregrid import Regridder, CdoGenerate, cdo_generate_weights
 
 
 INDIR = 'tests/data'
 tfile = os.path.join(INDIR, 'r360x180.nc')
-rfile = os.path.join(INDIR, 'regional.nc')
 
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_healpix_extra(method):
@@ -29,10 +28,10 @@ def test_healpix_extra(method):
 
 @pytest.mark.parametrize("method", ['con', 'nn', 'bic'])
 def test_nan_preserve(method):
-    """Test to verify that NaN are preserved"""
+    """Test to verify that NaN are preserved with deprecated cdo_generate_weights"""
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     xfield['tas'][1,:,:] = numpy.nan
-    wfield = CdoGenerate(xfield, tfile, loglevel='debug').weights(method = method)
+    wfield = cdo_generate_weights(xfield, tfile, loglevel='debug', method = method)
     interpolator = Regridder(weights=wfield, space_dims='pippo', loglevel='debug')
     rfield = interpolator.regrid(xfield)
     assert numpy.isnan(rfield['tas'][1,:,:]).all().compute()
