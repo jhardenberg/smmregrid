@@ -9,13 +9,15 @@ For further details on the different usages, please consult the `demo notebook <
 Starting from weights
 ---------------------
 
-You can simply generate the weights with `cdo_generate_weights` function (or load precomputed weights on your own)
-and then activate the `Regridder()` class and run the `.regrid()` method on the data you want to regrid
+You can simply generate the weights with `CdoGenerate()` class and its method `weights()` (or load precomputed weights on your own).
+This will create the weight with the `gen<method>` command from CDO. 
+Then activate the sparse smmregrid `Regridder()` class and run the `regrid()` method on the data you want to regrid.
+
 
 .. code-block:: python 
 
     from smmregrid import Regridder, CdoGenerate
-    weights = CdoGenerate(filein, target_grid).weights()
+    weights = CdoGenerate(filein, target_grid).weights(method='con')
     interpolator = Regridder(weights=wfield)
     myfile = interpolator.regrid(xfield[var])
 
@@ -30,3 +32,25 @@ simply operate with the `.regrid()` method
     from smmregrid import Regridder
     interpolator = Regridder(filein, target_grid)
     myfile = interpolator.regrid(xfield[var])
+
+
+Area generation
+---------------
+
+Similarly, it is possible to produce the area for both source and target grid making use of 
+the `CdoGenerate()` class and the method `areas()`. This build again on CDO, specifically on
+the `gridarea` command.
+
+For source area:
+
+.. code-block:: python 
+
+    from smmregrid import CdoGenerate
+    areas = CdoGenerate(filein, target_grid).areas()
+
+For target area:
+
+.. code-block:: python 
+
+    from smmregrid import CdoGenerate
+    areas = CdoGenerate(filein, target_grid).areas(target=True)

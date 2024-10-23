@@ -122,10 +122,10 @@ class CdoGenerate():
         Notes:
             This function handles both 2D and 3D grid cases:
 
-            - For 2D grids (when `vertical_dim` is None), it calls the `_weights_2d` method
+            For 2D grids (when `vertical_dim` is None), it calls the `_weights_2d` method
             to generate weights. The weights are then masked based on a precomputed weights matrix.
 
-            - For 3D grids (when `vertical_dim` is specified), it uses multiprocessing to generate weights
+            For 3D grids (when `vertical_dim` is specified), it uses multiprocessing to generate weights
             for each vertical level. It requires the vertical dimension to be present in the source grid,
             and it will generate a mask indicating valid and invalid weights for each vertical level.
 
