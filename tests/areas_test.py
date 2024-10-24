@@ -42,3 +42,11 @@ def test_basic_areas_target(filename, shape):
     earth_surface = area.cell_area.values.sum()/1e6
     assert area.cell_area.shape == shape
     assert earth_surface == pytest.approx(EARTH_SURFACE, abs=TOLERANCE)
+
+def test_nosource_areas_target():
+    """Basic test for area generation from source file"""
+    generator = CdoGenerate(source_grid=None, target_grid='r180x91', loglevel='debug')
+    area = generator.areas(target=True)
+    earth_surface = area.cell_area.values.sum()/1e6
+    assert area.cell_area.shape == (91, 180)
+    assert earth_surface == pytest.approx(EARTH_SURFACE, abs=TOLERANCE)
