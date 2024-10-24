@@ -329,8 +329,8 @@ class CdoGenerate():
 
         if not target:
             self.loggy.info('Generating areas for source grid!')
-            if not self.source_grid:
-                raise TypeError('Source grid is not specified, cannot provide any area')
+            #if not self.source_grid:
+            #    raise TypeError('Source grid is not specified, cannot provide any area')
             return self._areas(self.source_grid, cdo_extra=self.cdo_extra,
                                 cdo_options=self.cdo_options)
 
