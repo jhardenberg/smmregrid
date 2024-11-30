@@ -174,7 +174,7 @@ class CdoGenerate():
         else:
             sgrid = self.source_grid
 
-        if vertical_dim not in sgrid:
+        if vertical_dim not in sgrid.dims:
             raise KeyError(f'Cannot find vertical dim {vertical_dim} in {list(sgrid.dims)}')
 
         nvert = sgrid[vertical_dim].values.size
@@ -265,7 +265,7 @@ class CdoGenerate():
         tgrid = self._prepare_grid(self.target_grid)
 
         self.loggy.debug("Source grid file name is: %s", sgrid)
-        self.loggy.debug("Source grid file name is: %s", tgrid)
+        self.loggy.debug("Target grid file name is: %s", tgrid)
 
         env = copy.deepcopy(self.env)
         env["REMAP_EXTRAPOLATE"] = "on" if extrapolate else "off"
