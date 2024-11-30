@@ -144,7 +144,7 @@ class GridType:
         time_dims = set(self.time_dims) if self.time_dims else set()
 
         # Return the unused dimensions by subtracting used dimensions from all dimensions
-        return set(self.dims) - (horizontal_dims | vertical_dim | time_dims)
+        return list(set(self.dims) - (horizontal_dims | vertical_dim | time_dims))
 
     def _identify_spatial_bounds(self, data):
         """

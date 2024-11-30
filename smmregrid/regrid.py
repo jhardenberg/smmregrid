@@ -137,8 +137,9 @@ class Regridder(object):
 
             for gridtype in self.grids:
                 self.loggy.debug('Processing grids %s', gridtype.dims)
-                self.loggy.debug('Horizontal dimension is %s', gridtype.horizontal_dims)
+                self.loggy.debug('Horizontal dimensions are %s', gridtype.horizontal_dims)
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
+                self.loggy.debug('Other dimensions are %s', gridtype.other_dims)
 
                 # always prefer to pass file (i.e. source_grid) when possible to CdoGenerate()
                 # this will limit errors from xarray and speed up CDO itself
