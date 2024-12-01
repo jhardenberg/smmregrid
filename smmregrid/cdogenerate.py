@@ -84,7 +84,7 @@ class CdoGenerate():
             return grid
 
         grid_file = tempfile.NamedTemporaryFile(delete=False)
-        grid.to_netcdf(grid_file.name)
+        grid.load().to_netcdf(grid_file.name)
         return grid_file.name
 
     def weights(self, method="con", extrapolate=True,
