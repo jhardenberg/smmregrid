@@ -35,7 +35,6 @@ class GridType:
             bounds (list): A list of bounds variables identified in the dataset.
             masked (any): Placeholder for masked data (to be defined later).
             weights (any): The weights associated with the grid, if provided.
-            cdo_weights (bool): A flag indicating if weights are provided.
             weights_matrix (any): Placeholder for a weights matrix (to be defined later).
             level_index (str): A string used to identify the index of the levels.
 
@@ -56,7 +55,6 @@ class GridType:
         # used by Regrid class
         self.masked = None
         self.weights = weights
-        self.cdo_weights = bool(weights)
         self.weights_matrix = None
         self.level_index = "idx_"
 
