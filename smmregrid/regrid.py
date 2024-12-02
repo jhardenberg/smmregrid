@@ -145,7 +145,7 @@ class Regridder(object):
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
                 self.loggy.debug('Other dimensions are %s', gridtype.other_dims)
 
-                # always prefer to pass file (i.e. source_grid) when possible to CdoGenerate()
+                # always prefer to pass filename (i.e. source_grid) when possible to CdoGenerate()
                 # this will limit errors from xarray and speed up CDO itself
                 # it wil work only for single-gridtype dataset
                 if isinstance(source_grid, str) and len_grids == 1:
@@ -158,6 +158,10 @@ class Regridder(object):
                         source_grid_array_to_cdo = source_grid_array[stored_vars]
                     else:
                         source_grid_array_to_cdo = source_grid_array
+                    
+                    if gridtype.time_dims:
+                        self.loggy.debug('Selecting only first time step for dimension %s', gridtype.time_dims[0])
+                        source_grid_array_to_cdo = source_grid_array_to_cdo.isel({gridtype.time_dims[0]: 0})
 
                 generator = CdoGenerate(source_grid_array_to_cdo, target_grid,
                                                cdo=cdo, cdo_options=cdo_options,
