@@ -114,9 +114,10 @@ class Regridder(object):
 
         # Is there already a weights file?
         if weights is not None:
+            self.loggy.info('Init from weights selected!')
             self.grids = self._gridtype_from_weights(weights)
         else:
-
+            self.loggy.info('Init from grids selected!')
             if isinstance(source_grid, str):
                 if os.path.isfile(source_grid):
                     source_grid_array = xarray.open_dataset(source_grid)
@@ -133,9 +134,10 @@ class Regridder(object):
             if len_grids == 1:
                 self.loggy.info('One gridtype found! Standard procedure')
             else:
-                self.loggy.info('%s gridtypes found! We are in uncharted territory!', len_grids)
+                self.loggy.warning('%s gridtypes found! We are in uncharted territory!', len_grids)
 
-            for gridtype in self.grids:
+            for index, gridtype  in enumerate(self.grids):
+                self.loggy.info('Processing grid number %s', index)
                 self.loggy.debug('Processing grids %s', gridtype.dims)
                 self.loggy.debug('Horizontal dimensions are %s', gridtype.horizontal_dims)
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
@@ -449,7 +451,7 @@ class Regridder(object):
 
         src_cdo_grid = w.attrs['source_grid']
         dst_cdo_grid = w.attrs['dest_grid']
-        self.loggy.info('AInterpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
+        self.loggy.info('Interpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
 
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(

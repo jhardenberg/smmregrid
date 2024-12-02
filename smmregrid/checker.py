@@ -22,7 +22,8 @@ def find_var(xfield):
 
 
 def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
-                     init_method='grids', vertical_dim=None, extrapolate=True):
+                     init_method='grids', vertical_dim=None, extrapolate=True,
+                     loglevel='INFO'):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests."""
@@ -62,10 +63,10 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     # method with automatic creation of weights
     if init_method == 'grids':
         interpolator = Regridder(source_grid=finput, target_grid=ftarget,
-                                 method=remap_method, vertical_dim=vertical_dim)
+                                 method=remap_method, vertical_dim=vertical_dim, loglevel=loglevel)
     elif init_method == 'weights':
-        wfield = CdoGenerate(finput, ftarget).weights(method=remap_method, vertical_dim=vertical_dim)
-        interpolator = Regridder(weights=wfield)
+        wfield = CdoGenerate(finput, ftarget, loglevel=loglevel).weights(method=remap_method, vertical_dim=vertical_dim)
+        interpolator = Regridder(weights=wfield, loglevel=loglevel)
     else:
         raise KeyError('Unsupported init method')
     rfield = interpolator.regrid(xfield)
@@ -80,7 +81,7 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
 
 
 def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method='con',
-                            access='Dataset', extrapolate=True):
+                            access='Dataset', extrapolate=True, loglevel='INFO'):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
@@ -105,11 +106,11 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
     cdovar = find_var(cdofield)
 
     # compute weights
-    wfield = CdoGenerate(finput, ftarget, loglevel='debug').weights(
+    wfield = CdoGenerate(finput, ftarget, loglevel=loglevel).weights(
         method=remap_method, vertical_dim=vertical_dim)
 
     # Pass full 3D weights
-    interpolator = Regridder(weights=wfield, loglevel='debug')
+    interpolator = Regridder(weights=wfield, loglevel=loglevel)
 
     # subselect some levels
     xfield = xfield.isel(**{vertical_dim: levels})
