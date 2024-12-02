@@ -180,7 +180,8 @@ class CdoGenerate():
         if vertical_dim not in sgrid.dims:
             raise KeyError(f'Cannot find vertical dim {vertical_dim} in {list(sgrid.dims)}')
 
-        nvert = sgrid[vertical_dim].values.size
+        #nvert = sgrid[vertical_dim].values.size
+        nvert = sgrid.sizes[vertical_dim]
         self.loggy.info('Vertical dimension has length: %s', nvert)
 
         mgr = Manager()
