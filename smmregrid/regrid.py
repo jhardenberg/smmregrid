@@ -114,9 +114,12 @@ class Regridder(object):
 
         # Is there already a weights file?
         if weights is not None:
+            self.loggy.info('Init from weights selected!')
+            self.init_mode = 'weights'
             self.grids = self._gridtype_from_weights(weights)
         else:
-
+            self.loggy.info('Init from grids selected!')
+            self.init_mode = 'grids'
             if isinstance(source_grid, str):
                 if os.path.isfile(source_grid):
                     source_grid_array = xarray.open_dataset(source_grid)
@@ -133,14 +136,16 @@ class Regridder(object):
             if len_grids == 1:
                 self.loggy.info('One gridtype found! Standard procedure')
             else:
-                self.loggy.info('%s gridtypes found! We are in uncharted territory!', len_grids)
+                self.loggy.warning('%s gridtypes found! We are in uncharted territory!', len_grids)
 
-            for gridtype in self.grids:
+            for index, gridtype  in enumerate(self.grids):
+                self.loggy.info('Processing grid number %s', index)
                 self.loggy.debug('Processing grids %s', gridtype.dims)
-                self.loggy.debug('Horizontal dimension is %s', gridtype.horizontal_dims)
+                self.loggy.debug('Horizontal dimensions are %s', gridtype.horizontal_dims)
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
+                self.loggy.debug('Other dimensions are %s', gridtype.other_dims)
 
-                # always prefer to pass file (i.e. source_grid) when possible to CdoGenerate()
+                # always prefer to pass filename (i.e. source_grid) when possible to CdoGenerate()
                 # this will limit errors from xarray and speed up CDO itself
                 # it wil work only for single-gridtype dataset
                 if isinstance(source_grid, str) and len_grids == 1:
@@ -153,6 +158,10 @@ class Regridder(object):
                         source_grid_array_to_cdo = source_grid_array[stored_vars]
                     else:
                         source_grid_array_to_cdo = source_grid_array
+                    
+                    if gridtype.time_dims:
+                        self.loggy.debug('Selecting only first time step for dimension %s', gridtype.time_dims[0])
+                        source_grid_array_to_cdo = source_grid_array_to_cdo.isel({gridtype.time_dims[0]: 0})
 
                 generator = CdoGenerate(source_grid_array_to_cdo, target_grid,
                                                cdo=cdo, cdo_options=cdo_options,
@@ -169,8 +178,8 @@ class Regridder(object):
 
             # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
             # has a destination mask been precomputed?
-            if "dst_grid_masked" in gridtype.weights.variables: 
-                gridtype.masked = gridtype.weights.dst_grid_masked.data 
+            if "dst_grid_masked" in gridtype.weights.variables:
+                gridtype.masked = gridtype.weights.dst_grid_masked.data
             else:
                 # compute the destination mask now
                 gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.vertical_dim)
@@ -223,6 +232,7 @@ class Regridder(object):
 
         # apply the regridder on each DataArray
         if isinstance(source_data, xarray.Dataset):
+
             out = source_data.map(self.regrid_array, keep_attrs=False)
 
             # clean from degenerated variables
@@ -232,8 +242,7 @@ class Regridder(object):
         elif isinstance(source_data, xarray.DataArray):
             return self.regrid_array(source_data)
 
-        else:
-            raise TypeError('The object provided is not a Xarray object!')
+        raise TypeError('The object provided is not a Xarray object!')
 
     def regrid_array(self, source_data):
         """
@@ -269,7 +278,7 @@ class Regridder(object):
 
         # special case for CDO weights without any dimensional information
         # we derived this from the regridded data and we use it as it is
-        if self.grids[0].cdo_weights:
+        if self.init_mode == 'weights':
             self.loggy.info('Assuming gridtype from data to be the same from weights')
             self.grids[0].dims = datagridtype.dims
             self.grids[0].horizontal_dims = datagridtype.horizontal_dims
@@ -448,7 +457,7 @@ class Regridder(object):
 
         src_cdo_grid = w.attrs['source_grid']
         dst_cdo_grid = w.attrs['dest_grid']
-        self.loggy.info('AInterpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
+        self.loggy.info('Interpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
 
         dst_grid_shape = w.dst_grid_dims.values
         dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(

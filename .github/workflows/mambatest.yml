@@ -5,7 +5,7 @@ name: Mamba PyTest
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, grid-detector-changes ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:

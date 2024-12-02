@@ -147,6 +147,9 @@ class CdoGenerate():
         # vertical dimension
         vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
 
+        self.source_grid_filename = self._prepare_grid(self.source_grid)
+        self.target_grid_filename = self._prepare_grid(self.target_grid)
+
         # Generate weights for 2D or 3D grid based on vertical_dim presence
         if not vertical_dim:
             return self._weights_2d(method, extrapolate, remap_norm, remap_area_min)
@@ -174,7 +177,7 @@ class CdoGenerate():
         else:
             sgrid = self.source_grid
 
-        if vertical_dim not in sgrid:
+        if vertical_dim not in sgrid.dims:
             raise KeyError(f'Cannot find vertical dim {vertical_dim} in {list(sgrid.dims)}')
 
         nvert = sgrid[vertical_dim].values.size
@@ -250,6 +253,9 @@ class CdoGenerate():
             :obj:`xarray.Dataset` with regridding weights
         """
 
+        sgrid = self.source_grid_filename
+        tgrid = self.target_grid_filename
+
         cdo_extra_vertical = cdo_extra_vertical if isinstance(cdo_extra_vertical, list) else ([cdo_extra_vertical] if cdo_extra_vertical else [])
 
         # Log method and remapping information
@@ -261,11 +267,8 @@ class CdoGenerate():
         weight_file = tempfile.NamedTemporaryFile()
         self.loggy.debug("Weight file name is: %s", weight_file.name)
 
-        sgrid = self._prepare_grid(self.source_grid)
-        tgrid = self._prepare_grid(self.target_grid)
-
         self.loggy.debug("Source grid file name is: %s", sgrid)
-        self.loggy.debug("Source grid file name is: %s", tgrid)
+        self.loggy.debug("Target grid file name is: %s", tgrid)
 
         env = copy.deepcopy(self.env)
         env["REMAP_EXTRAPOLATE"] = "on" if extrapolate else "off"
