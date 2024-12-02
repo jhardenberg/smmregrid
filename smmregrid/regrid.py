@@ -272,7 +272,7 @@ class Regridder(object):
 
         # special case for CDO weights without any dimensional information
         # we derived this from the regridded data and we use it as it is
-        if self.grids[0].weights:
+        if self.grids[0].weights and not self.grids[0].dims:
             self.loggy.info('Assuming gridtype from data to be the same from weights')
             self.grids[0].dims = datagridtype.dims
             self.grids[0].horizontal_dims = datagridtype.horizontal_dims
