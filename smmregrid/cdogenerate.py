@@ -84,7 +84,7 @@ class CdoGenerate():
             return grid
 
         grid_file = tempfile.NamedTemporaryFile(delete=False)
-        grid.load().to_netcdf(grid_file.name)
+        grid.to_netcdf(grid_file.name)
         return grid_file.name
 
     def weights(self, method="con", extrapolate=True,
@@ -146,6 +146,9 @@ class CdoGenerate():
 
         # vertical dimension
         vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
+
+        self.source_grid_filename = self._prepare_grid(self.source_grid)
+        self.target_grid_filename = self._prepare_grid(self.target_grid)
 
         # Generate weights for 2D or 3D grid based on vertical_dim presence
         if not vertical_dim:
@@ -250,6 +253,9 @@ class CdoGenerate():
             :obj:`xarray.Dataset` with regridding weights
         """
 
+        sgrid = self.source_grid_filename
+        tgrid = self.target_grid_filename
+
         cdo_extra_vertical = cdo_extra_vertical if isinstance(cdo_extra_vertical, list) else ([cdo_extra_vertical] if cdo_extra_vertical else [])
 
         # Log method and remapping information
@@ -260,9 +266,6 @@ class CdoGenerate():
 
         weight_file = tempfile.NamedTemporaryFile()
         self.loggy.debug("Weight file name is: %s", weight_file.name)
-
-        sgrid = self._prepare_grid(self.source_grid)
-        tgrid = self._prepare_grid(self.target_grid)
 
         self.loggy.debug("Source grid file name is: %s", sgrid)
         self.loggy.debug("Target grid file name is: %s", tgrid)
