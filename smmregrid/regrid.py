@@ -115,9 +115,11 @@ class Regridder(object):
         # Is there already a weights file?
         if weights is not None:
             self.loggy.info('Init from weights selected!')
+            self.init_mode = 'weights'
             self.grids = self._gridtype_from_weights(weights)
         else:
             self.loggy.info('Init from grids selected!')
+            self.init_mode = 'grids'
             if isinstance(source_grid, str):
                 if os.path.isfile(source_grid):
                     source_grid_array = xarray.open_dataset(source_grid)
@@ -172,8 +174,8 @@ class Regridder(object):
 
             # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
             # has a destination mask been precomputed?
-            if "dst_grid_masked" in gridtype.weights.variables: 
-                gridtype.masked = gridtype.weights.dst_grid_masked.data 
+            if "dst_grid_masked" in gridtype.weights.variables:
+                gridtype.masked = gridtype.weights.dst_grid_masked.data
             else:
                 # compute the destination mask now
                 gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.vertical_dim)
@@ -226,6 +228,7 @@ class Regridder(object):
 
         # apply the regridder on each DataArray
         if isinstance(source_data, xarray.Dataset):
+
             out = source_data.map(self.regrid_array, keep_attrs=False)
 
             # clean from degenerated variables
@@ -235,8 +238,7 @@ class Regridder(object):
         elif isinstance(source_data, xarray.DataArray):
             return self.regrid_array(source_data)
 
-        else:
-            raise TypeError('The object provided is not a Xarray object!')
+        raise TypeError('The object provided is not a Xarray object!')
 
     def regrid_array(self, source_data):
         """
@@ -272,7 +274,7 @@ class Regridder(object):
 
         # special case for CDO weights without any dimensional information
         # we derived this from the regridded data and we use it as it is
-        if self.grids[0].weights and not self.grids[0].dims:
+        if self.init_mode == 'weights':
             self.loggy.info('Assuming gridtype from data to be the same from weights')
             self.grids[0].dims = datagridtype.dims
             self.grids[0].horizontal_dims = datagridtype.horizontal_dims
