@@ -91,10 +91,10 @@ class GridType:
             other (GridType): Another GridType instance to compare against.
 
         Returns:
-            bool: True if both horizontal_dims and vertical_dims are equal for both instances, False otherwise.
+            bool: True if both self.dims are equal for both instances, False otherwise.
         """
         if isinstance(other, GridType):
-            return self.horizontal_dims == other.horizontal_dims and self.vertical_dim == other.vertical_dim
+            return self.dims == other.dims
         return False
 
     def __hash__(self):
@@ -104,7 +104,7 @@ class GridType:
         Returns:
             int: A hash value representing the dimensions of the GridType instance.
         """
-        return hash((self.horizontal_dims, self.vertical_dim))
+        return hash(tuple(self.dims))
 
     def _identify_dims(self, axis, dims, default_dims):
         """
