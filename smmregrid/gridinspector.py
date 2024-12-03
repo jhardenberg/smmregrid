@@ -44,9 +44,9 @@ class GridInspector():
         else:
             raise ValueError('Data supplied is neither xarray Dataset or DataArray')
 
+        # get variables associated to the grid
         for gridtype in self.grids:
             self.identify_variables(gridtype)
-            # gridtype.identify_sizes(self.data)
 
     def _inspect_dataarray_grid(self, data_array):
         """
@@ -126,6 +126,7 @@ class GridInspector():
         """Helper function to process individual variables.
 
         Args:
+            gridtype (GridType): The Gridtype object of originally inspected from the data
             var_data (xr.DataArray): An xarray DataArray containing variable data.
             var_name (str, optional): The name of the variable. If None, uses the name from var_data.
 
@@ -144,7 +145,7 @@ class GridInspector():
         Identify variables in the provided data that match the defined dimensions.
 
         Args:
-            data (xr.Dataset or xr.DataArray): The input data from which to identify variables.
+            gridtype (GridType): The Gridtype object of originally inspected from the data
 
         Raises:
             TypeError: If the input data is neither an xarray Dataset nor DataArray.
@@ -161,6 +162,11 @@ class GridInspector():
             for var in self.data.data_vars:
                 self._identify_variable(gridtype, self.data[var], var)
             gridtype.bounds = self._identify_spatial_bounds(self.data)
+            gridtype.variables = {
+                            key: value
+                            for key, value in gridtype.variables.items()
+                            if key not in set(gridtype.bounds)
+                        }
 
         elif isinstance(self.data, xr.DataArray):
             self._identify_variable(gridtype, self.data)

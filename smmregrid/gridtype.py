@@ -26,9 +26,9 @@ class GridType:
                                          way assuming single-gridtype objects. Defaults to None.
 
         Attributes:
-            dims (list): The dimensions defined for the grid.
             horizontal_dims (list): The identified horizontal dimensions from the input.
             vertical_dim (str or None): The identified vertical dimension, if applicable.
+            dims (list): The dimensions defined for the grid. A combination of horizontal and vertical. 
             time_dims (list): The identified time dimensions from the input.
             other_dims (list): The dimensions which are there but are not identified automatically.
             variables (dict): A dictionary holding identified variables and their coordinates.
@@ -46,7 +46,7 @@ class GridType:
         default_dims = self._handle_default_dimensions(extra_dims)
         self.horizontal_dims = self._identify_dims('horizontal', dims, default_dims)
         self.vertical_dim = self._identify_dims('vertical', dims, default_dims)
-        self.dims = (self.horizontal_dims if self.horizontal_dims is not None else []) + ([self.vertical_dim] if self.vertical_dim is not None else [])
+        self.dims = (self.horizontal_dims or []) + ([self.vertical_dim] if self.vertical_dim else [])
         self.time_dims = self._identify_dims('time', dims, default_dims)
         self.other_dims = self._identify_other_dims(dims)
         self.variables = {}
@@ -94,7 +94,7 @@ class GridType:
             bool: True if both horizontal_dims and vertical_dims are equal for both instances, False otherwise.
         """
         if isinstance(other, GridType):
-            return self.horizontal_dims == other.horizontal_dims and self.vertical_dim == other.vertical_dim # and self.other_dims == other.other_dims
+            return self.horizontal_dims == other.horizontal_dims and self.vertical_dim == other.vertical_dim
         return False
 
     def __hash__(self):
@@ -104,7 +104,7 @@ class GridType:
         Returns:
             int: A hash value representing the dimensions of the GridType instance.
         """
-        return hash((self.horizontal_dims, self.vertical_dim)) #, self.other_dims))
+        return hash((self.horizontal_dims, self.vertical_dim))
 
     def _identify_dims(self, axis, dims, default_dims):
         """
