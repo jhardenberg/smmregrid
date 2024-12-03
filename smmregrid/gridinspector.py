@@ -109,11 +109,15 @@ class GridInspector():
         # Iterate through grids
         for gridtype in self.grids:
             # Check if any variable in the grid contains 'bnds'
-            if all('bnds' in variable for variable in gridtype.variables):
+            if not gridtype.dims:
+                removed.append(gridtype)
+                self.loggy.info('Removing the grid defined by %s with with no spatial dimensions',
+                                gridtype.dims)
+            elif all('bnds' in variable for variable in gridtype.variables):
                 removed.append(gridtype)  # Add to removed list
                 self.loggy.info('Removing the grid defined by %s with variables containing "bnds"',
                                 gridtype.dims)
-            if all('bounds' in variable for variable in gridtype.variables):
+            elif all('bounds' in variable for variable in gridtype.variables):
                 removed.append(gridtype)  # Add to removed list
                 self.loggy.info('Removing the grid defined by %s with variables containing "bounds"',
                                 gridtype.dims)
