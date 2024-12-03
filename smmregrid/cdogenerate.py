@@ -58,6 +58,10 @@ class CdoGenerate():
         self.source_grid = source_grid
         self.target_grid = target_grid
 
+        # define grid filenames
+        self.source_grid_filename = None
+        self.target_grid_filename = None
+
         # assign cdo bin file and get envrinment file
         self.cdo = cdo
         self.env = os.environ.copy()
@@ -147,6 +151,7 @@ class CdoGenerate():
         # vertical dimension
         vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
 
+        # set grids filenames
         self.source_grid_filename = self._prepare_grid(self.source_grid)
         self.target_grid_filename = self._prepare_grid(self.target_grid)
 

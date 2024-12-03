@@ -235,11 +235,19 @@ class Regridder(object):
 
             out = source_data.map(self.regrid_array, keep_attrs=False)
 
+            # extra call to GridInspector for the raise with multiple grids
+            grid_inspect = GridInspector(source_data, clean=True,
+                                     extra_dims=self.extra_dims,
+                                     loglevel=self.loglevel)
+            datagrids = grid_inspect.get_grid_info()
+            if len(datagrids)>1 and self.init_mode == 'weights':
+                raise ValueError(f'Cannot process data with {len(datagrids)} GridType initializing from weights')
+
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
             return out.drop_vars(degen_vars)
 
-        elif isinstance(source_data, xarray.DataArray):
+        if isinstance(source_data, xarray.DataArray):
             return self.regrid_array(source_data)
 
         raise TypeError('The object provided is not a Xarray object!')
