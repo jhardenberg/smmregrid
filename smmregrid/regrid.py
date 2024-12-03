@@ -233,8 +233,6 @@ class Regridder(object):
         # apply the regridder on each DataArray
         if isinstance(source_data, xarray.Dataset):
 
-            out = source_data.map(self.regrid_array, keep_attrs=False)
-
             # extra call to GridInspector for the raise with multiple grids
             grid_inspect = GridInspector(source_data, clean=True,
                                      extra_dims=self.extra_dims,
@@ -242,6 +240,9 @@ class Regridder(object):
             datagrids = grid_inspect.get_grid_info()
             if len(datagrids)>1 and self.init_mode == 'weights':
                 raise ValueError(f'Cannot process data with {len(datagrids)} GridType initializing from weights')
+
+            # map on multiple dataarray
+            out = source_data.map(self.regrid_array, keep_attrs=False)
 
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
@@ -268,7 +269,7 @@ class Regridder(object):
         Raises:
             ValueError: If the input data does not match expected dimensions.
         """
-
+        
         self.loggy.debug('Getting GridType from source_data')
         grid_inspect = GridInspector(source_data, clean=True,
                                      extra_dims=self.extra_dims,
