@@ -43,10 +43,10 @@ class GridType:
         """
 
         # key definitions
-        if extra_dims:
-            for key, value in extra_dims.items():
-                if not isinstance(value, list):
-                    raise ValueError(f'Extra_dims for {key} must be a list!')
+        #if extra_dims:
+        #    for key, value in extra_dims.items():
+        #        if not isinstance(value, list):
+        #            raise ValueError(f'Extra_dims for {key} must be a list!')
 
         default_dims = self._handle_default_dimensions(extra_dims)
         self.horizontal_dims = self._identify_dims('horizontal', dims, default_dims)

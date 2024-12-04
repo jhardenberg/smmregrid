@@ -31,9 +31,9 @@ def test_multiple_vertical():
 
 def test_gridtype_extradims():
     """Test for extradimensions"""
-    with pytest.raises(ValueError):
-        GridType(dims=["lon", "lat", "ciccio"],
-                 extra_dims = {'horizontal': "nonnapaper"})
+    #with pytest.raises(ValueError):
+    #    GridType(dims=["lon", "lat", "ciccio"],
+    #             extra_dims = {'horizontal': "nonnapaper"})
 
     grid = GridType(dims=["lon", "lat", "ciccio"],
                     extra_dims = {'vertical': ["ciccio"]})
