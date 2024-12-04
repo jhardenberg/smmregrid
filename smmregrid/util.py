@@ -1,26 +1,64 @@
-"""Utils module"""
+"""Utility module with various support function"""
 
+import re
+import os
+import warnings
 import xarray
-import logging
 
-default_vert_coords = ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half']
+# Define CDO regex patterns for each grid type (updated at CDO 2.4.4)
+# Define regex patterns for each grid type
+CDO_GRID_PATTERNS = {
+    "global_regular": re.compile(r"^global_\d+(\.\d+)?$"),                    
+    "regional_regular": re.compile(r"^dcw:[A-Z]{2,4}(?:_\d+(\.\d+)?)?$"),     
+    "zonal_latitudes": re.compile(r"^zonal_\d+(\.\d+)?$"),                    
+    "global_regular_NxM": re.compile(r"^r\d+x\d+$"),                          
+    "one_grid_point": re.compile(r"^lon=(-?\d+(\.\d+)?)/lat=(-?\d+(\.\d+)?)$"),
+    "gaussian_grid_F": re.compile(r"^F\d+$"),      
+    "gaussian_grid_n": re.compile(r"^n\d+$"),                            
+    "icosahedral_gme": re.compile(r"^gme\d+$"),                           
+    "healpix_grid": re.compile(r"^hp\d+(?:_(nested|ring))?$"),             
+    "healpix_zoom": re.compile(r"^hpz\d+$")                       
+}
 
-# set up logger
-loggy = logging.getLogger(__name__)
+def is_cdo_grid(grid_str):
+    """Check if the input string matches any CDO grid type."""
 
+    # Check if the string matches any of the grid patterns
+    for grid_type, pattern in CDO_GRID_PATTERNS.items():
+        if pattern.match(grid_str):
+            return True
 
-def find_vert_coords(xfield):
-    """
-    Find a vertical coordinate among defaults
-    Used to define if we need the 3d interpolation with adaptive mask
-    """
+    # Return False if no patterns match
+    return False
 
-    if isinstance(xfield, str):
-        xfield = xarray.open_dataset(xfield)
+def check_gridfile(filename):
+    """Check if a grid is a file, a cdo string or xarray object"""
 
-    vcoords = list(set(xfield.coords.keys()).intersection(default_vert_coords))
-    if len(vcoords) > 1:
-        raise ValueError('Multiple vertical coordinates in the same file are not yet supported')
-    if len(vcoords) == 0:
+    if filename is None:
         return None
-    return vcoords[0]
+    if isinstance(filename, (xarray.Dataset, xarray.DataArray)):
+        return "xarray"
+    if isinstance(filename, str):
+        if is_cdo_grid(filename):
+            return "grid"
+        if os.path.exists(filename):
+            return "file"
+        raise FileNotFoundError(f"Cannot find {filename} on disk")
+
+    raise TypeError(f'Unsuported format for {filename}')
+
+
+def deprecated_argument(old, new, oldname='var1', newname='var2'):
+    """Utility to provide warning in case of deprecated argument"""
+
+    # Check for deprecated 'old' argument
+    if old is not None:
+        warnings.warn(
+            f"{oldname} is deprecated and will be removed in future versions. "
+            f"Please use {newname} instead.",
+            DeprecationWarning
+        )
+        # If new is not provided, use the value from old
+        if new is None:
+            new = old
+    return new

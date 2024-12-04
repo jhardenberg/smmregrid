@@ -3,9 +3,7 @@
 import numpy as np
 import xarray as xr
 from cdo import Cdo
-from smmregrid import Regridder, cdo_generate_weights
-
-
+from smmregrid import Regridder, CdoGenerate
 cdo = Cdo()
 
 
@@ -24,30 +22,38 @@ def find_var(xfield):
 
 
 def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
-                     init_method='grids', vert_coord=None):
+                     init_method='grids', vertical_dim=None, extrapolate=True,
+                     loglevel='INFO'):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests."""
 
     # define files and open input file
-    xfield = xr.open_mfdataset(finput)
+    if isinstance(finput, str):
+        xfield = xr.open_mfdataset(finput)
+    else:
+        xfield = finput
+
+    # convert extrapolation to cdo!
+    cdoextrapolate = 'on' if extrapolate else 'off'
 
     # var as the last available
     # myvar = list(xfield.data_vars)[-1]
 
     # interpolation with pure CDO
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
-    cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True)
+    cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True,
+                                env={'REMAP_EXTRAPOLATE': cdoextrapolate})
     # print(cdofield)
 
     # var as the one which have time and not have bnds (could work)
     smmvar = find_var(xfield)
     cdovar = find_var(cdofield)
 
-    if len(smmvar) == 1 and access == 'DataArray':
-        xfield = xfield[smmvar[0]]
-    if len(cdovar) == 1 and access == 'DataArray':
-        cdofield = cdofield[cdovar[0]]
+    # if len(smmvar) == 1 and access == 'DataArray':
+    #    xfield = xfield[smmvar[0]]
+    # if len(cdovar) == 1 and access == 'DataArray':
+    #    cdofield = cdofield[cdovar[0]]
 
     # interpolation with smmregrid (CDO-based)
     # method with creation of weights
@@ -57,11 +63,12 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     # method with automatic creation of weights
     if init_method == 'grids':
         interpolator = Regridder(source_grid=finput, target_grid=ftarget,
-                                 method=remap_method, vert_coord=vert_coord)
-    if init_method == 'weights':
-        wfield = cdo_generate_weights(finput, ftarget,
-                                      method=remap_method, vert_coord=vert_coord)
-        interpolator = Regridder(weights=wfield, vert_coord=vert_coord)
+                                 method=remap_method, vertical_dim=vertical_dim, loglevel=loglevel)
+    elif init_method == 'weights':
+        wfield = CdoGenerate(finput, ftarget, loglevel=loglevel).weights(method=remap_method, vertical_dim=vertical_dim)
+        interpolator = Regridder(weights=wfield, loglevel=loglevel)
+    else:
+        raise KeyError('Unsupported init method')
     rfield = interpolator.regrid(xfield)
 
     if access == 'Dataset':
@@ -73,7 +80,8 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     return checker
 
 
-def check_cdo_regrid_levels(finput, ftarget, vert_coord, levels, remap_method='con', access='Dataset'):
+def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method='con',
+                            access='Dataset', extrapolate=True, loglevel='INFO'):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
@@ -82,35 +90,30 @@ def check_cdo_regrid_levels(finput, ftarget, vert_coord, levels, remap_method='c
     # define files and open input file
     xfield = xr.open_mfdataset(finput)
 
+    # convert extrapolate to CDO
+    cdoextrapolate = 'on' if extrapolate else 'off'
+
     # interpolation with pure CDO
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
-    cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True)
+    cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True,
+                                env={'REMAP_EXTRAPOLATE': cdoextrapolate})
 
     # Keep only some levels
-    cdofield = cdofield.isel(**{vert_coord: levels})
+    cdofield = cdofield.isel(**{vertical_dim: levels})
 
     # var as the one which have time and not have bnds (could work)
     smmvar = find_var(xfield)
     cdovar = find_var(cdofield)
 
-    if len(smmvar) == 1 and access == 'DataArray':
-        xfield = xfield[smmvar[0]]
-    if len(cdovar) == 1 and access == 'DataArray':
-        cdofield = cdofield[cdovar[0]]
-
     # compute weights
-    wfield = cdo_generate_weights(finput, ftarget,
-                                  method=remap_method, vert_coord=vert_coord)
-    
-    # Pass full 3D weights
-    interpolator = Regridder(weights=wfield, vert_coord=vert_coord)
+    wfield = CdoGenerate(finput, ftarget, loglevel=loglevel).weights(
+        method=remap_method, vertical_dim=vertical_dim)
 
-    # Add a helper idx_3d coordinate
-    idx = list(range(0, len(xfield.coords[vert_coord])))
-    xfield = xfield.assign_coords(idx_3d=(vert_coord, idx))
+    # Pass full 3D weights
+    interpolator = Regridder(weights=wfield, loglevel=loglevel)
 
     # subselect some levels
-    xfield = xfield.isel(**{vert_coord: levels})
+    xfield = xfield.isel(**{vertical_dim: levels})
 
     # Regrid level selection
     rfield = interpolator.regrid(xfield)
