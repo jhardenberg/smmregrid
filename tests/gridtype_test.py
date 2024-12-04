@@ -7,14 +7,15 @@ from smmregrid import GridType
     (['lon','lat'], ['lon', 'lat'], []),
     (['lon','lat', 'lev', 'time'], ['lon', 'lat', 'lev'], []),
     (['i', 'k'], ['i'], ['k']),
-    (['pix', 'time', 'papera'], ['pix'], ['papera'])
+    (['pix', 'time', 'papera'], ['pix'], ['papera']),
+    (['time', 'papera'], [], ['papera'])
 
     ])
 def test_gridtype(definition, dims, other):
     """Basic gridtype investigation"""
     grid = GridType(dims=definition)
-    assert sorted(grid.dims) == sorted(dims)
-    assert grid.other_dims == other
+    assert set(grid.dims) == set(dims)
+    assert set(grid.other_dims) == set(other)
 
 def test_difference():
     """Test equality for gridtypes"""

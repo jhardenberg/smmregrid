@@ -99,7 +99,7 @@ class GridType:
             bool: True if both self.dims are equal for both instances, False otherwise.
         """
         if isinstance(other, GridType):
-            return self.dims == other.dims
+            return set(self.dims) == set(other.dims)
         return False
 
     def __hash__(self):

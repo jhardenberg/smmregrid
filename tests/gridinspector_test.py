@@ -21,5 +21,5 @@ def test_basic_gridinspector(file, ngrids, firstdims, variables):
     xfield = xarray.open_mfdataset(filename)
     grids = GridInspector(xfield, loglevel='debug').get_grid_info()
     assert len(grids) == ngrids
-    assert sorted(grids[0].dims) == sorted(firstdims)
-    assert list(grids[0].variables.keys()) == variables
+    assert set(grids[0].dims) == set(firstdims)
+    assert set(grids[0].variables.keys()) == set(variables)
