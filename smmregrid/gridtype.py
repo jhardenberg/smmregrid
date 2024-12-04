@@ -1,5 +1,4 @@
 # GridType class to gather all information about grids with shared dimensions
-import xarray as xr
 
 # default spatial dimensions and vertical coordinates
 DEFAULT_DIMS = {
@@ -54,6 +53,8 @@ class GridType:
         self.dims = (self.horizontal_dims or []) + ([self.vertical_dim] if self.vertical_dim else [])
         self.time_dims = self._identify_dims('time', dims, default_dims)
         self.other_dims = self._identify_other_dims(dims)
+
+        # used by GridInspector
         self.variables = {}
         self.bounds = []
 
