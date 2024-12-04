@@ -1,4 +1,4 @@
-"""Set of basic tests for smmregrid weights"""
+"""Set of basic tests for smmregrid gridinspector"""
 
 import os
 import pytest

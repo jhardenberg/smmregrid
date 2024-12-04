@@ -234,7 +234,7 @@ class Regridder(object):
         if isinstance(source_data, xarray.Dataset):
 
             # extra call to GridInspector for the raise with multiple grids
-            grid_inspect = GridInspector(source_data, clean=True,
+            grid_inspect = GridInspector(source_data,
                                      extra_dims=self.extra_dims,
                                      loglevel=self.loglevel)
             datagrids = grid_inspect.get_grid_info()
@@ -271,7 +271,7 @@ class Regridder(object):
         """
         
         self.loggy.debug('Getting GridType from source_data')
-        grid_inspect = GridInspector(source_data, clean=True,
+        grid_inspect = GridInspector(source_data,
                                      extra_dims=self.extra_dims,
                                      loglevel=self.loglevel)
         datagrids = grid_inspect.get_grid_info()
