@@ -16,8 +16,8 @@ def test_multi_grid_inspection():
     data = xr.open_dataset(ifile)
     regridded = regrid.regrid(data)
     assert len(regrid.grids) == 2
-    assert vars(regrid.grids[1])['dims'] == ('time', 'lev', 'j', 'i')
-    assert vars(regrid.grids[0])['dims'] == ('time', 'plev', 'lat', 'lon')
+    assert sorted(vars(regrid.grids[1])['dims']) == sorted(['lev', 'j', 'i'])
+    assert sorted(vars(regrid.grids[0])['dims']) == sorted(['plev', 'lat', 'lon'])
     assert regridded['ua'].shape == (2, 3, 90, 180)
     assert regridded['so'].shape == (2, 3, 90, 180)
 

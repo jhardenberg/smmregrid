@@ -44,9 +44,9 @@ class GridInspector():
         else:
             raise ValueError('Data supplied is neither xarray Dataset or DataArray')
 
+        # get variables associated to the grid
         for gridtype in self.grids:
-            gridtype.identify_variables(self.data)
-            # gridtype.identify_sizes(self.data)
+            self.identify_variables(gridtype)
 
     def _inspect_dataarray_grid(self, data_array):
         """
@@ -109,11 +109,15 @@ class GridInspector():
         # Iterate through grids
         for gridtype in self.grids:
             # Check if any variable in the grid contains 'bnds'
-            if any('bnds' in variable for variable in gridtype.variables):
+            if not gridtype.dims:
+                removed.append(gridtype)
+                self.loggy.info('Removing the grid defined by %s with with no spatial dimensions',
+                                gridtype.dims)
+            elif all('bnds' in variable for variable in gridtype.variables):
                 removed.append(gridtype)  # Add to removed list
                 self.loggy.info('Removing the grid defined by %s with variables containing "bnds"',
                                 gridtype.dims)
-            if any('bounds' in variable for variable in gridtype.variables):
+            elif all('bounds' in variable for variable in gridtype.variables):
                 removed.append(gridtype)  # Add to removed list
                 self.loggy.info('Removing the grid defined by %s with variables containing "bounds"',
                                 gridtype.dims)
@@ -121,12 +125,70 @@ class GridInspector():
         for remove in removed:
             self.grids.remove(remove)
 
-    # def get_variable_grids(self):
-    #    """
-    #    Return a dictionary with the variable - grids pairs
-    #    """
-    #    all_grids = {}
-    #    for gridtype in self.grids:
-    #        for variable in gridtype.variables:
-    #            all_grids[variable] = grid_dims
-    #    return all_grids
+
+    def _identify_variable(self, gridtype, var_data, var_name=None):
+        """Helper function to process individual variables.
+
+        Args:
+            gridtype (GridType): The Gridtype object of originally inspected from the data
+            var_data (xr.DataArray): An xarray DataArray containing variable data.
+            var_name (str, optional): The name of the variable. If None, uses the name from var_data.
+
+        Updates:
+            self.variables: Updates the variables dictionary with the variable's coordinates.
+        """
+        datagridtype = GridType(var_data.dims, extra_dims=self.extra_dims)
+
+        if datagridtype == gridtype:
+            gridtype.variables[var_name or var_data.name] = {
+                'coords': list(var_data.coords),
+            }
+
+    def identify_variables(self, gridtype):
+        """
+        Identify variables in the provided data that match the defined dimensions.
+
+        Args:
+            gridtype (GridType): The Gridtype object of originally inspected from the data
+
+        Raises:
+            TypeError: If the input data is neither an xarray Dataset nor DataArray.
+
+        Updates:
+            self.variables: Updates the variables dictionary with identified variables and their coordinates.
+            self.bounds: Updates the bounds list with identified bounds variables from the dataset.
+        """
+
+        if not isinstance(self.data, (xr.Dataset, xr.DataArray)):
+            raise TypeError("Unsupported data type. Must be an xarray Dataset or DataArray.")
+
+        if isinstance(self.data, xr.Dataset):
+            for var in self.data.data_vars:
+                self._identify_variable(gridtype, self.data[var], var)
+            gridtype.bounds = self._identify_spatial_bounds(self.data)
+            gridtype.variables = {
+                            key: value
+                            for key, value in gridtype.variables.items()
+                            if key not in set(gridtype.bounds)
+                        }
+
+        elif isinstance(self.data, xr.DataArray):
+            self._identify_variable(gridtype, self.data)
+
+    def _identify_spatial_bounds(self, data):
+        """
+        Identify bounds variables in the dataset by checking variable names.
+
+        Args:
+            data (xr.Dataset): An xarray dataset containing data variables.
+
+        Returns:
+            list: A list of bounds variable names identified in the dataset.
+        """
+        bounds_variables = []
+
+        for var in data.data_vars:
+            if (var.endswith('_bnds') or var.endswith('_bounds') or var == 'vertices') and 'time' not in var:
+                bounds_variables.append(var)
+
+        return bounds_variables

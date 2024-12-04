@@ -1,5 +1,4 @@
 # GridType class to gather all information about grids with shared dimensions
-import xarray as xr
 
 # default spatial dimensions and vertical coordinates
 DEFAULT_DIMS = {
@@ -26,9 +25,9 @@ class GridType:
                                          way assuming single-gridtype objects. Defaults to None.
 
         Attributes:
-            dims (list): The dimensions defined for the grid.
             horizontal_dims (list): The identified horizontal dimensions from the input.
             vertical_dim (str or None): The identified vertical dimension, if applicable.
+            dims (list): The dimensions defined for the grid. A combination of horizontal and vertical. 
             time_dims (list): The identified time dimensions from the input.
             other_dims (list): The dimensions which are there but are not identified automatically.
             variables (dict): A dictionary holding identified variables and their coordinates.
@@ -43,12 +42,19 @@ class GridType:
         """
 
         # key definitions
-        self.dims = dims
+        #if extra_dims:
+        #    for key, value in extra_dims.items():
+        #        if not isinstance(value, list):
+        #            raise ValueError(f'Extra_dims for {key} must be a list!')
+
         default_dims = self._handle_default_dimensions(extra_dims)
-        self.horizontal_dims = self._identify_dims('horizontal', default_dims)
-        self.vertical_dim = self._identify_dims('vertical', default_dims)
-        self.time_dims = self._identify_dims('time', default_dims)
-        self.other_dims = self._identify_other_dims()
+        self.horizontal_dims = self._identify_dims('horizontal', dims, default_dims)
+        self.vertical_dim = self._identify_dims('vertical', dims, default_dims)
+        self.dims = (self.horizontal_dims or []) + ([self.vertical_dim] if self.vertical_dim else [])
+        self.time_dims = self._identify_dims('time', dims, default_dims)
+        self.other_dims = self._identify_other_dims(dims)
+
+        # used by GridInspector
         self.variables = {}
         self.bounds = []
 
@@ -91,10 +97,10 @@ class GridType:
             other (GridType): Another GridType instance to compare against.
 
         Returns:
-            bool: True if both horizontal_dims, vertical_dims and other_dims are equal for both instances, False otherwise.
+            bool: True if both self.dims are equal for both instances, False otherwise.
         """
         if isinstance(other, GridType):
-            return self.horizontal_dims == other.horizontal_dims and self.vertical_dim == other.vertical_dim and self.other_dims == other.other_dims
+            return set(self.dims) == set(other.dims)
         return False
 
     def __hash__(self):
@@ -104,9 +110,9 @@ class GridType:
         Returns:
             int: A hash value representing the dimensions of the GridType instance.
         """
-        return hash((self.horizontal_dims, self.vertical_dim, self.other_dims))
+        return hash(tuple(self.dims))
 
-    def _identify_dims(self, axis, default_dims):
+    def _identify_dims(self, axis, dims, default_dims):
         """
         Identify dimensions along a specified axis.
 
@@ -121,7 +127,7 @@ class GridType:
         Raises:
             ValueError: If more than one vertical dimension is identified.
         """
-        identified_dims = list(set(self.dims).intersection(default_dims[axis]))
+        identified_dims = list(set(dims).intersection(default_dims[axis]))
         if axis == 'vertical':
             if len(identified_dims) > 1:
                 raise ValueError(f'Only one vertical dimension can be processed at the time: check {identified_dims}')
@@ -129,7 +135,7 @@ class GridType:
                 identified_dims = identified_dims[0]  # unlist the single vertical dimension
         return identified_dims if identified_dims else None
 
-    def _identify_other_dims(self):
+    def _identify_other_dims(self, dims):
         """
         Calculate and return the dimensions that are not part of horizontal_dims, vertical_dim, or time_dims.
 
@@ -142,71 +148,7 @@ class GridType:
         time_dims = set(self.time_dims) if self.time_dims else set()
 
         # Return the unused dimensions by subtracting used dimensions from all dimensions
-        return list(set(self.dims) - (horizontal_dims | vertical_dim | time_dims))
+        return list(set(dims) - (horizontal_dims | vertical_dim | time_dims))
+    
 
-    def _identify_spatial_bounds(self, data):
-        """
-        Identify bounds variables in the dataset by checking variable names.
 
-        Args:
-            data (xr.Dataset): An xarray dataset containing data variables.
-
-        Returns:
-            list: A list of bounds variable names identified in the dataset.
-        """
-        bounds_variables = []
-
-        for var in data.data_vars:
-            if (var.endswith('_bnds') or var.endswith('_bounds') or var == 'vertices') and 'time' not in var:
-                bounds_variables.append(var)
-
-        return bounds_variables
-
-    # def identify_sizes(self, data):
-    #    """
-    #    Identify the sizes of the dataset based on the horizontal dimensions.
-    #    """
-    #
-    #    if self.horizontal_dims:
-    #        self.horizontal_sizes  = [data.sizes[x] for x in self.horizontal_dims]
-
-    def _identify_variable(self, var_data, var_name=None):
-        """Helper function to process individual variables.
-
-        Args:
-            var_data (xr.DataArray): An xarray DataArray containing variable data.
-            var_name (str, optional): The name of the variable. If None, uses the name from var_data.
-
-        Updates:
-            self.variables: Updates the variables dictionary with the variable's coordinates.
-        """
-        if set(var_data.dims) == set(self.dims):
-            self.variables[var_name or var_data.name] = {
-                'coords': list(var_data.coords),
-            }
-
-    def identify_variables(self, data):
-        """
-        Identify variables in the provided data that match the defined dimensions.
-
-        Args:
-            data (xr.Dataset or xr.DataArray): The input data from which to identify variables.
-
-        Raises:
-            TypeError: If the input data is neither an xarray Dataset nor DataArray.
-
-        Updates:
-            self.variables: Updates the variables dictionary with identified variables and their coordinates.
-            self.bounds: Updates the bounds list with identified bounds variables from the dataset.
-        """
-
-        if not isinstance(data, (xr.Dataset, xr.DataArray)):
-            raise TypeError("Unsupported data type. Must be an xarray Dataset or DataArray.")
-
-        if isinstance(data, xr.Dataset):
-            for var in data.data_vars:
-                self._identify_variable(data[var], var)
-            self.bounds = self._identify_spatial_bounds(data)
-
-        elif isinstance(data, xr.DataArray):
-            self._identify_variable(data)
