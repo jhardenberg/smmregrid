@@ -92,7 +92,7 @@ class CdoGenerate():
         return grid_file.name
 
     def weights(self, method="con", extrapolate=True,
-            remap_norm="fracarea", remap_area_min=0.0,
+            remap_norm="fracarea", remap_area_min=0.5,
             vert_coord=None, vertical_dim=None, nproc=1):
         """
         Generate weights for regridding using Climate Data Operators (CDO), 
@@ -106,7 +106,8 @@ class CdoGenerate():
                                           Defaults to True.
             remap_norm (str, optional): The normalization method to apply when remapping.
                                         Default is "fracarea" which normalizes by fractional area.
-            remap_area_min (float, optional): Minimum area for remapping. Defaults to 0.0.
+            remap_area_min (float, optional): Minimum area for remapping. 
+                                              Defaults to 0.5 to ensure moderate erosion of masks. 
             nproc (int, optional): Number of processes to use for parallel processing. Default is 1.
             vertical_dim (str, optional): Name of the vertical dimension in the source grid, if applicable.
                                         Defaults to None. Use if the grid is 3D.
