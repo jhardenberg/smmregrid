@@ -280,7 +280,8 @@ class CdoGenerate():
         env = copy.deepcopy(self.env)
         env["REMAP_EXTRAPOLATE"] = "on" if extrapolate else "off"
         env["CDO_REMAP_NORM"] = remap_norm
-        env["REMAP_AREA_MIN"] = f"{remap_area_min:f}"
+        env["REMAP_AREA_MIN"] = str(remap_area_min)
+        self.loggy.debug("Environment variables: %s", env)
 
         try:
             self.loggy.info("Additional CDO commands: %s", self.cdo_extra)
@@ -398,7 +399,7 @@ class CdoGenerate():
 
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
-                         remap_norm="fracarea", remap_area_min=0.0, gridpath=None,
+                         remap_norm="fracarea", remap_area_min=0.5, gridpath=None,
                          icongridpath=None, extra=None, cdo_extra=None, cdo_options=None,
                          vertical_dim=None, vert_coord=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
