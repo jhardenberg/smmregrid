@@ -4,6 +4,7 @@ import re
 import os
 import warnings
 import xarray
+#import numpy as np
 
 # Define CDO regex patterns for each grid type (updated at CDO 2.4.4)
 # Define regex patterns for each grid type
@@ -62,3 +63,28 @@ def deprecated_argument(old, new, oldname='var1', newname='var2'):
         if new is None:
             new = old
     return new
+
+
+def is_healpix_grid(ds):
+    """Check if the dataset has a HEALPix-compatible number of grid points."""
+    n_points = ds.sizes.get("grid", ds.sizes.get("cell", None))  # Adjust based on the dataset structure
+    if n_points is None:
+        return False  # No appropriate coordinate found
+    
+    # Solve for nside: nside = sqrt(n_pix / 12)
+    nside = np.sqrt(n_points / 12)
+    
+    # Check if nside is a power of 2
+    return nside.is_integer() and (nside & (nside - 1)) == 0
+
+# def detect_grid(data):
+#     """Classify the grid type based on coordinate structure."""
+
+#     if 'lat' or 'latitude' in data.coords and 'lon' or 'longitude' in data.coords:
+#         if data.lat.ndim == 1 and data.lon.ndim == 1:
+#             if data.lat.dims == data.lon.dims:
+#                 return "Unstructured Grid"
+#             else:
+#                 return "Regular Grid"
+#         if data.lat.ndim == 2 and data.lon.ndim == 2:
+#             return "Curvilinear Grid"

@@ -4,7 +4,7 @@
 DEFAULT_DIMS = {
     'horizontal': ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
                    'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
-                   'nav_lon', 'nav_lat'],
+                   'nav_lon', 'nav_lat', 'rgrid'],
     'vertical': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
     'time': ['time']
 }
@@ -37,15 +37,13 @@ class GridType:
             weights_matrix (any): Placeholder for a weights matrix (to be defined later).
             level_index (str): A string used to identify the index of the levels.
 
-        Raises:
-            ValueError: If multiple vertical dimensions are identified during initialization.
         """
 
-        # key definitions
-        #if extra_dims:
-        #    for key, value in extra_dims.items():
-        #        if not isinstance(value, list):
-        #            raise ValueError(f'Extra_dims for {key} must be a list!')
+        # safety checks
+        #if not isinstance(dims, list):
+        #    raise TypeError("dims must be a list of dimension names.")
+        if extra_dims is not None and not isinstance(extra_dims, dict):
+            raise TypeError("extra_dims must be a dictionary or None.")
 
         default_dims = self._handle_default_dimensions(extra_dims)
         self.horizontal_dims = self._identify_dims('horizontal', dims, default_dims)
@@ -88,6 +86,15 @@ class GridType:
             if extra_dims[dim]:
                 update_dims[dim] = list(set(update_dims[dim] + extra_dims[dim]))
         return update_dims
+    
+    def __repr__(self):
+        """
+        Return a string representation of the GridType instance. 
+        Only includes attributes with values.
+        """
+
+        attributes = ', '.join(f"{key}={value}" for key, value in self.__dict__.items() if value is not None)
+        return f"{self.__class__.__name__}({attributes})"
 
     def __eq__(self, other):
         """

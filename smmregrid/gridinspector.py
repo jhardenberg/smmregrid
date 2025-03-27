@@ -74,6 +74,12 @@ class GridInspector():
 
     def get_grid_info(self):
         """
+        Returns the gridtype object
+        """
+        return self.get_gridtype()
+
+    def get_gridtype(self):
+        """
         Returns detailed information about all the grids in the dataset.
         """
 
