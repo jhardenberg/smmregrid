@@ -64,19 +64,6 @@ def deprecated_argument(old, new, oldname='var1', newname='var2'):
             new = old
     return new
 
-
-def is_healpix_grid(ds):
-    """Check if the dataset has a HEALPix-compatible number of grid points."""
-    n_points = ds.sizes.get("grid", ds.sizes.get("cell", None))  # Adjust based on the dataset structure
-    if n_points is None:
-        return False  # No appropriate coordinate found
-    
-    # Solve for nside: nside = sqrt(n_pix / 12)
-    nside = np.sqrt(n_points / 12)
-    
-    # Check if nside is a power of 2
-    return nside.is_integer() and (nside & (nside - 1)) == 0
-
 # def detect_grid(data):
 #     """Classify the grid type based on coordinate structure."""
 
