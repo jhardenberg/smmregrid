@@ -4,7 +4,7 @@ import re
 import os
 import warnings
 import xarray
-#import numpy as np
+import numpy as np
 
 # Define CDO regex patterns for each grid type (updated at CDO 2.4.4)
 # Define regex patterns for each grid type
@@ -64,14 +64,41 @@ def deprecated_argument(old, new, oldname='var1', newname='var2'):
             new = old
     return new
 
-# def detect_grid(data):
-#     """Classify the grid type based on coordinate structure."""
+def find_coord(ds, possible_names):
+    """Find the first matching coordinate in the dataset."""
+    for name in possible_names:
+        if name in ds.coords:
+            return name
+    return None
 
-#     if 'lat' or 'latitude' in data.coords and 'lon' or 'longitude' in data.coords:
-#         if data.lat.ndim == 1 and data.lon.ndim == 1:
-#             if data.lat.dims == data.lon.dims:
-#                 return "Unstructured Grid"
-#             else:
-#                 return "Regular Grid"
-#         if data.lat.ndim == 2 and data.lon.ndim == 2:
-#             return "Curvilinear Grid"
+def detect_grid(data):
+    """Classify the grid type based on coordinate structure."""
+
+    lat = find_coord(data, ["lat", "latitude", "nav_lat"])
+    lon = find_coord(data, ["lon", "longitude", "nav_lon"])
+
+    if not lat or not lon:
+        return "Unknown"
+
+    # 2D coord-dim dependency
+    if data[lat].ndim == 2 and data[lon].ndim == 2:
+        return "Curvilinear Grid"
+
+    # 1D coord-dim depencendy
+    if data[lat].ndim == 1 and data[lon].ndim == 1:
+
+        # regular: latitude nad longitude depende on different coordinates
+        if data[lat].dims != data[lon].dims:
+            # gaussian: second derivative of latitude is positive
+            gaussian = np.all(np.diff(data.lat.sel(lat=slice(-90, 0)).values, n=2)>0)
+            if gaussian:
+                return "Gaussian Grid"
+            return "Regular Grid"
+
+        # healpix: number of pixels is a multiple of 12
+        pix = data[lat].size
+        if pix % 12 == 0 and np.log2(pix // 12).is_integer():
+            return "Healpix Grid"
+        
+        # none of the above cases
+        return "Unstructured Grid"
