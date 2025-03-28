@@ -3,8 +3,7 @@
 import os
 import pytest
 import xarray
-from smmregrid.util import is_cdo_grid, check_gridfile
-
+from smmregrid.util import is_cdo_grid, check_gridfile, detect_grid
 
 @pytest.mark.parametrize("grid_str,expected", [
     ("global_1.0", True),        # Global regular grid
@@ -51,3 +50,28 @@ def test_check_gridfile(filename, expected, raises):
             check_gridfile(filename)
     else:
         assert check_gridfile(filename) == expected
+
+# Define test cases
+TEST_FILES = [
+    ("2t-era5.nc", "Regular"),
+    ("mix-cesm.nc", "Regular"),
+    ("r360x180.nc", "Regular"),
+    ("so3d-nemo.nc", "Curvilinear"),
+    ("tas-healpix2.nc", "Healpix"),
+    ("tos-fesom.nc", "Unstructured"),
+    ("ua-so_mix_ecearth.nc", "GaussianRegular"),
+    ("healpix_0.nc", "Unknown"),
+    ("onlytos-ipsl.nc", "Curvilinear"),
+    ("regional.nc", "Regular"),
+    ("tas-ecearth.nc", "GaussianRegular"),
+    ("temp3d-fesom.nc", "Unstructured"),
+    ("ua-ecearth.nc", "GaussianRegular"),
+    ("lsm-ifs.grb", "GaussianReduced"),
+]
+@pytest.mark.parametrize("file_name, expected_grid", TEST_FILES)
+def test_detect_grid(file_name, expected_grid):
+    """Test for grid format detection"""
+    filename = os.path.join('tests/data', file_name)
+    xfield = xarray.open_mfdataset(filename)
+    detected_grid = detect_grid(xfield)
+    assert detected_grid == expected_grid, f"File {file_name}: expected {expected_grid}, got {detected_grid}"

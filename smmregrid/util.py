@@ -66,10 +66,7 @@ def deprecated_argument(old, new, oldname='var1', newname='var2'):
 
 def find_coord(ds, possible_names):
     """Find the first matching coordinate in the dataset."""
-    for name in possible_names:
-        if name in ds.coords:
-            return name
-    return None
+    return next((name for name in possible_names if name in ds.coords), None)
 
 def detect_grid(data):
     """Classify the grid type based on coordinate structure."""
@@ -82,23 +79,33 @@ def detect_grid(data):
 
     # 2D coord-dim dependency
     if data[lat].ndim == 2 and data[lon].ndim == 2:
-        return "Curvilinear Grid"
+        return "Curvilinear"
 
-    # 1D coord-dim depencendy
+    # 1D coord-dim dependency
     if data[lat].ndim == 1 and data[lon].ndim == 1:
 
-        # regular: latitude nad longitude depende on different coordinates
+        # Regular: latitude and longitude depend on different coordinates
         if data[lat].dims != data[lon].dims:
-            # gaussian: second derivative of latitude is positive
-            gaussian = np.all(np.diff(data.lat.sel(lat=slice(-90, 0)).values, n=2)>0)
+            # Gaussian: second derivative of latitude is positive from -90 to 0
+            lat_values = data[lat].where(data[lat]<0).values
+            lat_values=lat_values[~np.isnan(lat_values)]
+            gaussian = np.all(np.diff(lat_values, n=2) > 0)
             if gaussian:
-                return "Gaussian Grid"
-            return "Regular Grid"
+                return "GaussianRegular"
+            return "Regular"
 
-        # healpix: number of pixels is a multiple of 12
+        # Healpix: number of pixels is a multiple of 12 and log2(pix / 12) is an integer
         pix = data[lat].size
-        if pix % 12 == 0 and np.log2(pix // 12).is_integer():
-            return "Healpix Grid"
+        if pix % 12 == 0 and (pix // 12).bit_length() - 1 == np.log2(pix // 12):
+            return "Healpix"
         
-        # none of the above cases
-        return "Unstructured Grid"
+        # Guess gaussian reduced: increasing number of latitudes from -90 to 0
+        lat_values = data[lat].where(data[lat]<0).values
+        lat_values=lat_values[~np.isnan(lat_values)]
+        _, counts = np.unique(lat_values, return_counts=True)
+        gaussian_reduced = np.all(np.diff(counts)>0)
+        if gaussian_reduced:
+            return "GaussianReduced"
+
+        # None of the above cases
+        return "Unstructured"
