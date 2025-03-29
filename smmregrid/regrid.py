@@ -51,7 +51,7 @@ class Regridder(object):
     """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', remap_area_min=0.5, transpose=True, vert_coord=None, vertical_dim=None,
+                 method='con', remap_area_min=0.0, transpose=True, vert_coord=None, vertical_dim=None,
                  space_dims=None, horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  cdo='cdo', loglevel='WARNING'):
         """
@@ -76,6 +76,7 @@ class Regridder(object):
                                     interpolate (default: None).
             method (str): Interpolation method to use (default: 'con').
             remap_area_min (float): Minimum area for remapping in conservative remapping (default: 0.5).
+                                    Larger values avoid mask erosion.
             transpose (bool): If True, transpose the output such that 
                               the vertical coordinate is placed just before the 
                               other spatial coordinates (default: True).
@@ -113,6 +114,12 @@ class Regridder(object):
             self.loggy.info('Forcing horizontal_dim from input: expecting a single-gridtype dataset')
         self.extra_dims = {'vertical': vertical_dim, 'horizontal': horizontal_dims}
 
+        # TODO: this might be overridden at regrid level
+        self.loggy.debug("Minimum remap area: %s", remap_area_min)
+        self.remap_area_min = float(remap_area_min)
+        if self.remap_area_min < 0.0 or self.remap_area_min > 1.0:
+            raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
+        
         # Is there already a weights file?
         if weights is not None:
             self.loggy.info('Init from weights selected!')
@@ -133,7 +140,7 @@ class Regridder(object):
 
             len_grids = len(self.grids)
             if len_grids == 0:
-                raise KeyError('Cannot find any gridtype in your data, aborting!')
+                raise ValueError('Cannot find any gridtype in your data, aborting!')
             if len_grids == 1:
                 self.loggy.info('One gridtype found! Standard procedure')
             else:
@@ -168,8 +175,7 @@ class Regridder(object):
                                                cdo=cdo, cdo_options=cdo_options,
                                                cdo_extra=cdo_extra, loglevel=loglevel)
                 gridtype.weights = generator.weights(method=method,
-                                                     vertical_dim=gridtype.vertical_dim,
-                                                     remap_area_min=remap_area_min)
+                                                     vertical_dim=gridtype.vertical_dim)
 
         for gridtype in self.grids:
             if gridtype.vertical_dim:
@@ -380,8 +386,8 @@ class Regridder(object):
             data3d = data3d.transpose(*dimst)
 
             return data3d
-        else:
-            raise ValueError(f'Cannot transpose output dimensions {data3d.dims} over {target_horizontal_dims}')
+
+        raise ValueError(f'Cannot transpose output dimensions {data3d.dims} over {target_horizontal_dims}')
 
     def regrid2d(self, source_data, datagridtype):
         """
@@ -478,8 +484,11 @@ class Regridder(object):
             dst_grid_shape[::-1]
         )
 
+        # destination grid fractional area
+        dst_frac_area = w.dst_grid_frac
+
+        # destination grid mask
         dst_mask = w.dst_grid_imask
-        # src_mask = w.src_grid_imask
 
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
@@ -532,9 +541,14 @@ class Regridder(object):
             # apply the mask
             target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
 
+        # use the frac area of the destination to further mask the data
+        target_dask = dask.array.where(
+            dask.array.broadcast_to(dst_frac_area, target_dask.shape) < self.remap_area_min,
+            numpy.nan, target_dask)
+
         # after the tensordot, bring the NaN back in
         # Use greater than 1e19 to avoid numerical noise from interpolation.
-        target_dask = xarray.where(target_dask > 1e19, numpy.nan, target_dask)
+        target_dask = dask.array.where(target_dask > 1e19, numpy.nan, target_dask)
 
         if len(dst_grid_rank) == 2:
             tgt_shape = [dst_grid_shape[1], dst_grid_shape[0]]

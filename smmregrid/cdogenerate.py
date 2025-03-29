@@ -71,7 +71,7 @@ class CdoGenerate():
             self.env["CDO_ICON_GRIDS"] = cdo_icon_grids
 
     @staticmethod
-    def _safe_check(method, remap_norm, remap_area_min):
+    def _safe_check(method, remap_norm):
         """Safety checks for weights generation """
 
         supported_methods = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
@@ -79,8 +79,7 @@ class CdoGenerate():
             raise ValueError('The remap method provided is not supported!')
         if remap_norm not in ["fracarea", "destarea"]:
             raise ValueError('The remap normalization provided is not supported!')
-        if remap_area_min < 0.0 or remap_area_min > 1.0:
-            raise ValueError('The remap_area_min provided is not supported!')
+
     
     @staticmethod
     def _prepare_grid(grid):
@@ -94,7 +93,7 @@ class CdoGenerate():
         return grid_file.name
 
     def weights(self, method="con", extrapolate=True,
-            remap_norm="fracarea", remap_area_min=0.5,
+            remap_norm="fracarea",
             vert_coord=None, vertical_dim=None, nproc=1):
         """
         Generate weights for regridding using Climate Data Operators (CDO), 
@@ -108,8 +107,6 @@ class CdoGenerate():
                                           Defaults to True.
             remap_norm (str, optional): The normalization method to apply when remapping.
                                         Default is "fracarea" which normalizes by fractional area.
-            remap_area_min (float, optional): Minimum area for remapping. 
-                                              Defaults to 0.5 to ensure moderate erosion of masks. 
             nproc (int, optional): Number of processes to use for parallel processing. Default is 1.
             vertical_dim (str, optional): Name of the vertical dimension in the source grid, if applicable.
                                         Defaults to None. Use if the grid is 3D.
@@ -149,7 +146,7 @@ class CdoGenerate():
             raise TypeError('Source grid is not specified, cannot provide any regridding')
 
         # verify that method and normalization are suitable
-        self._safe_check(method, remap_norm, remap_area_min)
+        self._safe_check(method, remap_norm)
 
         # vertical dimension
         vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
@@ -160,16 +157,15 @@ class CdoGenerate():
 
         # Generate weights for 2D or 3D grid based on vertical_dim presence
         if not vertical_dim:
-            return self._weights_2d(method, extrapolate, remap_norm, remap_area_min)
-        return self._weights_3d(method, extrapolate, remap_norm, remap_area_min,
+            return self._weights_2d(method, extrapolate, remap_norm)
+        return self._weights_3d(method, extrapolate, remap_norm,
                             nproc, vertical_dim)
 
-    def _weights_2d(self, method, extrapolate, remap_norm,
-                remap_area_min):
+    def _weights_2d(self, method, extrapolate, remap_norm):
         """Generate 2D weights using CDO."""
 
         weights = self._cdo_generate_weights(method, extrapolate,
-                                             remap_norm, remap_area_min)
+                                             remap_norm)
         weights_matrix = compute_weights_matrix(weights)
         weights = mask_weights(weights, weights_matrix)
         masked = int(check_mask(weights))
@@ -177,7 +173,7 @@ class CdoGenerate():
         return xarray.merge([weights, masked_xa])
 
     def _weights_3d(self, method, extrapolate, remap_norm,
-                remap_area_min, nproc, vertical_dim):
+                nproc, vertical_dim):
         """Generate 3D weights using multiprocessing."""
 
         if isinstance(self.source_grid, str):
@@ -210,7 +206,6 @@ class CdoGenerate():
                                   "method": method,
                                   "extrapolate": extrapolate,
                                   "remap_norm": remap_norm,
-                                  "remap_area_min": remap_area_min,
                                   "cdo_extra_vertical": cdo_extra_vertical
                               })
                 ppp.start()
@@ -235,7 +230,7 @@ class CdoGenerate():
         wlist[nnn] = self._cdo_generate_weights(*args, **kwargs).compute()
 
     def _cdo_generate_weights(self, method="con", extrapolate=True,
-                              remap_norm="fracarea", remap_area_min=0.0,
+                              remap_norm="fracarea",
                               cdo_extra_vertical=None):
         """
         Generate weights for regridding using CDO
@@ -255,7 +250,6 @@ class CdoGenerate():
             method (str): Regridding method - default "con"
             extrapolate (bool): Extrapolate output field - default True
             remap_norm (str): Normalisation method for conservative methods
-            remap_area_min (float): Minimum destination area fraction
             cdo_extra_vertical (list): Command to select vertical levels for 3d case
 
         Returns:
@@ -271,7 +265,6 @@ class CdoGenerate():
         self.loggy.info("CDO remapping method: %s", method)
         self.loggy.info("Extrapolation enabled: %s", extrapolate)
         self.loggy.debug("Normalization method: %s", remap_norm)
-        self.loggy.debug("Minimum remap area: %s", remap_area_min)
 
         weight_file = tempfile.NamedTemporaryFile()
         self.loggy.debug("Weight file name is: %s", weight_file.name)
@@ -282,7 +275,6 @@ class CdoGenerate():
         env = copy.deepcopy(self.env)
         env["REMAP_EXTRAPOLATE"] = "on" if extrapolate else "off"
         env["CDO_REMAP_NORM"] = remap_norm
-        env["REMAP_AREA_MIN"] = str(remap_area_min)
         self.loggy.debug("Environment variables: %s", env)
 
         try:
@@ -401,7 +393,7 @@ class CdoGenerate():
 
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
-                         remap_norm="fracarea", remap_area_min=0.5, gridpath=None,
+                         remap_norm="fracarea", gridpath=None,
                          icongridpath=None, extra=None, cdo_extra=None, cdo_options=None,
                          vertical_dim=None, vert_coord=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
@@ -414,6 +406,6 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                             extra=extra, cdo_extra=cdo_extra, cdo_options=cdo_options, cdo=cdo, 
                             cdo_icon_grids=icongridpath, cdo_download_path=gridpath)
     return generator.weights(method=method, extrapolate=extrapolate,
-                         remap_norm=remap_norm, remap_area_min=remap_area_min,
+                         remap_norm=remap_norm,
                          vertical_dim=vertical_dim, vert_coord=vert_coord, nproc=nproc)
 
