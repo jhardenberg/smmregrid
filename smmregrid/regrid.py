@@ -505,22 +505,20 @@ class Regridder(object):
             source_array = numpy.reshape(source_array, kept_shape + [-1])
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
-        # Efficient generic slicing for any dimension
-        #first_array = source_array[0, :] if source_array.ndim > 1 else source_array
-        first_array = source_array[(0,) + (slice(None),) * (source_array.ndim - 1)]
+        # Efficient slicing and nan evaluation
+        first_array = source_array[0, :] if source_array.ndim > 1 else source_array
+        src_data_nan = numpy.isnan(first_array.values).sum()
 
-        # Use dask's isnan and sum, delaying computation
-        #src_data_nan = numpy.isnan(first_array).sum()
-        src_data_nan = dask.array.isnan(first_array).sum()
+        # dask solutions seems to be slower than numpy
+        #first_array = source_array[(0,) + (slice(None),) * (source_array.ndim - 1)]
+        #src_data_nan = dask.array.isnan(first_array).sum().compute()
         
-        #self.loggy.info('Source grid NaN: %s', src_grid_nan)
-        #self.loggy.info('Source array NaN: %s', src_data_nan)
+        self.loggy.debug('Source grid NaN: %s', src_grid_nan)
+        self.loggy.debug('Source array NaN: %s', src_data_nan)
         if src_data_nan != src_grid_nan:
             self.loggy.error('Source grid NaN %s and source data NaN %s do not match!',
                              src_grid_nan, src_data_nan)
-            #raise ValueError('Source grid NaN and source data NaN do not match!')
-        
-
+            raise ValueError(f'Source grid NaN ({src_grid_nan}) and source data NaN ({src_data_nan}) do not match!')
 
         # Handle input mask
         dask.array.ma.set_fill_value(source_array, 1e20)
