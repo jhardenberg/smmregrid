@@ -16,6 +16,7 @@ def test_gridtype(definition, dims, other):
     grid = GridType(dims=definition)
     assert set(grid.dims) == set(dims)
     assert set(grid.other_dims) == set(other)
+    assert 'GridType' in repr(grid)
 
 def test_difference():
     """Test equality for gridtypes"""
@@ -32,10 +33,22 @@ def test_multiple_vertical():
 
 def test_gridtype_extradims():
     """Test for extradimensions"""
-    #with pytest.raises(ValueError):
-    #    GridType(dims=["lon", "lat", "ciccio"],
-    #             extra_dims = {'horizontal': "nonnapaper"})
+    with pytest.raises(TypeError):
+        GridType(dims=["lon", "lat", "ciccio"],
+                 extra_dims = ['horizontal'])
 
     grid = GridType(dims=["lon", "lat", "ciccio"],
                     extra_dims = {'vertical': ["ciccio"]})
     assert grid.vertical_dim == "ciccio"
+
+def test_gridtype_extradims_override():
+    """Test for extradimensions"""
+
+    grid = GridType(dims=["alfa", "beta", "ciccio"],
+                    extra_dims = {
+                        'horizontal': ["alfa", "beta"],
+                        'vertical': ["ciccio"]},
+                    override=True)
+    assert grid.vertical_dim == "ciccio"
+    assert set(grid.horizontal_dims) == set(["alfa", "beta"])
+    assert grid.time_dims is None
