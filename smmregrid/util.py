@@ -2,6 +2,7 @@
 
 import re
 import os
+import numpy
 import warnings
 import xarray
 

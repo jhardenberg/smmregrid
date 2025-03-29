@@ -464,6 +464,10 @@ class Regridder(object):
         dst_cdo_grid = weights.attrs['dest_grid']
         self.loggy.info('Interpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
 
+        # source grid properties
+        src_grid_mask = weights.src_grid_imask
+        src_grid_nan = len(src_grid_mask) - src_grid_mask.sum().values
+
         # destination grid properties
         dst_grid_shape = weights.dst_grid_dims.values
         dst_frac_area = weights.dst_grid_frac
@@ -500,6 +504,23 @@ class Regridder(object):
         else:
             source_array = numpy.reshape(source_array, kept_shape + [-1])
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
+
+        # Efficient generic slicing for any dimension
+        #first_array = source_array[0, :] if source_array.ndim > 1 else source_array
+        first_array = source_array[(0,) + (slice(None),) * (source_array.ndim - 1)]
+
+        # Use dask's isnan and sum, delaying computation
+        #src_data_nan = numpy.isnan(first_array).sum()
+        src_data_nan = dask.array.isnan(first_array).sum()
+        
+        #self.loggy.info('Source grid NaN: %s', src_grid_nan)
+        #self.loggy.info('Source array NaN: %s', src_data_nan)
+        if src_data_nan != src_grid_nan:
+            self.loggy.error('Source grid NaN %s and source data NaN %s do not match!',
+                             src_grid_nan, src_data_nan)
+            #raise ValueError('Source grid NaN and source data NaN do not match!')
+        
+
 
         # Handle input mask
         dask.array.ma.set_fill_value(source_array, 1e20)
