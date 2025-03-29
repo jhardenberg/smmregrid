@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [v0.1.1]
+
+- `GridInspector()` is now able to detect also the `kind` of a grid, i.e. if it is regular, gaussian, unstructured etc. (#44)
+- Possibility to replace default dimension in `GridType()` with `override` flag (#44)
+- `GridType()` can now be printed (#44)
+- `GridInspector().get_gridtype()` replace `get_gridtype()` method for cleaner naming structure (#44)
+
 ## [v0.1.0]
 
 - Refactoring of the grid handling to possibly support more complex data structures (#33)
