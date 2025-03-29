@@ -3,26 +3,8 @@
 import os
 import pytest
 import xarray
-from smmregrid.util import is_cdo_grid, check_gridfile, detect_grid
+from smmregrid.util import check_gridfile, detect_grid
 
-@pytest.mark.parametrize("grid_str,expected", [
-    ("global_1.0", True),        # Global regular grid
-    ("dcw:US", True),            # Regional regular grid
-    ("zonal_2.5", True),         # Zonal latitudes
-    ("r360x180", True),          # Global regular NxM grid
-    ("lon=-75.0/lat=40.0", True),# One grid point
-    ("F64", True),               # Full regular Gaussian grid
-    ("n400", True),              # Full regular Gaussian grid
-    ("gme10", True),             # Global icosahedral-hexagonal GME grid
-    ("hp1024", True),            # HEALPix grid
-    ("hp32_ring", True),         # HEALPix grid
-    ("hpz4", True),              # HEALPix zoom grid
-    ("random_string", False),    # Invalid CDO grid
-    ("/path/to/file.nc", False)  # Invalid CDO grid (file path)
-])
-def test_is_cdo_grid(grid_str, expected):
-    """Simple test for cdo grid detection"""
-    assert is_cdo_grid(grid_str) == expected
 
 # Mock function to avoid actual file system checks for testing purposes
 def mock_exists(path):

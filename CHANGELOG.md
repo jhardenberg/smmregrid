@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [v0.1.1]
 
+- Support for python==3.13 (#44)
 - `GridInspector()` is now able to detect also the `kind` of a grid, i.e. if it is regular, gaussian, unstructured etc. (#44)
 - Possibility to replace default dimension in `GridType()` with `override` flag (#44)
 - `GridType()` can now be printed (#44)
