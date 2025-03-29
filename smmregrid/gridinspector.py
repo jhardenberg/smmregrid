@@ -82,7 +82,7 @@ class GridInspector():
         """
         warnings.warn(
             "get_grid_info() is deprecated and will be removed in future versions. "
-            f"Please use get_gridtype() instead.",
+            "Please use get_gridtype() instead.",
             DeprecationWarning
         )
 
