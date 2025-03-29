@@ -448,47 +448,31 @@ class Regridder(object):
             if 'time' in source_data.name:
                 self.loggy.info('%s will not be interpolated in the output', source_data.name)
                 return source_data
-            else:
-                self.loggy.info('%s will be excluded from the output', source_data.name)
-                return xarray.DataArray(data=None)
 
-        # Alias the weights dataset from CDO
-        w = weights
-
-        # The weights file contains a sparse matrix, that we need to multiply the
-        # source data's horizontal grid with to get the regridded data.
-        #
-        # A bit of messing about with `.stack()` is needed in order to get the
-        # dimensions to conform - the horizontal grid needs to be converted to a 1d
-        # array, multiplied by the weights matrix, then unstacked back into a 2d
-        # array
+            self.loggy.info('%s will be excluded from the output', source_data.name)
+            return xarray.DataArray(data=None)
 
         # CDO style weights
         # src_address = w.src_address - 1
         # dst_address = w.dst_address - 1
         # remap_matrix = w.remap_matrix[:, 0]
         # w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
-
         # src_grid_rank = w.src_grid_rank
-        dst_grid_rank = w.dst_grid_rank
-
-        src_cdo_grid = w.attrs['source_grid']
-        dst_cdo_grid = w.attrs['dest_grid']
+       
+        # info on grids
+        src_cdo_grid = weights.attrs['source_grid']
+        dst_cdo_grid = weights.attrs['dest_grid']
         self.loggy.info('Interpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
 
-        dst_grid_shape = w.dst_grid_dims.values
-        dst_grid_center_lat = w.dst_grid_center_lat.data.reshape(
-            dst_grid_shape[::-1]
-        )
-        dst_grid_center_lon = w.dst_grid_center_lon.data.reshape(
-            dst_grid_shape[::-1]
-        )
+        # destination grid properties
+        dst_grid_shape = weights.dst_grid_dims.values
+        dst_frac_area = weights.dst_grid_frac
+        dst_grid_mask = weights.dst_grid_imask
+        dst_grid_rank = weights.dst_grid_rank
 
-        # destination grid fractional area
-        dst_frac_area = w.dst_grid_frac
-
-        # destination grid mask
-        dst_mask = w.dst_grid_imask
+        # target lon/lat
+        dst_grid_center_lat = weights.dst_grid_center_lat.data.reshape(dst_grid_shape[::-1])
+        dst_grid_center_lon = weights.dst_grid_center_lon.data.reshape(dst_grid_shape[::-1])
 
         axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
 
@@ -502,10 +486,9 @@ class Regridder(object):
         self.loggy.info('Regridding from %s to %s', source_data.shape, dst_grid_shape)
 
         # Find dimensions to keep
-        nd = sum([(d not in horizontal_dims) for d in source_data.dims])
+        kept_dims = [dim for dim in source_data.dims if dim not in horizontal_dims]
+        kept_shape = [source_data.sizes[dim] for dim in kept_dims]
 
-        kept_shape = list(source_data.shape[0:nd])
-        kept_dims = list(source_data.dims[0:nd])
         self.loggy.debug('Dimension to be ignored: %s', kept_dims)
         if weights_matrix is None:
             weights_matrix = compute_weights_matrix(weights)
@@ -528,23 +511,18 @@ class Regridder(object):
 
         # define and compute the new mask
         if masked:
-
-            # target mask is loaded from above
-            target_mask = dst_mask.data
-
-            # broadcast the mask on all the remaining dimensions
-            target_mask = numpy.broadcast_to(
-                target_mask.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
+            # broadcast the mask on all the remaining dimensions and apply it with where
+            target_mask = dask.array.broadcast_to(
+                dst_grid_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
             )
             self.loggy.debug('Reshaped mask with %s', target_mask.shape)
-
-            # apply the mask
             target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
 
         # use the frac area of the destination to further mask the data
-        target_dask = dask.array.where(
-            dask.array.broadcast_to(dst_frac_area, target_dask.shape) < self.remap_area_min,
-            numpy.nan, target_dask)
+        if self.remap_area_min > 0.0:
+            target_dask = dask.array.where(
+                dask.array.broadcast_to(dst_frac_area, target_dask.shape) < self.remap_area_min,
+                numpy.nan, target_dask)
 
         # after the tensordot, bring the NaN back in
         # Use greater than 1e19 to avoid numerical noise from interpolation.
@@ -576,6 +554,7 @@ class Regridder(object):
             name=source_data.name,
         )
 
+        # Add the destination grid coordinate
         target_da.coords["lat"] = xarray.DataArray(dst_grid_center_lat, dims=tgt_dims)
         target_da.coords["lon"] = xarray.DataArray(dst_grid_center_lon, dims=tgt_dims)
 
@@ -592,22 +571,19 @@ class Regridder(object):
             target_da = target_da.swap_dims({"i": "lat", "j": "lon"})
 
         # Add metadata to the coordinates
-        target_da.coords["lat"].attrs["units"] = "degrees_north"
-        target_da.coords["lat"].attrs["standard_name"] = "latitude"
-        target_da.coords["lon"].attrs["units"] = "degrees_east"
-        target_da.coords["lon"].attrs["standard_name"] = "longitude"
-        target_da.coords["lon"].attrs["axis"] = "X"
-        target_da.coords["lat"].attrs["axis"] = "Y"
+        target_da.coords["lat"].attrs.update(
+            {"units": "degrees_north", "standard_name": "latitude", "axis": "Y"}
+        )
+        target_da.coords["lon"].attrs.update(
+            {"units": "degrees_east", "standard_name": "longitude", "axis": "X"}
+        )
 
         # Copy attributes from the original
         target_da.attrs = source_data.attrs
 
         # Clean CDI gridtype (which can lead to issues with CDO interpretation)
-        if target_da.attrs.get('CDI_grid_type'):
-            del target_da.attrs['CDI_grid_type']
+        target_da.attrs.pop('CDI_grid_type', None)
 
-        # Now rename to the original coordinate names
-        # target_da = target_da.rename({"lat": source_lat.name, "lon": source_lon.name})
 
         return target_da
 
