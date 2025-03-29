@@ -275,7 +275,6 @@ class CdoGenerate():
         env = copy.deepcopy(self.env)
         env["REMAP_EXTRAPOLATE"] = "on" if extrapolate else "off"
         env["CDO_REMAP_NORM"] = remap_norm
-        self.loggy.debug("Environment variables: %s", env)
 
         try:
             self.loggy.info("Additional CDO commands: %s", self.cdo_extra)

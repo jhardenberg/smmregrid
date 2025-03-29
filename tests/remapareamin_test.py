@@ -10,6 +10,9 @@ INDIR = 'tests/data'
 ifile = os.path.join(INDIR, 'onlytos-ipsl.nc')
 tfile = os.path.join(INDIR, 'r360x180.nc')
 
+# numerical noise in the CDO/smmregrid output
+RANGE = 10
+
 @pytest.mark.parametrize("fraction,nan", [
     ("0.0", 11607),
     (0.5, 10731),
@@ -22,4 +25,5 @@ def test_remap_area_min(fraction, nan):
     data = xr.open_dataset(ifile)
     regrid = regridder.regrid(data['tos'].isel(time=0))
     nanfound = (~np.isnan(regrid)).sum().values
-    assert nanfound == nan
+    assert pytest.approx(nanfound, abs=RANGE) == nan
+
