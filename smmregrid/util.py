@@ -21,6 +21,10 @@ CDO_GRID_PATTERNS = {
     "healpix_zoom": re.compile(r"^hpz\d+$")                       
 }
 
+# Define coordinate names for latitude and longitude
+LAT_COORDS = ["lat", "latitude", "nav_lat"]
+LON_COORDS = ["lon", "longitude", "nav_lon"]
+
 def is_cdo_grid(grid_str):
     """Check if the input string matches any CDO grid type."""
 
@@ -71,8 +75,8 @@ def find_coord(ds, possible_names):
 def detect_grid(data):
     """Classify the grid type based on coordinate structure."""
 
-    lat = find_coord(data, ["lat", "latitude", "nav_lat"])
-    lon = find_coord(data, ["lon", "longitude", "nav_lon"])
+    lat = find_coord(data, LAT_COORDS)
+    lon = find_coord(data, LON_COORDS)
 
     if not lat or not lon:
         return "Unknown"
