@@ -71,7 +71,7 @@ class CdoGenerate():
             self.env["CDO_ICON_GRIDS"] = cdo_icon_grids
 
     @staticmethod
-    def _safe_check(method, remap_norm):
+    def _safe_check(method, remap_norm, remap_area_min):
         """Safety checks for weights generation """
 
         supported_methods = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
@@ -79,6 +79,8 @@ class CdoGenerate():
             raise ValueError('The remap method provided is not supported!')
         if remap_norm not in ["fracarea", "destarea"]:
             raise ValueError('The remap normalization provided is not supported!')
+        if remap_area_min < 0.0 or remap_area_min > 1.0:
+            raise ValueError('The remap_area_min provided is not supported!')
     
     @staticmethod
     def _prepare_grid(grid):
@@ -147,7 +149,7 @@ class CdoGenerate():
             raise TypeError('Source grid is not specified, cannot provide any regridding')
 
         # verify that method and normalization are suitable
-        self._safe_check(method, remap_norm)
+        self._safe_check(method, remap_norm, remap_area_min)
 
         # vertical dimension
         vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')

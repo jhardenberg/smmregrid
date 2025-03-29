@@ -51,7 +51,7 @@ class Regridder(object):
     """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', transpose=True, vert_coord=None, vertical_dim=None,
+                 method='con', remap_area_min=0.5, transpose=True, vert_coord=None, vertical_dim=None,
                  space_dims=None, horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  cdo='cdo', loglevel='WARNING'):
         """
@@ -75,6 +75,7 @@ class Regridder(object):
             horizontal_dims (list): List of spatial dimensions to 
                                     interpolate (default: None).
             method (str): Interpolation method to use (default: 'con').
+            remap_area_min (float): Minimum area for remapping in conservative remapping (default: 0.5).
             transpose (bool): If True, transpose the output such that 
                               the vertical coordinate is placed just before the 
                               other spatial coordinates (default: True).
@@ -167,7 +168,8 @@ class Regridder(object):
                                                cdo=cdo, cdo_options=cdo_options,
                                                cdo_extra=cdo_extra, loglevel=loglevel)
                 gridtype.weights = generator.weights(method=method,
-                                                     vertical_dim=gridtype.vertical_dim)
+                                                     vertical_dim=gridtype.vertical_dim,
+                                                     remap_area_min=remap_area_min)
 
         for gridtype in self.grids:
             if gridtype.vertical_dim:
