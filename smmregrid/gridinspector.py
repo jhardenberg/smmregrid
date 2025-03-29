@@ -1,5 +1,6 @@
 """GridInspector class module"""
 
+import warnings
 import xarray as xr
 from smmregrid.log import setup_logger
 from .gridtype import GridType
@@ -79,6 +80,12 @@ class GridInspector():
         """
         Returns the gridtype object
         """
+        warnings.warn(
+            "get_grid_info() is deprecated and will be removed in future versions. "
+            f"Please use get_gridtype() instead.",
+            DeprecationWarning
+        )
+
         return self.get_gridtype()
 
     def get_gridtype(self):
