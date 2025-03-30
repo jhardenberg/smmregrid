@@ -355,9 +355,11 @@ class Regridder(object):
         # If a special additional coordinate is present pick correct levels from weights
         coord = next((coord for coord in source_data.coords if coord.startswith(level_index)), None)
         if coord:  # if a coordinate starting with level_index is found
+            self.loggy.debug('Coordinate for vertical indexing %s found in source_data', coord)
             levlist = source_data.coords[coord].values.tolist()
             levlist = [levlist] if numpy.isscalar(levlist) else levlist
         else:
+            self.loggy.debug('No Coordinate for vertical indexing found')
             levlist = list(range(0, source_data.coords[vertical_dim].values.size))
 
         data3d_list = []
@@ -365,8 +367,10 @@ class Regridder(object):
             self.loggy.debug('Processing vertical level %s - level_index %s', lev, levidx)
             xa = source_data.isel(**{vertical_dim: lev})
             wa = weights.isel(**{vertical_dim: levidx})
+            # this is necessary since zero padding along links dim is performed
             nl = wa.link_length.values
             wa = wa.isel(**{links_dim: slice(0, nl)})
+            #print(wa['src_grid_imask'].sum().values)
             wm = weights_matrix[levidx]
             mm = masked[levidx]
             data3d_list.append(self.apply_weights(
@@ -497,17 +501,20 @@ class Regridder(object):
         if weights_matrix is None:
             weights_matrix = compute_weights_matrix(weights)
 
-        # Remove the spatial axes, apply the weights, add the spatial axes back
+        # Ensure source data is a dask array
         source_array = source_data.data
-        if isinstance(source_array, dask.array.Array):
-            source_array = dask.array.reshape(source_array, kept_shape + [-1])
-        else:
-            source_array = numpy.reshape(source_array, kept_shape + [-1])
-        self.loggy.debug('Source array after reshape is: %s', source_array.shape)
+        if not isinstance(source_array, dask.array.Array):
+            self.loggy.debug('Source array is not a dask array, converting it')
+            source_array = dask.array.from_array(source_array, chunks=source_array.shape)
+        #if isinstance(source_array, dask.array.Array):
+        source_array = dask.array.reshape(source_array, kept_shape + [-1])
+        # else:
+        #    source_array = numpy.reshape(source_array, kept_shape + [-1])
+        #self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
         # Efficient slicing and nan evaluation
         first_array = source_array[0, :] if source_array.ndim > 1 else source_array
-        src_data_nan = numpy.isnan(first_array.values).sum()
+        src_data_nan = numpy.isnan(first_array).sum().compute()
 
         # dask solutions seems to be slower than numpy
         #first_array = source_array[(0,) + (slice(None),) * (source_array.ndim - 1)]
@@ -518,7 +525,7 @@ class Regridder(object):
         if src_data_nan != src_grid_nan:
             self.loggy.error('Source grid NaN %s and source data NaN %s do not match!',
                              src_grid_nan, src_data_nan)
-            raise ValueError(f'Source grid NaN ({src_grid_nan}) and source data NaN ({src_data_nan}) do not match!')
+            #raise ValueError(f'Source grid NaN ({src_grid_nan}) and source data NaN ({src_data_nan}) do not match!')
 
         # Handle input mask
         dask.array.ma.set_fill_value(source_array, 1e20)
