@@ -68,8 +68,8 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
 
 
 def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method='con',
-                            remap_area_min=0.5,
-                            access='Dataset', extrapolate=True, loglevel='INFO'):
+                            remap_area_min=0.5, access='Dataset',
+                            extrapolate=True, loglevel='INFO'):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
@@ -85,7 +85,7 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
     cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True,
                                 env={'REMAP_EXTRAPOLATE': cdoextrapolate,
-                                    'REMAP_AREA_MIN': remap_area_min})
+                                    'REMAP_AREA_MIN': str(remap_area_min)})
 
     # Keep only some levels
     cdofield = cdofield.isel(**{vertical_dim: levels})
