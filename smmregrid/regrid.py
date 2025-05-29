@@ -46,12 +46,13 @@ from .log import setup_logger
 from .gridinspector import GridInspector
 from .util import deprecated_argument
 
+DEFAULT_AREA_MIN = 0.5  # default minimum area for conservative remapping
 
 class Regridder(object):
     """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', remap_area_min=0.0, transpose=True, vert_coord=None, vertical_dim=None,
+                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, vert_coord=None, vertical_dim=None,
                  space_dims=None, horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  cdo='cdo', loglevel='WARNING'):
         """
@@ -75,7 +76,7 @@ class Regridder(object):
             horizontal_dims (list): List of spatial dimensions to 
                                     interpolate (default: None).
             method (str): Interpolation method to use (default: 'con').
-            remap_area_min (float): Minimum area for remapping in conservative remapping (default: 0.5).
+            remap_area_min (float): Minimum area for remapping in conservative remapping.
                                     Larger values avoid mask erosion.
             transpose (bool): If True, transpose the output such that 
                               the vertical coordinate is placed just before the 

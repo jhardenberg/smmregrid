@@ -63,14 +63,12 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
         cdofield = cdofield[cdovar].to_array()
 
     # check if arrays are equal with numerical tolerance
-    print((~np.isnan(cdofield)).sum().values)
-    print((~np.isnan(rfield)).sum().values)
     checker = np.allclose(cdofield, rfield, equal_nan=True)
     return checker
 
 
 def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method='con',
-                            remap_area_min=0.0,
+                            remap_area_min=0.5,
                             access='Dataset', extrapolate=True, loglevel='INFO'):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
@@ -87,8 +85,7 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
     cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True,
                                 env={'REMAP_EXTRAPOLATE': cdoextrapolate,
-                                    # 'REMAP_AREA_MIN': remap_area_min}) # this is not working with cdo 2.4.4
-                                    })
+                                    'REMAP_AREA_MIN': remap_area_min})
 
     # Keep only some levels
     cdofield = cdofield.isel(**{vertical_dim: levels})
