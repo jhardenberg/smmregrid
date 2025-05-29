@@ -186,7 +186,9 @@ class CdoGenerate():
 
         #nvert = sgrid[vertical_dim].values.size
         nvert = sgrid.sizes[vertical_dim]
+        vertical_coord_values = sgrid[vertical_dim].values
         self.loggy.info('Vertical dimension has length: %s', nvert)
+        self.loggy.info('Vertical coordinate values: %s', vertical_coord_values)
 
         mgr = Manager()
         wlist = mgr.list(range(nvert))
@@ -265,7 +267,6 @@ class CdoGenerate():
         self.loggy.info("CDO remapping method: %s", method)
         self.loggy.info("Extrapolation enabled: %s", extrapolate)
         self.loggy.debug("Normalization method: %s", remap_norm)
-
         weight_file = tempfile.NamedTemporaryFile()
         self.loggy.debug("Weight file name is: %s", weight_file.name)
 
@@ -305,14 +306,19 @@ class CdoGenerate():
     #     if not isinstance(tmpfile, str):
     #         os.remove(tmpfile.name)
 
-    def weightslist_to_3d(self, ds_list, vertical_dim='lev'):
+    def weightslist_to_3d(self, ds_list, vertical_dim='lev', coord_values=None):
         """Combine a list of 2D CDO weights into a 3D one."""
 
         links_dim = "numLinks" if "numLinks" in ds_list[0].dims else "num_links"
         dim_values = range(len(ds_list))
+        self.loggy.info('Number of levels: %s', len(ds_list))
+        self.loggy.info('Number of links: %s', ds_list[0].src_address.size)
         nl = [ds.src_address.size for ds in ds_list]
+        if coord_values is None:
+            coord_values = range(0, len(nl))
+        self.loggy.debug('Coordinate values: %s', coord_values)
         nl0 = max(nl)
-        nlda = xarray.DataArray(nl, coords={vertical_dim: range(0, len(nl))}, name="link_length")
+        nlda = xarray.DataArray(nl, coords={vertical_dim: coord_values}, name="link_length")
 
         new_array = []
         varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
@@ -323,7 +329,7 @@ class CdoGenerate():
             xplist = [x[vname].pad(**{links_dim: (0, nl0 - nl1), "mode": 'constant', "constant_values": 0})
                       for vname in varlist]
             xmerged = xarray.merge(xplist)
-            new_array.append(xmerged.assign_coords({vertical_dim: d}))
+            new_array.append(xmerged.assign_coords({vertical_dim: coord_values[d]}))
 
         return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim)],
                             combine_attrs='no_conflicts')
