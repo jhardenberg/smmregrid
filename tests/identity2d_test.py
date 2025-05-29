@@ -32,6 +32,13 @@ def test_gaussian_regular(method):
                            remap_method=method)
     assert fff is True
 
+@pytest.mark.parametrize("remap_area_min", ['0.0', '0.5', '0.75'])
+def test_gaussian_area_min(remap_area_min):
+    xfield = xr.open_dataset(os.path.join(INDIR, 'tas-ecearth.nc'))
+    fff = check_cdo_regrid(xfield, tfile,
+                           remap_method='con', remap_area_min=remap_area_min)
+    assert fff is True
+
 # test for gaussian grids as EC-Earth cmor
 @pytest.mark.parametrize("method", ['bil', 'con'])
 def test_gaussian_regular_regional(method):

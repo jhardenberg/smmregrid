@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+Unreleased:
+- `remap_area_min` for conservative remapping is now set to 0.5 to avoid coastal erosion (#43)
+- Fully dask-array based oriented `regrid2d` method and more efficient `check_mask` (#43)
+
 ## [v0.1.0]
 
 - Refactoring of the grid handling to possibly support more complex data structures (#33)
