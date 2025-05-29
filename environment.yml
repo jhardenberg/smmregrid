@@ -10,7 +10,7 @@ dependencies:
   - python>=3.8
   - ecCodes
   - numba
-  - cdo
+  - cdo>=2.5.0
   - pip
   - pip:
     - -e .[all]

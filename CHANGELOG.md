@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Possibility to replace default dimension in `GridType()` with `override` flag (#44)
 - `GridType()` can now be printed (#44)
 - `GridInspector().get_gridtype()` replace `get_gridtype()` method for cleaner naming structure (#44)
+- `remap_area_min` for conservative remapping is now set to 0.5 to avoid coastal erosion (#43)
+- Fully dask-array based oriented `regrid2d` method and more efficient `check_mask` (#43)
 
 ## [v0.1.0]
 
