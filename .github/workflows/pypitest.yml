@@ -33,8 +33,8 @@ jobs:
         condarc: |
           channels:
             - conda-forge
-        create-args: |
-            python=${{ matrix.python-version }}
+        create-args: >-
+          python=${{ matrix.python-version }}
     - name: Install smmregrid
       run: |
         # install package
