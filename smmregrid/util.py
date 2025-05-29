@@ -65,13 +65,20 @@ def detect_grid(data):
 
         # Regular: latitude and longitude depend on different coordinates
         if data[lat].dims != data[lon].dims:
+
+            lat_diff = np.diff(data[lat].values)
+            lon_diff = np.diff(data[lon].values)
+            if np.allclose(lat_diff, lat_diff[0]) and np.allclose(lon_diff, lon_diff[0]):
+                return "Regular"
+
             # Gaussian: second derivative of latitude is positive from -90 to 0
             lat_values = data[lat].where(data[lat]<0).values
             lat_values=lat_values[~np.isnan(lat_values)]
             gaussian = np.all(np.diff(lat_values, n=2) > 0)
             if gaussian:
                 return "GaussianRegular"
-            return "Regular"
+            
+            return "UndefinedRegular"
 
         # Healpix: number of pixels is a multiple of 12 and log2(pix / 12) is an integer
         pix = data[lat].size
