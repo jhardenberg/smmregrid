@@ -11,7 +11,8 @@ import numpy
 import xarray
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
-from .util import check_gridfile, deprecated_argument
+from .cdogrid import CdoGrid
+from .util import deprecated_argument
 
 
 class CdoGenerate():
@@ -357,7 +358,7 @@ class CdoGenerate():
         areas_file = tempfile.NamedTemporaryFile()
 
         # prepare grid
-        if check_gridfile(filename) == 'grid':
+        if CdoGrid(filename).grid_kind is not None:
             self.loggy.info('CDO grid as %s to be used for area generation', filename)
             sgrid = f"-const,1,{filename}"
         else:

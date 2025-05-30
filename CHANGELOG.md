@@ -3,7 +3,13 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-Unreleased:
+## [v0.1.1]
+
+- Support for python==3.13 (#44)
+- `GridInspector()` is now able to detect also the `kind` of a grid, i.e. if it is regular, gaussian, unstructured etc. (#44)
+- Possibility to replace default dimension in `GridType()` with `override` flag (#44)
+- `GridType()` can now be printed (#44)
+- `GridInspector` method `get_gridtype()` replaces `get_grid_info()` for cleaner naming structure (#44)
 - `remap_area_min` for conservative remapping is now set to 0.5 to avoid coastal erosion (#43)
 - Fully dask-array based oriented `regrid2d` method and more efficient `check_mask` (#43)
 

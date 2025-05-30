@@ -1,8 +1,10 @@
 """GridInspector class module"""
 
+import warnings
 import xarray as xr
 from smmregrid.log import setup_logger
 from .gridtype import GridType
+from .util import detect_grid
 
 
 class GridInspector():
@@ -37,16 +39,18 @@ class GridInspector():
         """
 
         if isinstance(self.data, xr.Dataset):
-            for variable in self.data.data_vars:
-                self._inspect_dataarray_grid(self.data[variable])
+            self.data.map(self._inspect_dataarray_grid)
         elif isinstance(self.data, xr.DataArray):
             self._inspect_dataarray_grid(self.data)
         else:
-            raise ValueError('Data supplied is neither xarray Dataset or DataArray')
+            raise TypeError('Data supplied is neither xarray Dataset or DataArray')
 
         # get variables associated to the grid
         for gridtype in self.grids:
             self.identify_variables(gridtype)
+        
+        # get grid format
+        self._identify_grid_format(self.data)
 
     def _inspect_dataarray_grid(self, data_array):
         """
@@ -66,13 +70,25 @@ class GridInspector():
 
         # get vertical info from the weights coords if available
         if self.data.coords:
-            self.loggy.debug('Vertical dimension read from weights and assigned to %s',
-                             list(self.data.coords)[0])
-            gridtype.vertical_dim = list(self.data.coords)[0]
+            vertical_dim = list(self.data.coords)[0]
+            self.loggy.debug('Vertical dimension read from weights: %s', vertical_dim)
+            gridtype.vertical_dim = vertical_dim
 
         self.grids.append(gridtype)
 
     def get_grid_info(self):
+        """
+        Returns the gridtype object
+        """
+        warnings.warn(
+            "get_grid_info() is deprecated and will be removed in future versions. "
+            "Please use get_gridtype() instead.",
+            DeprecationWarning
+        )
+
+        return self.get_gridtype()
+
+    def get_gridtype(self):
         """
         Returns detailed information about all the grids in the dataset.
         """
@@ -89,16 +105,21 @@ class GridInspector():
         if self.clean:
             self._clean_grids()
 
-        # self.loggy.info('Grids that have been identifed are: %s', self.grids.)
+        # Log details about identified grids
         for gridtype in self.grids:
-            self.loggy.debug('More details on gridtype %s:', gridtype.dims)
-            if gridtype.horizontal_dims:
-                self.loggy.debug('    Space dims are: %s', gridtype.horizontal_dims)
-            if gridtype.vertical_dim:
-                self.loggy.debug('    Vertical dims is: %s', gridtype.vertical_dim)
-            self.loggy.debug('    Variables are: %s', list(gridtype.variables.keys()))
-            self.loggy.debug('    Bounds are: %s', gridtype.bounds)
+            self._log_grid_details(gridtype)
+    
         return self.grids
+    
+    def _log_grid_details(self, gridtype):
+        """Log detailed information about a grid."""
+        self.loggy.debug('Grid details: %s', gridtype.dims)
+        if gridtype.horizontal_dims:
+            self.loggy.debug('  Horizontal dims: %s', gridtype.horizontal_dims)
+        if gridtype.vertical_dim:
+            self.loggy.debug('  Vertical dim: %s', gridtype.vertical_dim)
+        self.loggy.debug('  Variables: %s', list(gridtype.variables.keys()))
+        self.loggy.debug('  Bounds: %s', gridtype.bounds)
 
     def _clean_grids(self):
         """
@@ -167,10 +188,10 @@ class GridInspector():
                 self._identify_variable(gridtype, self.data[var], var)
             gridtype.bounds = self._identify_spatial_bounds(self.data)
             gridtype.variables = {
-                            key: value
-                            for key, value in gridtype.variables.items()
-                            if key not in set(gridtype.bounds)
-                        }
+                key: value
+                for key, value in gridtype.variables.items()
+                if key not in set(gridtype.bounds)
+            }
 
         elif isinstance(self.data, xr.DataArray):
             self._identify_variable(gridtype, self.data)
@@ -192,3 +213,21 @@ class GridInspector():
                 bounds_variables.append(var)
 
         return bounds_variables
+    
+    def _identify_grid_format(self, data):
+        """
+        Identify the grid format based on the provided data.
+
+        Args:
+            data (xr.Dataset or xr.DataArray): The input dataset.
+
+        Returns:
+            str: The identified grid format.
+        """
+        for gridtype in self.grids:
+            variables = list(gridtype.variables.keys())
+            if variables:
+                if isinstance(data, xr.Dataset):
+                    gridtype.kind = detect_grid(data[variables])
+                elif isinstance(data, xr.DataArray):
+                    gridtype.kind = detect_grid(data)

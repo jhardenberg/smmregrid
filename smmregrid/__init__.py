@@ -2,11 +2,14 @@
 
 from .regrid import Regridder, regrid
 from .cdogenerate import cdo_generate_weights, CdoGenerate
-from .gridtype import GridType, DEFAULT_DIMS
+from .cdogrid import CdoGrid
+from .gridtype import GridType
 from .gridinspector import GridInspector
+from .util import detect_grid
 
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 __all__ = ['Regridder', 'regrid', 'cdo_generate_weights',
-           'GridType', 'GridInspector', 'CdoGenerate']
+           'GridType', 'GridInspector', 'CdoGenerate',
+           'CdoGrid', 'detect_grid']

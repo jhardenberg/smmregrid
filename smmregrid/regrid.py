@@ -206,7 +206,7 @@ class Regridder(object):
 
         grid_info = GridInspector(weights, cdo_weights=True, extra_dims=self.extra_dims,
                                   clean=False, loglevel=self.loglevel)
-        gridtype = grid_info.get_grid_info()
+        gridtype = grid_info.get_gridtype()
 
         # the vertical dimension has to show up into the extra dimensions
         # to cover the case that it is not a standard dimension: possibly better implementation available
@@ -220,7 +220,7 @@ class Regridder(object):
         """
         grid_info = GridInspector(source_grid_array, extra_dims=self.extra_dims,
                                   clean=True, loglevel=self.loglevel)
-        return grid_info.get_grid_info()
+        return grid_info.get_gridtype()
 
     def regrid(self, source_data):
         """
@@ -246,7 +246,7 @@ class Regridder(object):
             grid_inspect = GridInspector(source_data,
                                      extra_dims=self.extra_dims,
                                      loglevel=self.loglevel)
-            datagrids = grid_inspect.get_grid_info()
+            datagrids = grid_inspect.get_gridtype()
             if len(datagrids)>1 and self.init_mode == 'weights':
                 raise ValueError(f'Cannot process data with {len(datagrids)} GridType initializing from weights')
 
@@ -283,7 +283,7 @@ class Regridder(object):
         grid_inspect = GridInspector(source_data,
                                      extra_dims=self.extra_dims,
                                      loglevel=self.loglevel)
-        datagrids = grid_inspect.get_grid_info()
+        datagrids = grid_inspect.get_gridtype()
 
         for datagridtype in datagrids:
             if datagridtype.vertical_dim:
@@ -377,7 +377,7 @@ class Regridder(object):
         data3d = xarray.concat(data3d_list, dim=vertical_dim)
 
         # get dimensional info on target grid. TODO: can be moved at the init?
-        target_gridtypes = GridInspector(data3d, clean=True, loglevel=self.loglevel).get_grid_info()
+        target_gridtypes = GridInspector(data3d, clean=True, loglevel=self.loglevel).get_gridtype()
         target_horizontal_dims = target_gridtypes[0].horizontal_dims
 
         if self.transpose:
