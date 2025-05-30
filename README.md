@@ -3,7 +3,9 @@
 [![Coverage Status](https://coveralls.io/repos/github/jhardenberg/smmregrid/badge.svg?branch=main)](https://coveralls.io/github/jhardenberg/smmregrid?branch=main)
 [![PyPI version](https://badge.fury.io/py/smmregrid.svg)](https://badge.fury.io/py/smmregrid)
 [![Documentation](https://readthedocs.org/projects/smmregrid/badge/?version=latest)](https://smmregrid.readthedocs.io/en/latest/?badge=latest)
-      
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15553576.svg)](https://doi.org/10.5281/zenodo.15553576)
+
+
 
 # smmregrid
 A compact regridder using sparse matrix multiplication
