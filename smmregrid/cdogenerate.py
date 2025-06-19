@@ -83,15 +83,24 @@ class CdoGenerate():
 
     
     @staticmethod
-    def _prepare_grid(grid):
+    def _prepare_grid(grid, target=False):
         """Helper function to prepare grid (file or dataset)."""
 
+        # if grid is a Dataset or DataArray, save it to a temporary file
+        if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
+            grid_file = tempfile.NamedTemporaryFile(delete=False)
+            grid.to_netcdf(grid_file.name)
+            return grid_file.name
+
+        # prepare grid: if source_grid is a CDO grid, use it as is, otherwise prepare the file
+        if CdoGrid(grid).grid_kind and not target:
+            return f"-const,1,{grid}"
+      
+        # if grid is a string, assume it's a file path
         if isinstance(grid, str):
             return grid
-
-        grid_file = tempfile.NamedTemporaryFile(delete=False)
-        grid.to_netcdf(grid_file.name)
-        return grid_file.name
+        
+        raise TypeError('Grid must be a CDO grid string, a file path, or an xarray Dataset/DataArray.')
 
     def weights(self, method="con", extrapolate=True,
             remap_norm="fracarea",
@@ -152,9 +161,9 @@ class CdoGenerate():
         # vertical dimension
         vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
 
-        # set grids filenames
+        #prepare grid
         self.source_grid_filename = self._prepare_grid(self.source_grid)
-        self.target_grid_filename = self._prepare_grid(self.target_grid)
+        self.target_grid_filename = self._prepare_grid(self.target_grid, target=True)
 
         # Generate weights for 2D or 3D grid based on vertical_dim presence
         if not vertical_dim:
@@ -358,11 +367,7 @@ class CdoGenerate():
         areas_file = tempfile.NamedTemporaryFile()
 
         # prepare grid
-        if CdoGrid(filename).grid_kind is not None:
-            self.loggy.info('CDO grid as %s to be used for area generation', filename)
-            sgrid = f"-const,1,{filename}"
-        else:
-            sgrid = self._prepare_grid(filename)
+        sgrid = self._prepare_grid(filename)
 
         try:
             self.loggy.info("Additional CDO commands: %s", cdo_extra)
