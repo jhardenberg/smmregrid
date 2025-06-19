@@ -8,7 +8,7 @@ from .gridinspector import GridInspector
 from .util import detect_grid
 
 
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 
 __all__ = ['Regridder', 'regrid', 'cdo_generate_weights',
            'GridType', 'GridInspector', 'CdoGenerate',
