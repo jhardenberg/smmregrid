@@ -82,22 +82,24 @@ class CdoGenerate():
             raise ValueError('The remap normalization provided is not supported!')
 
     
-    @staticmethod
-    def _prepare_grid(grid, target=False):
+    def _prepare_grid(self, grid, target=False):
         """Helper function to prepare grid (file or dataset)."""
 
         # if grid is a Dataset or DataArray, save it to a temporary file
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
             grid_file = tempfile.NamedTemporaryFile(delete=False)
             grid.to_netcdf(grid_file.name)
+            self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
             return grid_file.name
 
         # prepare grid: if source_grid is a CDO grid, use it as is, otherwise prepare the file
         if CdoGrid(grid).grid_kind and not target:
+            self.loggy.info('CDO grid as %s to be used for areas/weights generation', grid)
             return f"-const,1,{grid}"
       
         # if grid is a string, assume it's a file path
         if isinstance(grid, str):
+            self.loggy.debug("Grid file path to be used for areas/weights generation: %s", grid)
             return grid
         
         raise TypeError('Grid must be a CDO grid string, a file path, or an xarray Dataset/DataArray.')
