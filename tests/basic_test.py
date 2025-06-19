@@ -62,3 +62,17 @@ def test_toward_healpix(method):
                              method = method, cdo_options='--force')
     interp = interpolator.regrid(source_data=xfield)
     assert interp['tas'].shape == (12, 3072)
+
+@pytest.mark.parametrize("source_grid,target_grid,src_grid_size,dst_grid_size", [
+    ('r180x90', 'r360x180', 180*90, 360*180),
+    ('F128', 'r180x90', 256*512, 180*90),
+    ('hp32', 'r360x180', 12288, 360*180),
+])
+def test_generation_from_cdo(source_grid, target_grid, src_grid_size, dst_grid_size):
+    """Test area generation from CDO grid string"""
+    generator = CdoGenerate(source_grid=source_grid,
+                            target_grid=target_grid,
+                            loglevel='debug')
+    weights = generator.weights(method="bil")
+    assert weights.dims['src_grid_size'] == src_grid_size
+    assert weights.dims['dst_grid_size'] == dst_grid_size
