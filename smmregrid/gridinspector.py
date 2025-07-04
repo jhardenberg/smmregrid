@@ -39,7 +39,7 @@ class GridInspector():
         """
 
         if isinstance(self.data, xr.Dataset):
-            self.data.map(self._inspect_dataarray_grid)
+            self.data.map(self._inspect_dataarray_grid, keep_attrs=False)
         elif isinstance(self.data, xr.DataArray):
             self._inspect_dataarray_grid(self.data)
         else:
@@ -231,3 +231,18 @@ class GridInspector():
                     gridtype.kind = detect_grid(data[variables])
                 elif isinstance(data, xr.DataArray):
                     gridtype.kind = detect_grid(data)
+
+    @staticmethod
+    def get_gridtype_attr(gridtypes, attr):
+        """Helper compact tool to extra gridtypes information"""
+        out = []
+        for gridtype in gridtypes:
+            value = getattr(gridtype, attr, None)
+            if isinstance(value, (list, tuple)):
+                out.extend(value)
+            elif isinstance(value, dict):
+                out.extend(value.keys())
+            elif isinstance(value, str):
+                out.append(value)
+
+        return list(dict.fromkeys(out))
