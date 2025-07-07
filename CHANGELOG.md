@@ -5,7 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+## [v0.1.2]
+
 - CDO names can be used to generate remapping weights as source (#46)
+- Fix `keep_attrs` behaviour in `GridInspector()` (#47)
 
 ## [v0.1.1]
 
