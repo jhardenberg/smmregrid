@@ -55,10 +55,9 @@ class GridInspector():
 
         if isinstance(self.data, xr.Dataset):
             self.data.map(self._inspect_dataarray_grid, keep_attrs=False)
-        elif isinstance(self.data, xr.DataArray):
+        if isinstance(self.data, xr.DataArray):
             self._inspect_dataarray_grid(self.data)
-        else:
-            raise TypeError('Data supplied is neither xarray Dataset or DataArray')
+
 
         # get variables associated to the grid
         for gridtype in self.grids:
@@ -184,9 +183,6 @@ class GridInspector():
             self.variables: Updates the variables dictionary with identified variables and their coordinates.
             self.bounds: Updates the bounds list with identified bounds variables from the dataset.
         """
-
-        if not isinstance(self.data, (xr.Dataset, xr.DataArray)):
-            raise TypeError("Unsupported data type. Must be an xarray Dataset or DataArray.")
 
         if isinstance(self.data, xr.Dataset):
             for var in self.data.data_vars:
