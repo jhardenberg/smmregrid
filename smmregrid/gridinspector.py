@@ -55,10 +55,11 @@ class GridInspector():
     def _inspect_dataarray_grid(self, data_array):
         """
         Helper method to inspect a single DataArray and identify its grid type.
+        If the data_array is a bounds variable, it is not added to the grids list.
         """
         grid_key = tuple(data_array.dims)
         gridtype = GridType(dims=grid_key, extra_dims=self.extra_dims)
-        if gridtype not in self.grids:
+        if gridtype not in self.grids and not self._is_bounds(data_array.name):
             self.grids.append(gridtype)
 
     def _inspect_weights(self):
@@ -118,6 +119,10 @@ class GridInspector():
             self.loggy.debug('  Horizontal dims: %s', gridtype.horizontal_dims)
         if gridtype.vertical_dim:
             self.loggy.debug('  Vertical dim: %s', gridtype.vertical_dim)
+        if gridtype.time_dims:
+            self.loggy.debug('  Time dims: %s', gridtype.time_dims)
+        if gridtype.other_dims:
+            self.loggy.debug('  Other dims: %s', gridtype.other_dims)
         self.loggy.debug('  Variables: %s', list(gridtype.variables.keys()))
         self.loggy.debug('  Bounds: %s', gridtype.bounds)
 
@@ -196,6 +201,12 @@ class GridInspector():
         elif isinstance(self.data, xr.DataArray):
             self._identify_variable(gridtype, self.data)
 
+    def _is_bounds(self, var):
+        """
+        Check if a variable is a bounds variable.
+        """
+        return var.endswith('_bnds') or var.endswith('_bounds') or var == 'vertices' and 'time' not in var
+
     def _identify_spatial_bounds(self, data):
         """
         Identify bounds variables in the dataset by checking variable names.
@@ -209,7 +220,7 @@ class GridInspector():
         bounds_variables = []
 
         for var in data.data_vars:
-            if (var.endswith('_bnds') or var.endswith('_bounds') or var == 'vertices') and 'time' not in var:
+            if self._is_bounds(var):
                 bounds_variables.append(var)
 
         return bounds_variables
