@@ -17,9 +17,11 @@ INDIR = 'tests/data'
     ])
 def test_basic_gridinspector(file, ngrids, firstdims, variables, kind):
     """test for GridInspector"""
-    filename = os.path.join('tests/data', file)
-    xfield = xarray.open_mfdataset(filename)
-    grids = GridInspector(xfield, loglevel='debug').get_grid_info()
+    xfield = os.path.join('tests/data', file)
+    if file == '2t-era5.nc':
+        xfield = xarray.open_dataset(xfield)
+
+    grids = GridInspector(xfield, loglevel='debug').get_gridtype()
     assert len(grids) == ngrids
     assert set(grids[0].dims) == set(firstdims)
     assert set(grids[0].variables.keys()) == set(variables)

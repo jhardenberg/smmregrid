@@ -28,7 +28,6 @@ class GridInspector():
         self.loglevel = loglevel
         self.extra_dims = extra_dims
         self.data = self._open_data(data)
-        self.data = data
         self.cdo_weights = cdo_weights
         self.clean = clean
         self.grids = []  # List to hold all grids info
@@ -40,6 +39,7 @@ class GridInspector():
         Open the data from a file path if it is a string and the file exists
         """
         if isinstance(data, (xr.Dataset, xr.DataArray)):
+            self.loggy.info('Data is already an xarray Dataset or DataArray')
             return data
         if isinstance(data, str):
             if os.path.exists(data):
