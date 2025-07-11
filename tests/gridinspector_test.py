@@ -17,10 +17,36 @@ INDIR = 'tests/data'
     ])
 def test_basic_gridinspector(file, ngrids, firstdims, variables, kind):
     """test for GridInspector"""
-    filename = os.path.join('tests/data', file)
-    xfield = xarray.open_mfdataset(filename)
-    grids = GridInspector(xfield, loglevel='debug').get_grid_info()
+    xfield = os.path.join('tests/data', file)
+    xfield = xarray.open_dataset(xfield)
+    grids = GridInspector(xfield, loglevel='debug').get_gridtype()
     assert len(grids) == ngrids
     assert set(grids[0].dims) == set(firstdims)
     assert set(grids[0].variables.keys()) == set(variables)
     assert grids[0].kind == kind
+
+def test_basic_gridinspector_raise():
+    """test for GridInspector raise"""
+    with pytest.raises(TypeError):
+        GridInspector(24)
+    with pytest.raises(FileNotFoundError):
+        GridInspector('not_a_file.nc')
+
+def test_basic_gridinspector_dataarray():
+    """test for GridInspector with a DataArray"""
+    xfield = os.path.join('tests/data', '2t-era5.nc')
+    xfield = xarray.open_dataset(xfield)['2t']
+    grids = GridInspector(xfield, loglevel='debug').get_gridtype()
+    assert len(grids) == 1
+    assert set(grids[0].dims) == set(['lon', 'lat'])
+    assert set(grids[0].variables.keys()) == set(['2t'])
+    assert grids[0].kind == 'Regular'
+
+def test_get_gridtype_attr():
+    """test for GridInspector get_gridtype_attr"""
+    xfield = os.path.join('tests/data', '2t-era5.nc')
+    gridinspect = GridInspector(xfield, loglevel='debug')
+    grids = gridinspect.get_gridtype()
+    assert set(gridinspect.get_gridtype_attr(grids, 'dims')) == set(['lon', 'lat'])
+    assert gridinspect.get_gridtype_attr(grids, 'variables') == ['2t']
+    assert gridinspect.get_gridtype_attr(grids, 'kind') == ['Regular']
