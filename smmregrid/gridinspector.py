@@ -258,8 +258,7 @@ class GridInspector():
 
         return list(dict.fromkeys(out))
 
-    @staticmethod
-    def detect_grid(data, lat='lat', lon='lon'):
+    def detect_grid(self, data, lat='lat', lon='lon'):
         """
         Detect the grid type based on the structure of the data.
 
@@ -275,8 +274,7 @@ class GridInspector():
         lon = find_coord(data, set(LON_COORDS + [lon]))
         lat = find_coord(data, set(LAT_COORDS + [lat]))
 
-        if (isinstance(data, xr.Dataset) and "healpix" in data.variables) or \
-           (isinstance(data, xr.DataArray) and data.attrs.get('grid_mapping') == 'healpix'):
+        if self.is_healpix(data):
             return "HEALPix"
 
         if not lat or not lon:
@@ -305,11 +303,6 @@ class GridInspector():
                     return "GaussianRegular"
                 
                 return "UndefinedRegular"
-
-            # Healpix: number of pixels is a multiple of 12 and log2(pix / 12) is an integer
-            pix = data[lat].size
-            if pix % 12 == 0 and (pix // 12).bit_length() - 1 == np.log2(pix // 12):
-                return "HEALPix"
             
             # Guess gaussian reduced: increasing number of latitudes from -90 to 0
             lat_values = data[lat].where(data[lat]<0).values
@@ -323,4 +316,46 @@ class GridInspector():
             return "Unstructured"
 
         return "Unknown"
+
+    @staticmethod
+    def is_healpix(data):
+        """
+        Determine if the given xarray Dataset or DataArray uses a HEALPix grid.
+
+        Returns:
+            bool: True if HEALPix grid detected, False otherwise.
+        """
+
+        # Attribute-based checks
+        if isinstance(data, xr.Dataset):
+            if "healpix" in data.variables:
+                return True
+            for var in data.data_vars:
+                if data[var].attrs.get('grid_mapping') == 'healpix':
+                    return True
+        elif isinstance(data, xr.DataArray):
+            if data.attrs.get('grid_mapping') == 'healpix':
+                return True
+
+        # Pixel-count-based check
+        def check_healpix_size(arr):
+            pix = arr.size
+            if pix % 12 == 0:
+                nside = pix // 12
+                # nside must be a power of 2: log2(nside) is integer
+                if nside > 0 and np.log2(nside).is_integer():
+                    return True
+            return False
+
+        if isinstance(data, xr.Dataset):
+            # Try to find a 1D variable to check
+            for var in data.data_vars:
+                arr = data[var]
+                if arr.ndim == 1 and check_healpix_size(arr):
+                    return True
+        elif isinstance(data, xr.DataArray):
+            if data.ndim == 1 and check_healpix_size(data):
+                return True
+
+        return False
     
