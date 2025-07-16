@@ -39,7 +39,7 @@ TEST_FILES = [
     ("mix-cesm.nc", "Regular"),
     ("r360x180.nc", "Regular"),
     ("so3d-nemo.nc", "Curvilinear"),
-    ("tas-healpix2.nc", "Healpix"),
+    ("tas-healpix2.nc", "HEALPix"),
     ("tos-fesom.nc", "Unstructured"),
     ("ua-so_mix_ecearth.nc", "GaussianRegular"),
     ("healpix_0.nc", "Unknown"),
