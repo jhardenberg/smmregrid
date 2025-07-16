@@ -274,7 +274,7 @@ class GridInspector():
         lon = find_coord(data, set(LON_COORDS + [lon]))
         lat = find_coord(data, set(LAT_COORDS + [lat]))
 
-        if self.is_healpix(data):
+        if self.is_healpix_from_attribute(data):
             return "HEALPix"
 
         if not lat or not lon:
@@ -304,6 +304,10 @@ class GridInspector():
                 
                 return "UndefinedRegular"
             
+            pix = data[lat].size
+            if pix % 12 == 0 and (pix // 12).bit_length() - 1 == np.log2(pix // 12):
+                return "HEALPix"
+            
             # Guess gaussian reduced: increasing number of latitudes from -90 to 0
             lat_values = data[lat].where(data[lat]<0).values
             lat_values=lat_values[~np.isnan(lat_values)]
@@ -318,7 +322,7 @@ class GridInspector():
         return "Unknown"
 
     @staticmethod
-    def is_healpix(data):
+    def is_healpix_from_attribute(data):
         """
         Determine if the given xarray Dataset or DataArray uses a HEALPix grid.
 
@@ -335,26 +339,6 @@ class GridInspector():
                     return True
         elif isinstance(data, xr.DataArray):
             if data.attrs.get('grid_mapping') == 'healpix':
-                return True
-
-        # Pixel-count-based check
-        def check_healpix_size(arr):
-            pix = arr.size
-            if pix % 12 == 0:
-                nside = pix // 12
-                # nside must be a power of 2: log2(nside) is integer
-                if nside > 0 and np.log2(nside).is_integer():
-                    return True
-            return False
-
-        if isinstance(data, xr.Dataset):
-            # Try to find a 1D variable to check
-            for var in data.data_vars:
-                arr = data[var]
-                if arr.ndim == 1 and check_healpix_size(arr):
-                    return True
-        elif isinstance(data, xr.DataArray):
-            if data.ndim == 1 and check_healpix_size(data):
                 return True
 
         return False
