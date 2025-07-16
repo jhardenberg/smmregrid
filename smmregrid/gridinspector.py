@@ -275,12 +275,9 @@ class GridInspector():
         lon = find_coord(data, set(LON_COORDS + [lon]))
         lat = find_coord(data, set(LAT_COORDS + [lat]))
 
-        if isinstance(data, xr.Dataset):
-            if "healpix" in data.variables:
-                return "HEALPix"
-        elif isinstance(data, xr.DataArray):
-            if data.attrs.get('grid_mapping').lower() == 'healpix':
-                return "HEALPix"
+        if (isinstance(data, xr.Dataset) and "healpix" in data.variables) or \
+           (isinstance(data, xr.DataArray) and data.attrs.get('grid_mapping') == 'healpix'):
+            return "HEALPix"
 
         if not lat or not lon:
             return "Unknown"
@@ -312,7 +309,7 @@ class GridInspector():
             # Healpix: number of pixels is a multiple of 12 and log2(pix / 12) is an integer
             pix = data[lat].size
             if pix % 12 == 0 and (pix // 12).bit_length() - 1 == np.log2(pix // 12):
-                return "Healpix"
+                return "HEALPix"
             
             # Guess gaussian reduced: increasing number of latitudes from -90 to 0
             lat_values = data[lat].where(data[lat]<0).values
