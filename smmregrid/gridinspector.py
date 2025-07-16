@@ -275,8 +275,12 @@ class GridInspector():
         lon = find_coord(data, set(LON_COORDS + [lon]))
         lat = find_coord(data, set(LAT_COORDS + [lat]))
 
-        if "healpix" in data.variables:
-            return "Healpix"
+        if isinstance(data, xr.Dataset):
+            if "healpix" in data.variables:
+                return "Healpix"
+        elif isinstance(data, xr.DataArray):
+            if "healpix" in data.name:
+                return "Healpix"
 
         if not lat or not lon:
             return "Unknown"
