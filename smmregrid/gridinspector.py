@@ -277,10 +277,10 @@ class GridInspector():
 
         if isinstance(data, xr.Dataset):
             if "healpix" in data.variables:
-                return "Healpix"
+                return "HEALPix"
         elif isinstance(data, xr.DataArray):
-            if "healpix" in data.name:
-                return "Healpix"
+            if data.attrs.get('grid_mapping').lower() == 'healpix':
+                return "HEALPix"
 
         if not lat or not lon:
             return "Unknown"
