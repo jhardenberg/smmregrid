@@ -3,8 +3,8 @@
 import os
 import pytest
 import xarray
-from smmregrid.util import check_gridfile, detect_grid
-
+from smmregrid.util import check_gridfile
+from smmregrid.gridinspector import GridInspector
 
 # Mock function to avoid actual file system checks for testing purposes
 def mock_exists(path):
@@ -55,5 +55,5 @@ def test_detect_grid(file_name, expected_grid):
     """Test for grid format detection"""
     filename = os.path.join('tests/data', file_name)
     xfield = xarray.open_mfdataset(filename)
-    detected_grid = detect_grid(xfield)
-    assert detected_grid == expected_grid, f"File {file_name}: expected {expected_grid}, got {detected_grid}"
+    gridtype = GridInspector(xfield).get_gridtype()[0]
+    assert gridtype.kind == expected_grid, f"File {file_name}: expected {expected_grid}, got {gridtype.kind}"
