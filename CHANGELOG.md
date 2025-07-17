@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+- Improve grid kind and bounds detection via `GridInspector` (#48, #49)
+
 ## [v0.1.2]
 
 - CDO names can be used to generate remapping weights as source (#46)
