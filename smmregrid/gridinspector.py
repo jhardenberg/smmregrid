@@ -292,14 +292,13 @@ class GridInspector():
 
                 lat_diff = np.diff(data[lat].values)
                 lon_diff = np.diff(data[lon].values)
+
+                # Regular: latitude and longitude equidistant
                 if np.allclose(lat_diff, lat_diff[0]) and np.allclose(lon_diff, lon_diff[0]):
                     return "Regular"
 
-                # Gaussian: second derivative of latitude is positive from -90 to 0
-                lat_values = data[lat].where(data[lat]<0).values
-                lat_values=lat_values[~np.isnan(lat_values)]
-                gaussian = np.all(np.diff(lat_values, n=2) > 0)
-                if gaussian:
+                # Gaussian: longitude equidistant, latitude not
+                if not np.allclose(lat_diff, lat_diff[0]) and np.allclose(lon_diff, lon_diff[0]):
                     return "GaussianRegular"
                 
                 return "UndefinedRegular"
