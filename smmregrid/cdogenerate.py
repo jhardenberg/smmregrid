@@ -327,7 +327,11 @@ class CdoGenerate():
         nlda = xarray.DataArray(nl, coords={vertical_dim: range(0, len(nl))}, name="link_length")
 
         new_array = []
-        varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
+        varlist = [
+            "src_address", "dst_address", "remap_matrix",
+            "src_grid_imask", "dst_grid_imask",
+            "dst_grid_area", "dst_grid_frac"
+        ]
         ds0 = ds_list[0].drop_vars(varlist)
 
         for x, d in zip(ds_list, dim_values):
