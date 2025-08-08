@@ -42,25 +42,21 @@ def find_coord(ds, possible_names):
     """Find the first matching coordinate in the dataset."""
     return next((name for name in possible_names if name in ds.coords), None)
 
+def tolist(value):
+    """Convert value to list format."""
+    if isinstance(value, list):
+        return value
+    return [value]
+
 def nan_variation_check(field, time_dim, check_dims):
     """
     Check if NaN values vary along specific dimension(s) in an xarray object
     after removing the time dimension.
     
-    Parameters
-    ----------
-    field : xr.DataArray
-        Input xarray DataArray with dask backend.
-    time_dim : str
-        Name of the time dimension to remove.
-    check_dims : str or list[str]
-        Dimension name(s) to check for NaN variation after time removal.
-    
-    Returns
-    -------
-    dict[str, xr.DataArray]
-        A dict mapping each checked dimension to a DataArray mask where
-        True indicates NaN variation along that dimension.
+    Args: 
+        field: Input xarray DataArray with dask backend.
+        time_dim: Name of the time dimension to remove.
+        check_dims:  list[str]. Dimension name(s) to check for NaN variation after time removal.
     """
     
     #nan_mask = field.isnull().any(dim=time_dims)

@@ -12,7 +12,7 @@ import xarray
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .cdogrid import CdoGrid
-from .util import deprecated_argument
+from .util import deprecated_argument, tolist
 
 
 class CdoGenerate():
@@ -52,8 +52,8 @@ class CdoGenerate():
         cdo_extra = deprecated_argument(extra, cdo_extra, 'extra', 'cdo_extra')
 
         # cdo options and extra, ensure they are lists
-        self.cdo_extra = cdo_extra if isinstance(cdo_extra, list) else ([cdo_extra] if cdo_extra else [])
-        self.cdo_options = cdo_options if isinstance(cdo_options, list) else ([cdo_options] if cdo_options else [])
+        self.cdo_extra = tolist(cdo_extra) if cdo_extra else None
+        self.cdo_options = tolist(cdo_options) if cdo_options else None
 
         # assign the two grids
         self.source_grid = source_grid
@@ -226,7 +226,7 @@ class CdoGenerate():
             for proc in processes:
                 proc.join()
 
-        weights = self.weightslist_to_3d(wlist, vertical_dim)
+        weights = self.weightslist_to_3d(wlist, method, vertical_dim)
         weights_matrix = compute_weights_matrix3d(weights, vertical_dim)
         weights = mask_weights(weights, weights_matrix, vertical_dim)
         masked = check_mask(weights, vertical_dim)
@@ -271,7 +271,7 @@ class CdoGenerate():
         sgrid = self.source_grid_filename
         tgrid = self.target_grid_filename
 
-        cdo_extra_vertical = cdo_extra_vertical if isinstance(cdo_extra_vertical, list) else ([cdo_extra_vertical] if cdo_extra_vertical else [])
+        cdo_extra_vertical = tolist(cdo_extra_vertical) if cdo_extra_vertical else None
 
         # Log method and remapping information
         self.loggy.info("CDO remapping method: %s", method)
@@ -294,9 +294,9 @@ class CdoGenerate():
 
             command = [
                 self.cdo,
-                *self.cdo_options,
+                *(self.cdo_options or []),
                 f"gen{method},{tgrid}",
-                *self.cdo_extra+cdo_extra_vertical,
+                *((self.cdo_extra or []) + (cdo_extra_vertical or [])),
                 sgrid,
                 weight_file.name
             ]
@@ -317,7 +317,7 @@ class CdoGenerate():
     #     if not isinstance(tmpfile, str):
     #         os.remove(tmpfile.name)
 
-    def weightslist_to_3d(self, ds_list, vertical_dim='lev'):
+    def weightslist_to_3d(self, ds_list, method='ycon', vertical_dim='lev'):
         """Combine a list of 2D CDO weights into a 3D one."""
 
         links_dim = "numLinks" if "numLinks" in ds_list[0].dims else "num_links"
@@ -327,11 +327,10 @@ class CdoGenerate():
         nlda = xarray.DataArray(nl, coords={vertical_dim: range(0, len(nl))}, name="link_length")
 
         new_array = []
-        varlist = [
-            "src_address", "dst_address", "remap_matrix",
-            "src_grid_imask", "dst_grid_imask",
-            "dst_grid_area", "dst_grid_frac"
-        ]
+        varlist = ["src_address", "dst_address", "remap_matrix","src_grid_imask", "dst_grid_imask"]
+        # Add dst_grid_area and dst_grid_frac only for conservative methods
+        if method in ['ycon', 'con2', 'con']:
+            varlist += ["dst_grid_area", "dst_grid_frac"]
         ds0 = ds_list[0].drop_vars(varlist)
 
         for x, d in zip(ds_list, dim_values):
@@ -366,8 +365,8 @@ class CdoGenerate():
         """Generate areas in a similar way of what done for weights"""
 
         # safety listing
-        cdo_extra = cdo_extra if isinstance(cdo_extra, list) else ([cdo_extra] if cdo_extra else [])
-        cdo_options = cdo_options if isinstance(cdo_options, list) else ([cdo_options] if cdo_options else [])
+        cdo_extra = tolist(cdo_extra) if cdo_extra else []
+        cdo_options = tolist(cdo_options) if cdo_options else []
 
         # Make some temporary files that we'll feed to CDO
         areas_file = tempfile.NamedTemporaryFile()
@@ -381,9 +380,9 @@ class CdoGenerate():
 
             command = [
                 self.cdo,
-                *cdo_options + ["-f", "nc4"],
+                *(cdo_options or []) + ["-f", "nc4"],
                 "gridarea",
-                *cdo_extra,
+                *(cdo_extra or []),
                 sgrid,
                 areas_file.name
             ]

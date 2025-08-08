@@ -44,7 +44,7 @@ from .cdogenerate import CdoGenerate
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .gridinspector import GridInspector
-from .util import deprecated_argument, nan_variation_check
+from .util import deprecated_argument, nan_variation_check, tolist
 
 DEFAULT_AREA_MIN = 0.5  # default minimum area for conservative remapping
 
@@ -110,8 +110,8 @@ class Regridder(object):
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
         self.transpose = transpose
-        vertical_dim = [vertical_dim] if isinstance(vertical_dim, str) else vertical_dim
-        horizontal_dims = [horizontal_dims] if isinstance(horizontal_dims, str) else horizontal_dims
+        vertical_dim = tolist(vertical_dim) if vertical_dim else None
+        horizontal_dims = tolist(horizontal_dims) if horizontal_dims else None
         if vertical_dim:
             self.loggy.info('Forcing vertical_dim from input: expecting a single-gridtype dataset')
         if horizontal_dims:
