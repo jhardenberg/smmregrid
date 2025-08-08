@@ -1,4 +1,6 @@
-# GridType class to gather all information about grids with shared dimensions
+"""Fundamental GridType class to gather all information about grids"""
+
+import copy
 
 # default spatial dimensions and vertical coordinates
 DEFAULT_DIMS = {
@@ -87,7 +89,10 @@ class GridType:
         if override:
             return extra_dims
 
-        update_dims = DEFAULT_DIMS
+        # Create a deep copy to avoid modifying the global DEFAULT_DIMS
+        update_dims = copy.deepcopy(DEFAULT_DIMS)
+        #update_dims = DEFAULT_DIMS
+
         for dim in extra_dims.keys():
             if extra_dims[dim]:
                 update_dims[dim] = list(set(update_dims[dim] + extra_dims[dim]))

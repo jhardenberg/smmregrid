@@ -617,10 +617,11 @@ class Regridder(object):
             return gridtype
 
         self.loggy.warning('Found NaN variation in dimensions: %s', nan_dims)
-        gridtype = GridInspector(source_grid, extra_dims={'vertical': nan_dims},
+        # update extra dimension for future calls
+        self.extra_dims['vertical'] = nan_dims
+        return GridInspector(source_grid, extra_dims=self.extra_dims,
                                     loglevel=self.loglevel, clean=True).get_gridtype()[0]
 
-        return gridtype
 
 def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo'):
     """
