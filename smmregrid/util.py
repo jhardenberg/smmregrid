@@ -43,7 +43,9 @@ def find_coord(ds, possible_names):
     return next((name for name in possible_names if name in ds.coords), None)
 
 def tolist(value):
-    """Convert value to list format."""
+    """Convert value to list format. Returns [] for None, [value] for single values, unchanged for lists."""
+    if value is None:
+        return []
     if isinstance(value, list):
         return value
     return [value]

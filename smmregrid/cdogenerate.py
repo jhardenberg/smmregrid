@@ -52,8 +52,8 @@ class CdoGenerate():
         cdo_extra = deprecated_argument(extra, cdo_extra, 'extra', 'cdo_extra')
 
         # cdo options and extra, ensure they are lists
-        self.cdo_extra = tolist(cdo_extra) if cdo_extra else None
-        self.cdo_options = tolist(cdo_options) if cdo_options else None
+        self.cdo_extra = tolist(cdo_extra)
+        self.cdo_options = tolist(cdo_options)
 
         # assign the two grids
         self.source_grid = source_grid
@@ -271,7 +271,7 @@ class CdoGenerate():
         sgrid = self.source_grid_filename
         tgrid = self.target_grid_filename
 
-        cdo_extra_vertical = tolist(cdo_extra_vertical) if cdo_extra_vertical else None
+        cdo_extra_vertical = tolist(cdo_extra_vertical)
 
         # Log method and remapping information
         self.loggy.info("CDO remapping method: %s", method)
@@ -294,9 +294,9 @@ class CdoGenerate():
 
             command = [
                 self.cdo,
-                *(self.cdo_options or []),
+                *self.cdo_options,
                 f"gen{method},{tgrid}",
-                *((self.cdo_extra or []) + (cdo_extra_vertical or [])),
+                *self.cdo_extra+cdo_extra_vertical,
                 sgrid,
                 weight_file.name
             ]
@@ -365,8 +365,8 @@ class CdoGenerate():
         """Generate areas in a similar way of what done for weights"""
 
         # safety listing
-        cdo_extra = tolist(cdo_extra) if cdo_extra else []
-        cdo_options = tolist(cdo_options) if cdo_options else []
+        cdo_extra = tolist(cdo_extra)
+        cdo_options = tolist(cdo_options)
 
         # Make some temporary files that we'll feed to CDO
         areas_file = tempfile.NamedTemporaryFile()
@@ -380,9 +380,9 @@ class CdoGenerate():
 
             command = [
                 self.cdo,
-                *(cdo_options or []) + ["-f", "nc4"],
+                *cdo_options + ["-f", "nc4"],
                 "gridarea",
-                *(cdo_extra or []),
+                *cdo_extra,
                 sgrid,
                 areas_file.name
             ]
