@@ -76,3 +76,12 @@ def test_generation_from_cdo(source_grid, target_grid, src_grid_size, dst_grid_s
     weights = generator.weights(method="bil")
     assert weights.dims['src_grid_size'] == src_grid_size
     assert weights.dims['dst_grid_size'] == dst_grid_size
+
+def test_check_nan_auto():
+
+    xfield = xarray.open_dataset(os.path.join(INDIR,'ua-ipsl.nc'))
+    regrid = Regridder(source_grid=xfield, target_grid='r90x45', loglevel='debug', check_nan=True)
+    rr = regrid.regrid(xfield.isel(time=0))
+    count = rr['ua'].isnull().sum(dim=['lon','lat']).compute()
+    assert count[-1] == 0, f"NaN values found in the regridded data: {count}"
+    assert count[1] == 589, f"NaN values found in the regridded data: {count}"

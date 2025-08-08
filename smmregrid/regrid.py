@@ -110,8 +110,8 @@ class Regridder(object):
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
         self.transpose = transpose
-        vertical_dim = tolist(vertical_dim) if vertical_dim else None
-        horizontal_dims = tolist(horizontal_dims) if horizontal_dims else None
+        vertical_dim = tolist(vertical_dim)
+        horizontal_dims = tolist(horizontal_dims)
         if vertical_dim:
             self.loggy.info('Forcing vertical_dim from input: expecting a single-gridtype dataset')
         if horizontal_dims:
