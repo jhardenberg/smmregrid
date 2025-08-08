@@ -41,3 +41,45 @@ def deprecated_argument(old, new, oldname='var1', newname='var2'):
 def find_coord(ds, possible_names):
     """Find the first matching coordinate in the dataset."""
     return next((name for name in possible_names if name in ds.coords), None)
+
+def nan_variation_check(field, time_dim, check_dims):
+    """
+    Check if NaN values vary along specific dimension(s) in an xarray object
+    after removing the time dimension.
+    
+    Parameters
+    ----------
+    field : xr.DataArray
+        Input xarray DataArray with dask backend.
+    time_dim : str
+        Name of the time dimension to remove.
+    check_dims : str or list[str]
+        Dimension name(s) to check for NaN variation after time removal.
+    
+    Returns
+    -------
+    dict[str, xr.DataArray]
+        A dict mapping each checked dimension to a DataArray mask where
+        True indicates NaN variation along that dimension.
+    """
+    
+    #nan_mask = field.isnull().any(dim=time_dims)
+    if time_dim[0] in field.dims:
+        # If time_dim is present, reduce it to a single value (e.g., first time step)
+        field = field.isel({time_dim[0]: 0})
+    nan_mask = field.isnull()
+    dims_with_variation = []
+    for dim in check_dims:
+        # Variation along this dim
+        variation_mask = (
+            nan_mask.astype("int8")
+            .diff(dim=dim)                # difference along this dim
+            .astype(bool)
+            .any(dim=dim)                  # any variation in this dim
+        )
+        count = variation_mask.sum().compute()
+        print(f"Dimension '{dim}' has {count} variations with NaN values.")
+        if count > 0:
+            dims_with_variation.append(dim)
+
+    return dims_with_variation

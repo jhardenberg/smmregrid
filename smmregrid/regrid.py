@@ -44,7 +44,7 @@ from .cdogenerate import CdoGenerate
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .gridinspector import GridInspector
-from .util import deprecated_argument
+from .util import deprecated_argument, nan_variation_check
 
 DEFAULT_AREA_MIN = 0.5  # default minimum area for conservative remapping
 
@@ -54,6 +54,7 @@ class Regridder(object):
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, vert_coord=None, vertical_dim=None,
                  space_dims=None, horizontal_dims=None, cdo_extra=None, cdo_options=None,
+                 check_nan=True,
                  cdo='cdo', loglevel='WARNING'):
         """
         Initialize the Regridder for performing regridding operations.
@@ -81,6 +82,8 @@ class Regridder(object):
             transpose (bool): If True, transpose the output such that 
                               the vertical coordinate is placed just before the 
                               other spatial coordinates (default: True).
+            check_nan (bool): If True, check for NaN variation in the source grid 
+                              to define the vertical dimension.
             cdo (str): Path to the CDO executable (default: 'cdo').
             cdo_extra (str): Extra command to be passed to CDO
             cdo_options(str): Extra options to be passed to CDO
@@ -147,12 +150,18 @@ class Regridder(object):
             else:
                 self.loggy.warning('%s gridtypes found! We are in uncharted territory!', len_grids)
 
-            for index, gridtype  in enumerate(self.grids):
+            for index, gridtype in enumerate(self.grids):
+                if check_nan:
+                    # check for NaN variation in the source grid
+                    self.grids[index] = self._check_nan_variation(source_grid_array, gridtype)
+                    gridtype = self.grids[index]  # update local reference
+         
                 self.loggy.info('Processing grid number %s', index)
                 self.loggy.debug('Processing grids %s', gridtype.dims)
                 self.loggy.debug('Horizontal dimensions are %s', gridtype.horizontal_dims)
                 self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
                 self.loggy.debug('Other dimensions are %s', gridtype.other_dims)
+                self.loggy.debug('Variables are %s', gridtype.variables)
 
                 # always prefer to pass filename (i.e. source_grid) when possible to CdoGenerate()
                 # this will limit errors from xarray and speed up CDO itself
@@ -588,6 +597,21 @@ class Regridder(object):
 
         return target_da
 
+    def _check_nan_variation(self, source_grid, gridtype):
+        """
+        Check for NaN variation in the source grid and update the gridtype if necessary.
+        """
+        # check for NaN variation in the source grid
+        var = next(iter(gridtype.variables))
+        self.loggy.info('Checking for NaN variation in the source grid for variable %s', var)
+        nan_dims = nan_variation_check(source_grid[var], time_dim=gridtype.time_dims,
+                                    check_dims=gridtype.other_dims)
+        if nan_dims:
+            self.loggy.warning('Found NaN variation in dimensions: %s', nan_dims)
+            gridtype = GridInspector(source_grid, extra_dims={'vertical': nan_dims},
+                                    loglevel=self.loglevel, clean=True).get_gridtype()[0]
+    
+        return gridtype
 
 def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo'):
     """
