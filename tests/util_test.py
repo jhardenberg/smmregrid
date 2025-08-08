@@ -49,6 +49,8 @@ TEST_FILES = [
     ("temp3d-fesom.nc", "Unstructured"),
     ("ua-ecearth.nc", "GaussianRegular"),
     ("lsm-ifs.grb", "GaussianReduced"),
+    ("ua-ipsl.nc", "Regular"),
+
 ]
 @pytest.mark.parametrize("file_name, expected_grid", TEST_FILES)
 def test_detect_grid(file_name, expected_grid):
