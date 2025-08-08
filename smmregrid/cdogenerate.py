@@ -19,30 +19,30 @@ class CdoGenerate():
     """CDO-based class to generate weights for smmregrid."""
 
     def __init__(self, source_grid, target_grid=None, extra=None, cdo_extra=None,
-            cdo_options=None, cdo_download_path=None, cdo_icon_grids=None,
-            cdo="cdo", loglevel='warning'):
+                 cdo_options=None, cdo_download_path=None, cdo_icon_grids=None,
+                 cdo="cdo", loglevel='warning'):
         """
-        Initialize GenerateWeights class for regridding using Climate Data Operators (CDO), 
+        Initialize GenerateWeights class for regridding using Climate Data Operators (CDO),
         accommodating both 2D and 3D grid cases.
 
         Args:
             source_grid (str or xarray.Dataset): The source grid from which to generate weights.
                                                  This can be a file path or an xarray dataset.
-            target_grid (str or xarray.Dataset): The target grid to which the source grid 
-                                                 will be regridded. This can also be a file 
+            target_grid (str or xarray.Dataset): The target grid to which the source grid
+                                                 will be regridded. This can also be a file
                                                  path or an xarray dataset.
-            loglevel (str, optional): The logging level for messages. Default is 'warning'. 
-                                      Options include 'debug', 'info', 'warning', 
+            loglevel (str, optional): The logging level for messages. Default is 'warning'.
+                                      Options include 'debug', 'info', 'warning',
                                       'error', and 'critical'.
-            extra (list, optional): Deprecated. Previously used for additional CDO options. 
+            extra (list, optional): Deprecated. Previously used for additional CDO options.
                                    Use `cdo_extra` instead.
-            cdo_extra (list, optional): Additional CDO command-line options. 
+            cdo_extra (list, optional): Additional CDO command-line options.
                                                Defaults to None.
             cdo_options (list, optional): Options for CDO commands. Defaults to None.
             cdo (str, optional): The command to invoke CDO. Default is "cdo".
-            cdo_icon_grids (str, optional): Path to the ICON grid 
+            cdo_icon_grids (str, optional): Path to the ICON grid
                                             if applicable. Defaults to None.
-            cdo_download_path (str, optional): Path to the grid download path 
+            cdo_download_path (str, optional): Path to the grid download path
                                                 if applicable. Defaults to None.
         """
 
@@ -81,7 +81,6 @@ class CdoGenerate():
         if remap_norm not in ["fracarea", "destarea"]:
             raise ValueError('The remap normalization provided is not supported!')
 
-    
     def _prepare_grid(self, grid, target=False):
         """Helper function to prepare grid (file or dataset)."""
 
@@ -96,26 +95,26 @@ class CdoGenerate():
         if CdoGrid(grid).grid_kind and not target:
             self.loggy.info('CDO grid as %s to be used for areas/weights generation', grid)
             return f"-const,1,{grid}"
-      
+
         # if grid is a string, assume it's a file path
         if isinstance(grid, str):
             self.loggy.debug("Grid file path to be used for areas/weights generation: %s", grid)
             return grid
-        
+
         raise TypeError('Grid must be a CDO grid string, a file path, or an xarray Dataset/DataArray.')
 
     def weights(self, method="con", extrapolate=True,
-            remap_norm="fracarea",
-            vert_coord=None, vertical_dim=None, nproc=1):
+                remap_norm="fracarea",
+                vert_coord=None, vertical_dim=None, nproc=1):
         """
-        Generate weights for regridding using Climate Data Operators (CDO), 
+        Generate weights for regridding using Climate Data Operators (CDO),
         accommodating both 2D and 3D grid cases.
 
         Args:
-            method (str, optional): The remapping method to use. 
+            method (str, optional): The remapping method to use.
                                     Default is "con" for conservative remapping.
                                     Other options may include 'bil', 'nearest', etc.
-            extrapolate (bool, optional): Whether to allow extrapolation beyond the grid boundaries. 
+            extrapolate (bool, optional): Whether to allow extrapolation beyond the grid boundaries.
                                           Defaults to True.
             remap_norm (str, optional): The normalization method to apply when remapping.
                                         Default is "fracarea" which normalizes by fractional area.
@@ -126,9 +125,9 @@ class CdoGenerate():
                                         Use `vertical_dim` instead.
 
         Returns:
-            xarray.Dataset: A dataset containing the generated weights 
+            xarray.Dataset: A dataset containing the generated weights
                             and a mask indicating which grid cells
-                            were successfully masked. 
+                            were successfully masked.
                             The mask is stored in a variable named "dst_grid_masked".
 
         Raises:
@@ -163,7 +162,7 @@ class CdoGenerate():
         # vertical dimension
         vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
 
-        #prepare grid
+        # prepare grid
         self.source_grid_filename = self._prepare_grid(self.source_grid)
         self.target_grid_filename = self._prepare_grid(self.target_grid, target=True)
 
@@ -171,7 +170,7 @@ class CdoGenerate():
         if not vertical_dim:
             return self._weights_2d(method, extrapolate, remap_norm)
         return self._weights_3d(method, extrapolate, remap_norm,
-                            nproc, vertical_dim)
+                                nproc, vertical_dim)
 
     def _weights_2d(self, method, extrapolate, remap_norm):
         """Generate 2D weights using CDO."""
@@ -185,7 +184,7 @@ class CdoGenerate():
         return xarray.merge([weights, masked_xa])
 
     def _weights_3d(self, method, extrapolate, remap_norm,
-                nproc, vertical_dim):
+                    nproc, vertical_dim):
         """Generate 3D weights using multiprocessing."""
 
         if isinstance(self.source_grid, str):
@@ -196,7 +195,7 @@ class CdoGenerate():
         if vertical_dim not in sgrid.dims:
             raise KeyError(f'Cannot find vertical dim {vertical_dim} in {list(sgrid.dims)}')
 
-        #nvert = sgrid[vertical_dim].values.size
+        # nvert = sgrid[vertical_dim].values.size
         nvert = sgrid.sizes[vertical_dim]
         self.loggy.info('Vertical dimension has length: %s', nvert)
 
@@ -296,7 +295,7 @@ class CdoGenerate():
                 self.cdo,
                 *self.cdo_options,
                 f"gen{method},{tgrid}",
-                *self.cdo_extra+cdo_extra_vertical,
+                *self.cdo_extra + cdo_extra_vertical,
                 sgrid,
                 weight_file.name
             ]
@@ -305,7 +304,7 @@ class CdoGenerate():
 
             weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
             return weights
-    
+
         except subprocess.CalledProcessError as err:
             print(err.output.decode(), file=sys.stderr)
             raise
@@ -327,7 +326,7 @@ class CdoGenerate():
         nlda = xarray.DataArray(nl, coords={vertical_dim: range(0, len(nl))}, name="link_length")
 
         new_array = []
-        varlist = ["src_address", "dst_address", "remap_matrix","src_grid_imask", "dst_grid_imask"]
+        varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
         # Add dst_grid_area and dst_grid_frac only for conservative methods
         if method in ['ycon', 'con2', 'con']:
             varlist += ["dst_grid_area", "dst_grid_frac"]
@@ -342,25 +341,24 @@ class CdoGenerate():
 
         return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim)],
                             combine_attrs='no_conflicts')
-    
+
     def areas(self, target=False):
         """Generate source areas or target areas"""
 
         if not target:
             self.loggy.info('Generating areas for source grid!')
-            #if not self.source_grid:
+            # if not self.source_grid:
             #    raise TypeError('Source grid is not specified, cannot provide any area')
             return self._areas(self.source_grid, cdo_extra=self.cdo_extra,
-                                cdo_options=self.cdo_options)
+                               cdo_options=self.cdo_options)
 
         if self.target_grid:
-            
+
             self.loggy.info('Generating areas for target grid!')
             return self._areas(self.target_grid)
 
         raise TypeError('Target grid is not specified, cannot provide any area')
 
-            
     def _areas(self, filename, cdo_extra=None, cdo_options=None):
         """Generate areas in a similar way of what done for weights"""
 
@@ -394,7 +392,7 @@ class CdoGenerate():
             areas.cell_area.attrs['standard_name'] = 'area'
             areas.cell_area.attrs['long_name'] = 'area of grid cell'
             return areas
-    
+
         except subprocess.CalledProcessError as err:
             print(err.output.decode(), file=sys.stderr)
             raise
@@ -411,11 +409,10 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
     Wrapper function for the new cdo class to provide the old access
     """
     warnings.warn("cdo_generate_weights() is now deprecated, please use CdoGenerate().weights()",
-                    DeprecationWarning)
+                  DeprecationWarning)
     generator = CdoGenerate(source_grid=source_grid, target_grid=target_grid, loglevel=loglevel,
-                            extra=extra, cdo_extra=cdo_extra, cdo_options=cdo_options, cdo=cdo, 
+                            extra=extra, cdo_extra=cdo_extra, cdo_options=cdo_options, cdo=cdo,
                             cdo_icon_grids=icongridpath, cdo_download_path=gridpath)
     return generator.weights(method=method, extrapolate=extrapolate,
-                         remap_norm=remap_norm,
-                         vertical_dim=vertical_dim, vert_coord=vert_coord, nproc=nproc)
-
+                             remap_norm=remap_norm,
+                             vertical_dim=vertical_dim, vert_coord=vert_coord, nproc=nproc)

@@ -48,6 +48,7 @@ from .util import deprecated_argument, nan_variation_check, tolist
 
 DEFAULT_AREA_MIN = 0.5  # default minimum area for conservative remapping
 
+
 class Regridder(object):
     """Main smmregrid regridding class"""
 
@@ -72,17 +73,17 @@ class Regridder(object):
             source_grid (xarray.DataArray or str): Source grid dataset or file path.
             target_grid (xarray.DataArray): Target grid dataset for regridding.
             weights (xarray.Dataset): Pre-computed interpolation weights.
-            vertical_dim (str): Name of the vertical coordinate for 
+            vertical_dim (str): Name of the vertical coordinate for
                                 3D weights generation (default: None).
-            horizontal_dims (list): List of spatial dimensions to 
+            horizontal_dims (list): List of spatial dimensions to
                                     interpolate (default: None).
             method (str): Interpolation method to use (default: 'con').
             remap_area_min (float): Minimum area for remapping in conservative remapping.
                                     Larger values avoid mask erosion.
-            transpose (bool): If True, transpose the output such that 
-                              the vertical coordinate is placed just before the 
+            transpose (bool): If True, transpose the output such that
+                              the vertical coordinate is placed just before the
                               other spatial coordinates (default: True).
-            check_nan (bool): If True, check for NaN variation in the source grid 
+            check_nan (bool): If True, check for NaN variation in the source grid
                               to define the vertical dimension.
             cdo (str): Path to the CDO executable (default: 'cdo').
             cdo_extra (str): Extra command to be passed to CDO
@@ -105,7 +106,7 @@ class Regridder(object):
 
         vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
         horizontal_dims = deprecated_argument(space_dims, horizontal_dims, 'space_dims', 'horizontal_dims')
-       
+
         # set up logger
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
@@ -123,7 +124,7 @@ class Regridder(object):
         self.remap_area_min = float(remap_area_min)
         if self.remap_area_min < 0.0 or self.remap_area_min > 1.0:
             raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
-        
+
         # Is there already a weights file?
         if weights is not None:
             self.loggy.info('Init from weights selected!')
@@ -155,7 +156,7 @@ class Regridder(object):
                     # check for NaN variation in the source grid
                     self.grids[index] = self._check_nan_variation(source_grid_array, gridtype)
                     gridtype = self.grids[index]  # update local reference
-         
+
                 self.loggy.info('Processing grid number %s', index)
                 self.loggy.debug('Processing grids %s', gridtype.dims)
                 self.loggy.debug('Horizontal dimensions are %s', gridtype.horizontal_dims)
@@ -176,14 +177,14 @@ class Regridder(object):
                         source_grid_array_to_cdo = source_grid_array[stored_vars]
                     else:
                         source_grid_array_to_cdo = source_grid_array
-                    
+
                     if gridtype.time_dims:
                         self.loggy.debug('Selecting only first time step for dimension %s', gridtype.time_dims[0])
                         source_grid_array_to_cdo = source_grid_array_to_cdo.isel({gridtype.time_dims[0]: 0})
 
                 generator = CdoGenerate(source_grid_array_to_cdo, target_grid,
-                                               cdo=cdo, cdo_options=cdo_options,
-                                               cdo_extra=cdo_extra, loglevel=loglevel)
+                                        cdo=cdo, cdo_options=cdo_options,
+                                        cdo_extra=cdo_extra, loglevel=loglevel)
                 gridtype.weights = generator.weights(method=method,
                                                      vertical_dim=gridtype.vertical_dim)
 
@@ -253,10 +254,10 @@ class Regridder(object):
 
             # extra call to GridInspector for the raise with multiple grids
             grid_inspect = GridInspector(source_data,
-                                     extra_dims=self.extra_dims,
-                                     loglevel=self.loglevel)
+                                         extra_dims=self.extra_dims,
+                                         loglevel=self.loglevel)
             datagrids = grid_inspect.get_gridtype()
-            if len(datagrids)>1 and self.init_mode == 'weights':
+            if len(datagrids) > 1 and self.init_mode == 'weights':
                 raise ValueError(f'Cannot process data with {len(datagrids)} GridType initializing from weights')
 
             # map on multiple dataarray
@@ -287,7 +288,7 @@ class Regridder(object):
         Raises:
             ValueError: If the input data does not match expected dimensions.
         """
-        
+
         self.loggy.debug('Getting GridType from source_data')
         grid_inspect = GridInspector(source_data,
                                      extra_dims=self.extra_dims,
@@ -469,7 +470,7 @@ class Regridder(object):
         # remap_matrix = w.remap_matrix[:, 0]
         # w_shape = (w.sizes["src_grid_size"], w.sizes["dst_grid_size"])
         # src_grid_rank = w.src_grid_rank
-       
+
         # info on grids
         src_cdo_grid = weights.attrs['source_grid']
         dst_cdo_grid = weights.attrs['dest_grid']
@@ -597,7 +598,6 @@ class Regridder(object):
         # Clean CDI gridtype (which can lead to issues with CDO interpretation)
         target_da.attrs.pop('CDI_grid_type', None)
 
-
         return target_da
 
     def _check_nan_variation(self, source_grid, gridtype):
@@ -612,7 +612,7 @@ class Regridder(object):
         var = next(iter(gridtype.variables))
         self.loggy.info('Checking for NaN variation in the source grid for variable %s', var)
         nan_dims = nan_variation_check(source_grid[var], time_dim=gridtype.time_dims,
-                                    check_dims=gridtype.other_dims)
+                                       check_dims=gridtype.other_dims)
         if not nan_dims:
             return gridtype
 
@@ -620,7 +620,7 @@ class Regridder(object):
         # update extra dimension for future calls
         self.extra_dims['vertical'] = nan_dims
         return GridInspector(source_grid, extra_dims=self.extra_dims,
-                                    loglevel=self.loglevel, clean=True).get_gridtype()[0]
+                             loglevel=self.loglevel, clean=True).get_gridtype()[0]
 
 
 def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo'):

@@ -6,6 +6,11 @@ with cdo or by creating the weights starting from the source and the target grid
 
 For further details on the different usages, please consult the `demo notebook <https://github.com/jhardenberg/smmregrid/blob/main/demo.ipynb>`_
 
+For comprehensive documentation of the main classes and their options, see:
+
+* :doc:`regridder` - Complete guide to the Regridder class
+* :doc:`cdogenerate` - Complete guide to the CdoGenerate class
+
 Starting from weights
 ---------------------
 

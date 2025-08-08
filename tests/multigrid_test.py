@@ -9,6 +9,7 @@ INDIR = 'tests/data'
 ifile = os.path.join(INDIR, 'ua-so_mix_ecearth.nc')
 tfile = os.path.join(INDIR, 'r360x180.nc')
 
+
 def test_multi_grid_inspection():
     """test and assert with CDO multigrids"""
 

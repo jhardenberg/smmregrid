@@ -1,6 +1,6 @@
 """"
 Class to define CDO objects and their grid types.
-This module provides a class to represent CDO grid strings and 
+This module provides a class to represent CDO grid strings and
 validate them against known CDO grid patterns.
 """
 
@@ -9,16 +9,16 @@ import re
 # Define CDO regex patterns for each grid type (updated at CDO 2.4.4)
 # Define regex patterns for each grid type
 CDO_GRID_PATTERNS = {
-    "global_regular": re.compile(r"^global_\d+(\.\d+)?$"),                    
-    "regional_regular": re.compile(r"^dcw:[A-Z]{2,4}(?:_\d+(\.\d+)?)?$"),     
-    "zonal_latitudes": re.compile(r"^zonal_\d+(\.\d+)?$"),                    
-    "global_regular_NxM": re.compile(r"^r\d+x\d+$"),                          
+    "global_regular": re.compile(r"^global_\d+(\.\d+)?$"),
+    "regional_regular": re.compile(r"^dcw:[A-Z]{2,4}(?:_\d+(\.\d+)?)?$"),
+    "zonal_latitudes": re.compile(r"^zonal_\d+(\.\d+)?$"),
+    "global_regular_NxM": re.compile(r"^r\d+x\d+$"),
     "one_grid_point": re.compile(r"^lon=(-?\d+(\.\d+)?)/lat=(-?\d+(\.\d+)?)$"),
-    "gaussian_grid_F": re.compile(r"^F\d+$"),      
-    "gaussian_grid_n": re.compile(r"^n\d+$"),                            
-    "icosahedral_gme": re.compile(r"^gme\d+$"),                           
-    "healpix_grid": re.compile(r"^hp\d+(?:_(nested|ring))?$"),             
-    "healpix_zoom": re.compile(r"^hpz\d+$")                       
+    "gaussian_grid_F": re.compile(r"^F\d+$"),
+    "gaussian_grid_n": re.compile(r"^n\d+$"),
+    "icosahedral_gme": re.compile(r"^gme\d+$"),
+    "healpix_grid": re.compile(r"^hp\d+(?:_(nested|ring))?$"),
+    "healpix_zoom": re.compile(r"^hpz\d+$")
 }
 
 
@@ -47,4 +47,3 @@ class CdoGrid:
 
     def __repr__(self):
         return f"CDOGrid(grid_str='{self.grid_str}', grid_kind='{self.grid_kind}')"
-

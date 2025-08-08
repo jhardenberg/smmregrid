@@ -3,6 +3,7 @@
 import dask.array
 import sparse
 
+
 def compute_weights_matrix3d(weights, vertical_dim='lev'):
     """
     Convert the weights from CDO to a list of numpy arrays
@@ -23,6 +24,7 @@ def compute_weights_matrix3d(weights, vertical_dim='lev'):
         sparse_weights.append(compute_weights_matrix(w))
 
     return sparse_weights
+
 
 def compute_weights_matrix(weights):
     """
@@ -45,12 +47,14 @@ def compute_weights_matrix(weights):
 
     return sparse_weights
 
+
 def mask_tensordot(src_mask, weights_matrix):
     """Apply tensor dot product to source mask to return destination mask"""
 
     target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
     target_mask = dask.array.where(target_mask < 0.5, 0, 1)
     return target_mask
+
 
 def mask_weights(weights, weights_matrix, vertical_dim=None):
     """This functions precompute the mask for the target interpolation

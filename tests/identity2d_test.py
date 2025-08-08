@@ -18,6 +18,8 @@ def test_healpix(method):
     assert fff is True
 
 # test for gaussian reduced grid (only nn)
+
+
 @pytest.mark.parametrize("method", ['nn'])
 def test_gaussian_reduced(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'lsm-ifs.grb'), tfile,
@@ -25,12 +27,15 @@ def test_gaussian_reduced(method):
     assert fff is True
 
 # test for gaussian grids as EC-Earth cmor
+
+
 @pytest.mark.parametrize("method", ['con', 'nn'])
 def test_gaussian_regular(method):
     xfield = xr.open_dataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     fff = check_cdo_regrid(xfield, tfile,
                            remap_method=method)
     assert fff is True
+
 
 @pytest.mark.parametrize("remap_area_min", ['0.0', '0.5', '0.75'])
 def test_gaussian_area_min(remap_area_min):
@@ -40,6 +45,8 @@ def test_gaussian_area_min(remap_area_min):
     assert fff is True
 
 # test for gaussian grids as EC-Earth cmor
+
+
 @pytest.mark.parametrize("method", ['bil', 'con'])
 def test_gaussian_regular_regional(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'tas-ecearth.nc'), rfile,
@@ -47,13 +54,17 @@ def test_gaussian_regular_regional(method):
     assert fff is True
 
 # test for lonlt grids, init by weights
-@pytest.mark.parametrize("method", [ 'con', 'bil'])
+
+
+@pytest.mark.parametrize("method", ['con', 'bil'])
 def test_lonlat(method):
     fff = check_cdo_regrid(os.path.join(INDIR, '2t-era5.nc'), tfile,
                            remap_method=method, init_method='weights')
     assert fff is True
 
 # test for unstructured grids as FESOM CMOR (no bilinear)
+
+
 @pytest.mark.parametrize("method", ['con', 'nn'])
 def test_unstructured(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'tos-fesom.nc'), tfile,
@@ -61,6 +72,8 @@ def test_unstructured(method):
     assert fff is True
 
 # test for curvilinear grid
+
+
 @pytest.mark.parametrize("method", ['con', 'nn', 'bil'])
 def test_curvilinear(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'onlytos-ipsl.nc'), tfile,

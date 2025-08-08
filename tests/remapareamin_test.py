@@ -4,7 +4,7 @@ import os
 import pytest
 import numpy as np
 import xarray as xr
-from smmregrid.checker import  Regridder
+from smmregrid.checker import Regridder
 
 INDIR = 'tests/data'
 ifile = os.path.join(INDIR, 'onlytos-ipsl.nc')
@@ -12,6 +12,7 @@ tfile = os.path.join(INDIR, 'r360x180.nc')
 
 # numerical noise in the CDO/smmregrid output
 RANGE = 10
+
 
 @pytest.mark.parametrize("fraction,nan", [
     ("0.0", 11607),
@@ -26,4 +27,3 @@ def test_remap_area_min(fraction, nan):
     regrid = regridder.regrid(data['tos'].isel(time=0))
     nanfound = (~np.isnan(regrid)).sum().values
     assert pytest.approx(nanfound, abs=RANGE) == nan
-

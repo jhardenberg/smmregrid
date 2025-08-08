@@ -31,7 +31,7 @@ class GridType:
         Attributes:
             horizontal_dims (list): The identified horizontal dimensions from the input.
             vertical_dim (str or None): The identified vertical dimension, if applicable.
-            dims (list): The dimensions defined for the grid. A combination of horizontal and vertical. 
+            dims (list): The dimensions defined for the grid. A combination of horizontal and vertical.
             time_dims (list): The identified time dimensions from the input.
             other_dims (list): The dimensions which are there but are not identified automatically.
             variables (dict): A dictionary holding identified variables and their coordinates.
@@ -44,7 +44,7 @@ class GridType:
         """
 
         # safety checks
-        #if not isinstance(dims, list):
+        # if not isinstance(dims, list):
         #    raise TypeError("dims must be a list of dimension names.")
         if extra_dims is not None and not isinstance(extra_dims, dict):
             raise TypeError("extra_dims must be a dictionary or None.")
@@ -57,8 +57,8 @@ class GridType:
         self.other_dims = self._identify_other_dims(dims)
 
         # used by GridInspector
-        self.variables = {} # dictionary of variables and their coordinates
-        self.bounds = [] # list of bounds variables
+        self.variables = {}  # dictionary of variables and their coordinates
+        self.bounds = []  # list of bounds variables
         self.kind = None  # which kind of grid, regular, guassian, curvilinear, etc.
 
         # used by Regrid class
@@ -85,22 +85,22 @@ class GridType:
 
         if extra_dims is None:
             return DEFAULT_DIMS
-        
+
         if override:
             return extra_dims
 
         # Create a deep copy to avoid modifying the global DEFAULT_DIMS
         update_dims = copy.deepcopy(DEFAULT_DIMS)
-        #update_dims = DEFAULT_DIMS
+        # update_dims = DEFAULT_DIMS
 
         for dim in extra_dims.keys():
             if extra_dims[dim]:
                 update_dims[dim] = list(set(update_dims[dim] + extra_dims[dim]))
         return update_dims
-    
+
     def __repr__(self):
         """
-        Return a string representation of the GridType instance. 
+        Return a string representation of the GridType instance.
         Only includes attributes with values.
         """
 
@@ -149,11 +149,11 @@ class GridType:
         # Check if the axis is valid
         if axis not in ['horizontal', 'vertical', 'time']:
             raise ValueError(f"Invalid axis '{axis}'. Must be one of 'horizontal', 'vertical', or 'time'.")
-        
+
         # Check if the axis is in the default dimensions
         if axis not in default_dims:
             return None
-        
+
         # Identify dimensions based on the provided axis
         identified_dims = list(set(dims).intersection(default_dims[axis]))
         if axis == 'vertical':
@@ -177,6 +177,3 @@ class GridType:
 
         # Return the unused dimensions by subtracting used dimensions from all dimensions
         return list(set(dims) - (horizontal_dims | vertical_dim | time_dims))
-    
-
-
