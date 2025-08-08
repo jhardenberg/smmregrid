@@ -78,7 +78,7 @@ def nan_variation_check(field, time_dim, check_dims):
             .any(dim=dim)                  # any variation in this dim
         )
         count = variation_mask.sum().compute()
-        print(f"Dimension '{dim}' has {count} variations with NaN values.")
+        #print(f"Dimension '{dim}' has {count} variations with NaN values.")
         if count > 0:
             dims_with_variation.append(dim)
 

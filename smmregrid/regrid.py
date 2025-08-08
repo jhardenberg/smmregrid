@@ -54,7 +54,7 @@ class Regridder(object):
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, vert_coord=None, vertical_dim=None,
                  space_dims=None, horizontal_dims=None, cdo_extra=None, cdo_options=None,
-                 check_nan=True,
+                 check_nan=False,
                  cdo='cdo', loglevel='WARNING'):
         """
         Initialize the Regridder for performing regridding operations.
@@ -375,6 +375,7 @@ class Regridder(object):
             self.loggy.debug('Processing vertical level %s - level_index %s', lev, levidx)
             xa = source_data.isel(**{vertical_dim: lev})
             wa = weights.isel(**{vertical_dim: levidx})
+            self.loggy.debug('Weight number of links is %s', wa.link_length.values)
             nl = wa.link_length.values
             wa = wa.isel(**{links_dim: slice(0, nl)})
             wm = weights_matrix[levidx]
@@ -525,8 +526,9 @@ class Regridder(object):
             target_mask = dask.array.broadcast_to(
                 dst_grid_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
             )
-            self.loggy.debug('Reshaped mask with %s', target_mask.shape)
+            self.loggy.debug('Applying mask with shape %s', target_mask.shape)
             target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
+            self.loggy.debug('Reshaped with %s masked points', dask.array.isnan(target_dask).sum().compute())
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
@@ -536,6 +538,7 @@ class Regridder(object):
 
         # after the tensordot, bring the NaN back in
         # Use greater than 1e19 to avoid numerical noise from interpolation.
+        # TODO: verify if after mask we still need this
         target_dask = dask.array.where(target_dask > 1e19, numpy.nan, target_dask)
 
         if len(dst_grid_rank) == 2:
@@ -602,15 +605,21 @@ class Regridder(object):
         Check for NaN variation in the source grid and update the gridtype if necessary.
         """
         # check for NaN variation in the source grid
+        if gridtype.vertical_dim:
+            self.loggy.info('Gridtype already has a vertical dimension %s', gridtype.vertical_dim)
+            return gridtype
+
         var = next(iter(gridtype.variables))
         self.loggy.info('Checking for NaN variation in the source grid for variable %s', var)
         nan_dims = nan_variation_check(source_grid[var], time_dim=gridtype.time_dims,
                                     check_dims=gridtype.other_dims)
-        if nan_dims:
-            self.loggy.warning('Found NaN variation in dimensions: %s', nan_dims)
-            gridtype = GridInspector(source_grid, extra_dims={'vertical': nan_dims},
+        if not nan_dims:
+            return gridtype
+
+        self.loggy.warning('Found NaN variation in dimensions: %s', nan_dims)
+        gridtype = GridInspector(source_grid, extra_dims={'vertical': nan_dims},
                                     loglevel=self.loglevel, clean=True).get_gridtype()[0]
-    
+
         return gridtype
 
 def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo'):
