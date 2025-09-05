@@ -44,7 +44,7 @@ from .cdogenerate import CdoGenerate
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .gridinspector import GridInspector
-from .util import deprecated_argument, nan_variation_check, tolist
+from .util import deprecated_argument, detect_nan_variation_dims, tolist
 
 DEFAULT_AREA_MIN = 0.5  # default minimum area for conservative remapping
 
@@ -154,8 +154,8 @@ class Regridder(object):
             for index, gridtype in enumerate(self.grids):
                 if check_nan:
                     # check for NaN variation in the source grid
-                    self.grids[index] = self._check_nan_variation(source_grid_array, gridtype)
-                    gridtype = self.grids[index]  # update local reference
+                    gridtype = self._check_nan_variation(source_grid_array, gridtype)
+                    self.grids[index] = gridtype  # update reference
 
                 self.loggy.info('Processing grid number %s', index)
                 self.loggy.debug('Processing grids %s', gridtype.dims)
@@ -611,8 +611,11 @@ class Regridder(object):
 
         var = next(iter(gridtype.variables))
         self.loggy.info('Checking for NaN variation in the source grid for variable %s', var)
-        nan_dims = nan_variation_check(source_grid[var], time_dim=gridtype.time_dims,
-                                       check_dims=gridtype.other_dims)
+        nan_dims = detect_nan_variation_dims(
+            source_grid[var], time_dim=gridtype.time_dims,
+            check_dims=gridtype.other_dims
+        )
+
         if not nan_dims:
             return gridtype
 

@@ -80,8 +80,8 @@ def test_generation_from_cdo(source_grid, target_grid, src_grid_size, dst_grid_s
                             target_grid=target_grid,
                             loglevel='debug')
     weights = generator.weights(method="bil")
-    assert weights.dims['src_grid_size'] == src_grid_size
-    assert weights.dims['dst_grid_size'] == dst_grid_size
+    assert weights.sizes['src_grid_size'] == src_grid_size
+    assert weights.sizes['dst_grid_size'] == dst_grid_size
 
 
 def test_check_nan_auto():

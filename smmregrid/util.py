@@ -53,7 +53,7 @@ def tolist(value):
     return [value]
 
 
-def nan_variation_check(field, time_dim, check_dims):
+def detect_nan_variation_dims(field, time_dim, check_dims):
     """
     Check if NaN values vary along specific dimension(s) in an xarray object
     after removing the time dimension.
@@ -62,22 +62,21 @@ def nan_variation_check(field, time_dim, check_dims):
         field: Input xarray DataArray with dask backend.
         time_dim: Name of the time dimension to remove.
         check_dims:  list[str]. Dimension name(s) to check for NaN variation after time removal.
+    
+    Returns:
+        list[str]: List of dimension names from check_dims that have NaN variations.
     """
 
-    # nan_mask = field.isnull().any(dim=time_dims)
     if time_dim[0] in field.dims:
         # If time_dim is present, reduce it to a single value (e.g., first time step)
-        field = field.isel({time_dim[0]: 0})
+        field = field.isel({time_dim[0]: 0}, drop=True)
+    
     nan_mask = field.isnull()
     dims_with_variation = []
     for dim in check_dims:
         # Variation along this dim
-        variation_mask = (
-            nan_mask.astype("int8")
-            .diff(dim=dim)                # difference along this dim
-            .astype(bool)
-            .any(dim=dim)                  # any variation in this dim
-        )
+        variation_mask = nan_mask.astype("int8").diff(dim=dim).astype(bool).any(dim=dim)                 
+        
         count = variation_mask.sum().compute()
         # print(f"Dimension '{dim}' has {count} variations with NaN values.")
         if count > 0:
