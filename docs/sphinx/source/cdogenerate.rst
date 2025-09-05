@@ -42,19 +42,13 @@ Constructor Parameters
 
 * **cdo** (*str*, default: 'cdo'): Path to the CDO executable. Useful if CDO is installed in a non-standard location.
 
-* **loglevel** (*str*, default: 'warning'): Logging level for output messages. Options:
-  
-  - 'debug': Detailed debugging information
-  - 'info': General information messages
-  - 'warning': Warning messages only (default)
-  - 'error': Error messages only
-  - 'critical': Critical errors only
+* **loglevel** (*str*, default: 'warning'): Logging level for output messages. 
 
-* **cdo_extra** (*list*, optional): Additional CDO command-line options to pass to all CDO commands. 
-  For example: ``['-P', '4']`` for 4-thread parallelization.
+* **cdo_extra** (*list*, optional): Additional CDO commands to pass to be used before the usual weights generation commands. 
+  For example: ``-selname,va`` to select the variable 'va'.
 
 * **cdo_options** (*list*, optional): CDO options to be applied to specific commands.
-  For example: ``['-f', 'nc4']`` to force NetCDF4 output format.
+  For example: ``['--force']`` to get to force HEALPix computation.
 
 * **cdo_download_path** (*str*, optional): Path where CDO should download grid files if needed.
   Sets the ``CDO_DOWNLOAD_PATH`` environment variable.
@@ -95,7 +89,7 @@ Generate interpolation weights for regridding.
   - 'destarea': Normalize by destination area
 
 * **vertical_dim** (*str*, optional): Name of the vertical dimension for 3D weight generation.
-  If specified, generates 3D weights for each vertical level.
+  If specified, generates 3D weights for each vertical level. To be used for vertical changing masks.
 
 * **nproc** (*int*, default: 1): Number of processes for parallel 3D weight generation.
 
@@ -173,30 +167,6 @@ The 3D weight generation:
 * Returns weights with vertical dimension preserved
 * Includes level-specific masking information
 
-Advanced CDO Options
---------------------
-
-**Environment Variables:**
-
-.. code-block:: python
-
-   generator = CdoGenerate(
-       'source.nc', 
-       'target.nc',
-       cdo_download_path='/path/to/grids',
-       cdo_icon_grids='/path/to/icon/grids'
-   )
-
-**Custom CDO Options:**
-
-.. code-block:: python
-
-   generator = CdoGenerate(
-       'source.nc',
-       'target.nc', 
-       cdo_options=['-f', 'nc4', '-z', 'zip_6'],  # NetCDF4 with compression
-       cdo_extra=['-P', '8']  # Use 8 threads
-   )
 
 Examples
 --------
@@ -237,10 +207,10 @@ Examples
 .. code-block:: python
 
    generator = CdoGenerate(
-       'input.nc',
+       'healpix.nc',
        'n256',  # Gaussian grid
        cdo='/opt/cdo/bin/cdo',
        cdo_options=['-f', 'nc4'],
-       cdo_extra=['-P', '12'],
+       cdo_extra=['--force'],
        loglevel='debug'
    )

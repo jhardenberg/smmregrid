@@ -74,9 +74,6 @@ Constructor Parameters
 
 * **remap_area_min** (*float*, default: 0.5): Minimum fractional area for conservative remapping.
   Grid cells with area fraction below this threshold are masked as NaN. Range: 0.0-1.0.
-  
-  - Larger values (0.7-0.9): More aggressive masking, avoids partial coverage artifacts
-  - Smaller values (0.1-0.3): Less masking, retains more data but may include edge effects
 
 * **transpose** (*bool*, default: True): If True, transposes output so vertical coordinate 
   appears just before spatial coordinates. Affects dimension ordering in output.
@@ -109,7 +106,6 @@ Constructor Parameters
 **Logging:**
 
 * **loglevel** (*str*, default: 'WARNING'): Logging verbosity level.
-  Options: 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'.
 
 Methods
 -------
@@ -220,35 +216,6 @@ For conservative methods ('con', 'con2', 'ycon'), additional masking options are
        remap_area_min=0.8
    )
    
-   # Lenient masking - cells with >10% coverage  
-   regridder = Regridder(
-       'source.nc', 'target.nc',
-       method='con',
-       remap_area_min=0.1
-   )
-
-Output Formatting
------------------
-
-**Dimension Transposition:**
-
-.. code-block:: python
-
-   # Default: vertical dim moved before spatial dims
-   # Output order: (time, lev, lat, lon)
-   regridder = Regridder('data.nc', 'target.nc', transpose=True)
-   
-   # Preserve original dimension order
-   regridder = Regridder('data.nc', 'target.nc', transpose=False)
-
-**Coordinate Handling:**
-
-The regridder automatically:
-
-* Updates latitude/longitude coordinates with proper metadata
-* Preserves non-spatial coordinates (time, ensemble members, etc.)
-* Handles coordinate bounds for conservative methods
-* Converts coordinate units and adds standard attributes
 
 Performance Optimization
 -------------------------
@@ -261,16 +228,6 @@ Performance Optimization
    import dask
    with dask.config.set(scheduler='threads', num_workers=4):
        regridded = regridder.regrid(large_dataset)
-
-**CDO Parallelization:**
-
-.. code-block:: python
-
-   # Use CDO's built-in parallelization
-   regridder = Regridder(
-       'source.nc', 'target.nc',
-       cdo_options=['-P', '8']  # 8 parallel threads
-   )
 
 **Pre-computed Weights:**
 
@@ -312,7 +269,6 @@ Examples
        'ecmwf_data.nc', 'regular_grid.nc',
        method='bil',
        vertical_dim='plev',
-       transpose=True
    )
    regridded = regridder.regrid(atmospheric_data)
 
@@ -325,7 +281,6 @@ Examples
        'ocean_model.nc', 'obs_locations.nc', 
        method='con',
        check_nan=True,
-       remap_area_min=0.3  # Lenient masking for sparse ocean data
    )
 
 **High-Performance Regridding:**
