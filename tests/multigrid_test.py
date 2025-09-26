@@ -9,6 +9,7 @@ INDIR = 'tests/data'
 ifile = os.path.join(INDIR, 'ua-so_mix_ecearth.nc')
 tfile = os.path.join(INDIR, 'r360x180.nc')
 
+
 def test_multi_grid_inspection():
     """test and assert with CDO multigrids"""
 
@@ -17,7 +18,7 @@ def test_multi_grid_inspection():
     regridded = regrid.regrid(data)
     assert len(regrid.grids) == 2
     assert sorted(vars(regrid.grids[1])['dims']) == sorted(['lev', 'j', 'i'])
-    assert sorted(vars(regrid.grids[0])['dims']) == sorted(['plev', 'lat', 'lon'])
+    assert sorted(vars(regrid.grids[0])['dims']) == sorted(['lat', 'lon'])
     assert regridded['ua'].shape == (2, 3, 90, 180)
     assert regridded['so'].shape == (2, 3, 90, 180)
 

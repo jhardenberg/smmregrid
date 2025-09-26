@@ -7,13 +7,18 @@ from smmregrid.util import check_gridfile
 from smmregrid.gridinspector import GridInspector
 
 # Mock function to avoid actual file system checks for testing purposes
+
+
 def mock_exists(path):
     return path == "/valid/file/path.nc"
 
 # Patch os.path.exists to use the mock function
+
+
 @pytest.fixture(autouse=True)
 def mock_os_path_exists(monkeypatch):
     monkeypatch.setattr(os.path, "exists", mock_exists)
+
 
 @pytest.mark.parametrize("filename,expected,raises", [
     (None, None, None),                                  # None input
@@ -33,6 +38,7 @@ def test_check_gridfile(filename, expected, raises):
     else:
         assert check_gridfile(filename) == expected
 
+
 # Define test cases
 TEST_FILES = [
     ("2t-era5.nc", "Regular"),
@@ -49,7 +55,11 @@ TEST_FILES = [
     ("temp3d-fesom.nc", "Unstructured"),
     ("ua-ecearth.nc", "GaussianRegular"),
     ("lsm-ifs.grb", "GaussianReduced"),
+    ("ua-ipsl.nc", "Regular"),
+
 ]
+
+
 @pytest.mark.parametrize("file_name, expected_grid", TEST_FILES)
 def test_detect_grid(file_name, expected_grid):
     """Test for grid format detection"""

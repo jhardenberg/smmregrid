@@ -22,7 +22,7 @@ class GridInspector():
 
         Parameters:
             data (xr.Datase or xr.DataArray): The input dataset.
-            clean (bool): apply the cleaning of grids which are assumed to be not relevant 
+            clean (bool): apply the cleaning of grids which are assumed to be not relevant
                           for regridding purposes (e.g. bounds)
             cdo_weights (bool): if the data provided are cdo weights instead of data to be regridded
             extra_dims(dict): Extra dimensions to be added and passed to GridType
@@ -62,11 +62,10 @@ class GridInspector():
         if isinstance(self.data, xr.DataArray):
             self._inspect_dataarray_grid(self.data)
 
-
         # get variables associated to the grid
         for gridtype in self.grids:
             self.identify_variables(gridtype)
-        
+
         # get grid format
         self._identify_grid_format(self.data)
 
@@ -142,18 +141,17 @@ class GridInspector():
                 removed.append(gridtype)
                 self.loggy.info('Removing the grid defined by %s with with no spatial dimensions',
                                 gridtype.dims)
-            #elif all('bnds' in variable for variable in gridtype.variables):
+            # elif all('bnds' in variable for variable in gridtype.variables):
             #    removed.append(gridtype)  # Add to removed list
             #    self.loggy.info('Removing the grid defined by %s with variables containing "bnds"',
             #                     gridtype.dims)
-            #elif all('bounds' in variable for variable in gridtype.variables):
+            # elif all('bounds' in variable for variable in gridtype.variables):
             #    removed.append(gridtype)  # Add to removed list
             #    self.loggy.info('Removing the grid defined by %s with variables containing "bounds"',
             #                    gridtype.dims)
 
         for remove in removed:
             self.grids.remove(remove)
-
 
     def _identify_variable(self, gridtype, var_data, var_name=None):
         """Helper function to process individual variables.
@@ -224,7 +222,7 @@ class GridInspector():
                 bounds_variables.append(var)
 
         return bounds_variables
-    
+
     def _identify_grid_format(self, data):
         """
         Identify the grid format based on the provided data.
@@ -300,18 +298,18 @@ class GridInspector():
                 # Gaussian: longitude equidistant, latitude not
                 if not np.allclose(lat_diff, lat_diff[0]) and np.allclose(lon_diff, lon_diff[0]):
                     return "GaussianRegular"
-                
+
                 return "UndefinedRegular"
-            
+
             pix = data[lat].size
             if pix % 12 == 0 and (pix // 12).bit_length() - 1 == np.log2(pix // 12):
                 return "HEALPix"
-            
+
             # Guess gaussian reduced: increasing number of latitudes from -90 to 0
-            lat_values = data[lat].where(data[lat]<0).values
-            lat_values=lat_values[~np.isnan(lat_values)]
+            lat_values = data[lat].where(data[lat] < 0).values
+            lat_values = lat_values[~np.isnan(lat_values)]
             _, counts = np.unique(lat_values, return_counts=True)
-            gaussian_reduced = np.all(np.diff(counts)>0)
+            gaussian_reduced = np.all(np.diff(counts) > 0)
             if gaussian_reduced:
                 return "GaussianReduced"
 
@@ -341,4 +339,3 @@ class GridInspector():
                 return True
 
         return False
-    

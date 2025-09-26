@@ -29,7 +29,7 @@ napoleon_google_docstring = True
 napoleon_numpy_docstring = False
 
 templates_path = ["_templates"]
-autoclass_content='both'
+autoclass_content = 'both'
 exclude_patterns = []
 
 

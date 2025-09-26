@@ -41,7 +41,7 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
     cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True,
                                 env={'REMAP_EXTRAPOLATE': cdoextrapolate})
-                                     #'REMAP_AREA_MIN': remap_area_min}) # this is not working with cdo 2.4.4
+    # 'REMAP_AREA_MIN': remap_area_min}) # this is not working with cdo 2.4.4
 
     # var as the one which have time and not have bnds (could work)
     smmvar = find_var(xfield)
@@ -85,7 +85,7 @@ def check_cdo_regrid_levels(finput, ftarget, vertical_dim, levels, remap_method=
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
     cdofield = cdo_interpolator(ftarget, input=finput, returnXDataset=True,
                                 env={'REMAP_EXTRAPOLATE': cdoextrapolate,
-                                    'REMAP_AREA_MIN': str(remap_area_min)})
+                                     'REMAP_AREA_MIN': str(remap_area_min)})
 
     # Keep only some levels
     cdofield = cdofield.isel(**{vertical_dim: levels})

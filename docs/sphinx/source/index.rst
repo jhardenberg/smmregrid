@@ -12,4 +12,6 @@ Welcome to smmregrid's documentation!
    intro
    installation
    usage
+   regridder
+   cdogenerate
    api
