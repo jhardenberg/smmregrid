@@ -25,7 +25,6 @@ dependencies = [
     'dask',
     'netcdf4',
     'cfgrib',
-    'dask',
     'sparse',
     'cdo',
     'numba',
@@ -34,7 +33,7 @@ dependencies = [
 
 [project.optional-dependencies]
 tests = [
-    "coverage",
+    "coverage>=7.10.0",
     "coveralls",
     "pytest"
 ]
