@@ -261,7 +261,11 @@ class Regridder(object):
                 raise ValueError(f'Cannot process data with {len(datagrids)} GridType initializing from weights')
 
             # map on multiple dataarray
-            out = source_data.map(self.regrid_array, keep_attrs=False)
+            #out = source_data.map(self.regrid_array, keep_attrs=True)
+            out_vars = {}
+            for var in source_data.data_vars:
+                out_vars[var] = self.regrid_array(source_data[var])
+            out = xarray.Dataset(out_vars, attrs=source_data.attrs)
 
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
