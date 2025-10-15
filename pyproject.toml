@@ -60,3 +60,6 @@ all = [
 
 [tool.setuptools.dynamic]
 version = {attr = "smmregrid.__version__"}
+
+[tool.coverage.report]
+ignore_errors = true
