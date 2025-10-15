@@ -21,7 +21,7 @@ classifiers = [
 ]
 dependencies = [
     'numpy',
-    'xarray',
+    'xarray<2025.09.1', #to avoid error with coordinate attributes
     'dask',
     'netcdf4',
     'cfgrib',
