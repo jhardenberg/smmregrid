@@ -385,7 +385,7 @@ class Regridder(object):
                 xa, wa, weights_matrix=wm,
                 masked=mm, horizontal_dims=horizontal_dims)
             )
-        data3d = xarray.concat(data3d_list, dim=vertical_dim)
+        data3d = xarray.concat(data3d_list, dim=vertical_dim, coords='different', compat='equals')
 
         # get dimensional info on target grid. TODO: can be moved at the init?
         target_gridtypes = GridInspector(data3d, clean=True, loglevel=self.loglevel).get_gridtype()
