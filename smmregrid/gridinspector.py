@@ -58,7 +58,9 @@ class GridInspector():
         """
 
         if isinstance(self.data, xr.Dataset):
-            self.data.map(self._inspect_dataarray_grid, keep_attrs=False)
+            #self.data.map(self._inspect_dataarray_grid, keep_attrs=False)
+            for var in self.data.data_vars:
+                self._inspect_dataarray_grid(self.data[var])
         if isinstance(self.data, xr.DataArray):
             self._inspect_dataarray_grid(self.data)
 
