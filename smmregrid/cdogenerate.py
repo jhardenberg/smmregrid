@@ -339,7 +339,7 @@ class CdoGenerate():
             xmerged = xarray.merge(xplist)
             new_array.append(xmerged.assign_coords({vertical_dim: d}))
 
-        return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim)],
+        return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim, coords='different', compat='equals')],
                             combine_attrs='no_conflicts')
 
     def areas(self, target=False):
