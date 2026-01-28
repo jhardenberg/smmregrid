@@ -221,17 +221,17 @@ class CdoGenerate():
                               })
                 ppp.start()
                 processes.append(ppp)
-
             for proc in processes:
                 proc.join()
 
         weights = self.weightslist_to_3d(wlist, method, vertical_dim)
+        #weights[vertical_dim].attrs = sgrid[vertical_dim].attrs
+        weights = weights.assign_coords({vertical_dim: sgrid[vertical_dim]})
         weights_matrix = compute_weights_matrix3d(weights, vertical_dim)
         weights = mask_weights(weights, weights_matrix, vertical_dim)
         masked = check_mask(weights, vertical_dim)
-        masked = [int(x) for x in masked]
         masked_xa = xarray.DataArray(masked,
-                                     coords={vertical_dim: range(0, len(masked))},
+                                     coords={vertical_dim: weights[vertical_dim]},
                                      name="dst_grid_masked")
 
         return xarray.merge([weights, masked_xa])
@@ -341,7 +341,6 @@ class CdoGenerate():
 
         return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim, coords='different', compat='equals')],
                             combine_attrs='no_conflicts')
-
     def areas(self, target=False):
         """Generate source areas or target areas"""
 
