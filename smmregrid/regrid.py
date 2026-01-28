@@ -120,11 +120,11 @@ class Regridder(object):
         self.extra_dims = {'vertical': vertical_dim, 'horizontal': horizontal_dims}
 
         # TODO: this might be overridden at regrid level
-        self.loggy.debug("Minimum remap area: %s", remap_area_min)
-        self.remap_area_min = float(remap_area_min)
-        if self.remap_area_min < 0.0 or self.remap_area_min > 1.0:
-            raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
-
+        if method in ['con', 'ycon']:
+            self.loggy.debug("Minimum remap area: %s", remap_area_min)
+            self.remap_area_min = float(remap_area_min)
+            if self.remap_area_min < 0.0 or self.remap_area_min > 1.0:
+                raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
         # Is there already a weights file?
         if weights is not None:
             self.loggy.info('Init from weights selected!')

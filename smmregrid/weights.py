@@ -64,7 +64,7 @@ def mask_weights(weights, weights_matrix, vertical_dim=None):
     if vertical_dim is not None:
         for i, nlev in enumerate(weights[vertical_dim]):
             mask = src_mask.sel({vertical_dim: nlev}).data
-            weights['dst_grid_imask'].isel({vertical_dim: i}).data = mask_tensordot(mask, weights_matrix[i])
+            weights['dst_grid_imask'].loc[{vertical_dim: nlev}] = mask_tensordot(mask, weights_matrix[i])
     else:
         mask = src_mask.data
         weights['dst_grid_imask'].data = mask_tensordot(mask, weights_matrix)
