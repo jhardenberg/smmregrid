@@ -39,8 +39,6 @@ class GridType:
             masked (any): Placeholder for masked data (to be defined later).
             weights (any): The weights associated with the grid, if provided.
             weights_matrix (any): Placeholder for a weights matrix (to be defined later).
-            level_index (str): A string used to identify the index of the levels.
-
         """
 
         # safety checks
@@ -65,7 +63,6 @@ class GridType:
         self.masked = None
         self.weights = weights
         self.weights_matrix = None
-        self.level_index = "idx_"
 
     def _handle_default_dimensions(self, extra_dims, override=False):
         """
