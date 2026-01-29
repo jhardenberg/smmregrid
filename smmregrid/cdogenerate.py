@@ -224,9 +224,7 @@ class CdoGenerate():
             for proc in processes:
                 proc.join()
 
-        weights = self.weightslist_to_3d(wlist, method, vertical_dim)
-        #weights[vertical_dim].attrs = sgrid[vertical_dim].attrs
-        weights = weights.assign_coords({vertical_dim: sgrid[vertical_dim]})
+        weights = self.weightslist_to_3d(wlist, method, sgrid[vertical_dim])
         weights_matrix = compute_weights_matrix3d(weights, vertical_dim)
         weights = mask_weights(weights, weights_matrix, vertical_dim)
         masked = check_mask(weights, vertical_dim)
@@ -316,31 +314,40 @@ class CdoGenerate():
     #     if not isinstance(tmpfile, str):
     #         os.remove(tmpfile.name)
 
-    def weightslist_to_3d(self, ds_list, method='ycon', vertical_dim='lev'):
-        """Combine a list of 2D CDO weights into a 3D one."""
+    def weightslist_to_3d(self, ds_list, method='ycon', vertical_coord=xarray.DataArray):
+        """Combine a list of 2D CDO weights into a 3D one.
+        
+        Args:
+            ds_list (list): List of xarray.Dataset with 2D weights
+            method (str): Remap method, to determine if dst_grid_area and dst_grid_frac
+                          need to be included
+            vertical_coord (xarray.DataArray): Vertical coordinate to use for the 3D weights
+        """
 
+        vertical_dim = vertical_coord.dims[0]
         links_dim = "numLinks" if "numLinks" in ds_list[0].dims else "num_links"
-        dim_values = range(len(ds_list))
+        
         nl = [ds.src_address.size for ds in ds_list]
-        nl0 = max(nl)
-        nlda = xarray.DataArray(nl, coords={vertical_dim: range(0, len(nl))}, name="link_length")
+        nl_max = max(nl)
+        nlda = xarray.DataArray(nl, coords={vertical_dim: vertical_coord}, name="link_length")
 
-        new_array = []
         varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
         # Add dst_grid_area and dst_grid_frac only for conservative methods
         if method in ['ycon', 'con2', 'con']:
             varlist += ["dst_grid_area", "dst_grid_frac"]
         ds0 = ds_list[0].drop_vars(varlist)
 
-        for x, d in zip(ds_list, dim_values):
+        new_array = []
+        for x, v in zip(ds_list, vertical_coord.values):
             nl1 = x.src_address.size
-            xplist = [x[vname].pad(**{links_dim: (0, nl0 - nl1), "mode": 'constant', "constant_values": 0})
+            xplist = [x[vname].pad(**{links_dim: (0, nl_max - nl1), "mode": 'constant', "constant_values": 0})
                       for vname in varlist]
             xmerged = xarray.merge(xplist)
-            new_array.append(xmerged.assign_coords({vertical_dim: d}))
+            new_array.append(xmerged.assign_coords({vertical_dim: v}))
 
         return xarray.merge([nlda, ds0, xarray.concat(new_array, vertical_dim, coords='different', compat='equals')],
                             combine_attrs='no_conflicts')
+    
     def areas(self, target=False):
         """Generate source areas or target areas"""
 

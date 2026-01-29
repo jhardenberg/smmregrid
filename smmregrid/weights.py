@@ -16,8 +16,8 @@ def compute_weights_matrix3d(weights, vertical_dim='lev'):
         links_dim = "num_links"
 
     sparse_weights = []
-    for _, nlev in enumerate(weights[vertical_dim]):
-        w = weights.sel({vertical_dim: nlev})
+    for i in range(weights.sizes[vertical_dim]):
+        w = weights.isel({vertical_dim: i})
         nl = w.link_length.values
         w = w.isel(**{links_dim: slice(0, nl)})
         sparse_weights.append(compute_weights_matrix(w))
@@ -62,9 +62,9 @@ def mask_weights(weights, weights_matrix, vertical_dim=None):
 
     src_mask = weights.src_grid_imask
     if vertical_dim is not None:
-        for i, nlev in enumerate(weights[vertical_dim]):
-            mask = src_mask.sel({vertical_dim: nlev}).data
-            weights['dst_grid_imask'].loc[{vertical_dim: nlev}] = mask_tensordot(mask, weights_matrix[i])
+        for i in range(weights.sizes[vertical_dim]):
+            mask = src_mask.isel({vertical_dim: i}).data
+            weights['dst_grid_imask'].isel({vertical_dim: i}).data[:] = mask_tensordot(mask, weights_matrix[i])
     else:
         mask = src_mask.data
         weights['dst_grid_imask'].data = mask_tensordot(mask, weights_matrix)
