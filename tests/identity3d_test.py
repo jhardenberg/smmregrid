@@ -38,5 +38,5 @@ def test_fesom_3d(method):
 def test_levbylev_plev_gaussian(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'ua-ecearth.nc'), tfile,
                            remap_method=method, init_method='weights',
-                           mask_dim="plev")
+                           vertical_dim="plev")
     assert fff is True

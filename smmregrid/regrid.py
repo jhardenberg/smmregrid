@@ -53,8 +53,8 @@ class Regridder(object):
     """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, vert_coord=None, mask_dim=None,
-                 space_dims=None, horizontal_dims=None, cdo_extra=None, cdo_options=None,
+                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None, vertical_dim=None,
+                 horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  check_nan=False,
                  cdo='cdo', loglevel='WARNING'):
         """
@@ -96,7 +96,7 @@ class Regridder(object):
             KeyError: If no grid types are found in the data.
 
         Warnings:
-            DeprecationWarning: If deprecated arguments 'vert_coord' or 'space_dims' are used.
+            DeprecationWarning: If deprecated arguments 'vertical_dim` is used. 
         """
 
         if (source_grid is None or target_grid is None) and (weights is None):
@@ -104,8 +104,7 @@ class Regridder(object):
                 "Either weights or source_grid/target_grid must be supplied"
             )
 
-        mask_dim = deprecated_argument(vert_coord, mask_dim, 'vert_coord', 'mask_dim')
-        horizontal_dims = deprecated_argument(space_dims, horizontal_dims, 'space_dims', 'horizontal_dims')
+        mask_dim = deprecated_argument(vertical_dim, mask_dim, 'vertical_dim', 'mask_dim')
 
         # set up logger
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
