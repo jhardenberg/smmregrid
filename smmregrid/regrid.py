@@ -366,7 +366,7 @@ class Regridder(object):
             # get the index of the level for weights selection (widx, which might be different from idx)
             widx = int(numpy.where(weights.coords[vertical_dim].values == lev)[0][0])
             self.loggy.debug('Processing vertical level %s - level_index %s', lev, widx)
-            # use sel for the data and isel for the weights
+            # use isel since it faster
             xa = source_data.isel(**{vertical_dim: idx})
             wa = weights.isel(**{vertical_dim: widx})
             self.loggy.debug('Weight number of links is %s', wa.link_length.values)
@@ -385,14 +385,17 @@ class Regridder(object):
         target_horizontal_dims = target_gridtypes[0].horizontal_dims
 
         if self.transpose:
-            dims = list(data3d.dims)
-            index = min([i for i, s in enumerate(dims) if s in target_horizontal_dims])
-            dimst = dims[1:index] + [dims[0]] + dims[index:]
-            data3d = data3d.transpose(*dimst)
+            data3d = self._transpose_output(data3d, target_horizontal_dims)
+        return data3d
 
-            return data3d
-
-        raise ValueError(f'Cannot transpose output dimensions {data3d.dims} over {target_horizontal_dims}')
+    def _transpose_output(self, data3d, target_horizontal_dims):
+        """
+        Transpose the output data array to place the vertical dimension as first
+        """
+        dims = list(data3d.dims)
+        index = min((i for i, s in enumerate(dims) if s in target_horizontal_dims))
+        dimst = dims[1:index] + [dims[0]] + dims[index:]
+        return data3d.transpose(*dimst)
 
     def regrid2d(self, source_data, datagridtype):
         """

@@ -5,7 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+- Vertical coordinate in weights now correspond to the data coordinates, rather than a list (#55)
 - Introduction `check_nan` option to detect if a vertical dimension has NaN values (#50)
+
 
 ## [v0.1.3]
 
