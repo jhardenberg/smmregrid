@@ -80,7 +80,7 @@ Constructor Parameters
 
 **Dimension Control:**
 
-* **vertical_dim** (*str*, optional): Name of vertical coordinate for 3D regridding.
+* **mask_dim** (*str*, optional): Name of vertical coordinate for 3D regridding.
   Forces recognition of this dimension as vertical even if not in standard list.
 
 * **horizontal_dims** (*list*, optional): List of spatial dimensions to interpolate.
@@ -90,7 +90,7 @@ Constructor Parameters
 
 * **check_nan** (*bool*, default: False): If True, analyzes NaN patterns in source data 
   to automatically identify vertical-like dimensions based on missing data variation and set
-  up the vertical_dim accordingly. Useful for datasets with unpredicted vertical structures.
+  up the mask_dim accordingly. Useful for datasets with unpredicted vertical structures.
   Planned to be extended in a more automatic way in the future.
 
 **CDO Configuration:**
@@ -161,7 +161,7 @@ The Regridder automatically detects and handles different grid types:
    # Force specific dimension recognition
    regridder = Regridder(
        'data.nc', 'target.nc',
-       vertical_dim='model_level',    # Force vertical recognition
+       mask_dim='model_level',    # Force vertical recognition
        horizontal_dims=['xi', 'eta']  # Force horizontal recognition
    )
 
@@ -178,16 +178,16 @@ Applies to data without vertical structure:
    regridder = Regridder('surface_temp.nc', 'r180x90')
    regridded = regridder.regrid(data)
 
-**3D Regridding:**
+**3D Masked Regridding:**
 
-For data with vertical levels, specify vertical dimension:
+For data with masked vertical levels, specify masked dimension:
 
 .. code-block:: python
 
    # 3D atmospheric data
    regridder = Regridder(
        'atmos_data.nc', 'target.nc',
-       vertical_dim='plev'
+       mask_dim='plev'
    )
 
 **Automatic 3D Detection with NaN Analysis:**
@@ -268,7 +268,7 @@ Examples
    regridder = Regridder(
        'ecmwf_data.nc', 'regular_grid.nc',
        method='bil',
-       vertical_dim='plev',
+       mask_dim='plev',
    )
    regridded = regridder.regrid(atmospheric_data)
 
@@ -313,6 +313,6 @@ Examples
    regridder = Regridder(
        'custom_model.nc', 'standard_grid.nc',
        horizontal_dims=['xi_rho', 'eta_rho'],  # ROMS ocean model
-       vertical_dim='s_rho',                   # Sigma coordinates
+       mask_dim='s_rho',                   # Sigma coordinates
        loglevel='DEBUG'
    )

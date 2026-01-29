@@ -42,8 +42,8 @@ def test_gridtype_extradims():
                  extra_dims=['horizontal'])
 
     grid = GridType(dims=["lon", "lat", "ciccio"],
-                    extra_dims={'vertical': ["ciccio"]})
-    assert grid.vertical_dim == "ciccio"
+                    extra_dims={'mask': ["ciccio"]})
+    assert grid.mask_dim == "ciccio"
 
 
 def test_gridtype_extradims_override():
@@ -52,8 +52,8 @@ def test_gridtype_extradims_override():
     grid = GridType(dims=["alfa", "beta", "ciccio"],
                     extra_dims={
                         'horizontal': ["alfa", "beta"],
-                        'vertical': ["ciccio"]},
+                        'mask': ["ciccio"]},
                     override=True)
-    assert grid.vertical_dim == "ciccio"
+    assert grid.mask_dim == "ciccio"
     assert set(grid.horizontal_dims) == set(["alfa", "beta"])
     assert grid.time_dims is None

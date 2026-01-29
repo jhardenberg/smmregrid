@@ -4,7 +4,7 @@ import dask.array
 import sparse
 
 
-def compute_weights_matrix3d(weights, vertical_dim='lev'):
+def compute_weights_matrix3d(weights, mask_dim='lev'):
     """
     Convert the weights from CDO to a list of numpy arrays
     """
@@ -16,9 +16,9 @@ def compute_weights_matrix3d(weights, vertical_dim='lev'):
         links_dim = "num_links"
 
     sparse_weights = []
-    nvert = weights[vertical_dim].values.size
+    nvert = weights[mask_dim].values.size
     for i in range(0, nvert):
-        w = weights.loc[{vertical_dim: i}]
+        w = weights.loc[{mask_dim: i}]
         nl = w.link_length.values
         w = w.isel(**{links_dim: slice(0, nl)})
         sparse_weights.append(compute_weights_matrix(w))
@@ -56,16 +56,16 @@ def mask_tensordot(src_mask, weights_matrix):
     return target_mask
 
 
-def mask_weights(weights, weights_matrix, vertical_dim=None):
+def mask_weights(weights, weights_matrix, mask_dim=None):
     """This functions precompute the mask for the target interpolation
     Takes as input the weights from CDO and the precomputed weights matrix
     Return the target mask: handle the 3d case"""
 
     src_mask = weights.src_grid_imask
-    if vertical_dim is not None:
-        for nlev in range(len(weights[vertical_dim])):
-            mask = src_mask.loc[{vertical_dim: nlev}].data
-            weights['dst_grid_imask'].loc[{vertical_dim: nlev}] = mask_tensordot(mask, weights_matrix[nlev])
+    if mask_dim is not None:
+        for nlev in range(len(weights[mask_dim])):
+            mask = src_mask.loc[{mask_dim: nlev}].data
+            weights['dst_grid_imask'].loc[{mask_dim: nlev}] = mask_tensordot(mask, weights_matrix[nlev])
     else:
         mask = src_mask.data
         weights['dst_grid_imask'].data = mask_tensordot(mask, weights_matrix)
@@ -73,14 +73,14 @@ def mask_weights(weights, weights_matrix, vertical_dim=None):
     return weights
 
 
-# def check_mask(weights, vertical_dim=None):
+# def check_mask(weights, mask_dim=None):
 #     """Check if the target mask is empty or full and
 #     return a bool to be passed to the regridder.
 #     Handle the 3d case (5x time faster)"""
 
 #     wdst = weights['dst_grid_imask']
-#     if vertical_dim is not None:
-#         check = wdst.mean(dim=tuple(dim for dim in wdst.dims if dim != vertical_dim))
+#     if mask_dim is not None:
+#         check = wdst.mean(dim=tuple(dim for dim in wdst.dims if dim != mask_dim))
 #         out = (check != 1).data.tolist()
 #     else:
 #         check = wdst.mean()
@@ -88,7 +88,7 @@ def mask_weights(weights, weights_matrix, vertical_dim=None):
 #     return out
 
 
-def check_mask(weights, vertical_dim=None):
+def check_mask(weights, mask_dim=None):
     """
     Check if the target mask has all values equal to 1.
     Returns a boolean indicating whether the mask is full.
@@ -96,9 +96,9 @@ def check_mask(weights, vertical_dim=None):
     """
     wdst = weights['dst_grid_imask']
 
-    if vertical_dim is not None:
+    if mask_dim is not None:
         # Reduce along all dimensions except the vertical dimension
-        dims_to_reduce = [dim for dim in wdst.dims if dim != vertical_dim]
+        dims_to_reduce = [dim for dim in wdst.dims if dim != mask_dim]
         mask = ~(wdst == 1).all(dim=dims_to_reduce)
     else:
         # Check if all values are 1 across all dimensions

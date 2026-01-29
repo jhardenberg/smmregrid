@@ -88,7 +88,7 @@ Generate interpolation weights for regridding.
   - 'fracarea': Normalize by fractional area (default)
   - 'destarea': Normalize by destination area
 
-* **vertical_dim** (*str*, optional): Name of the vertical dimension for 3D weight generation.
+* **mask_dim** (*str*, optional): Name of the vertical dimension for 3D weight generation.
   If specified, generates 3D weights for each vertical level. To be used for vertical changing masks.
 
 * **nproc** (*int*, default: 1): Number of processes for parallel 3D weight generation.
@@ -149,22 +149,23 @@ CdoGenerate accepts several types of grid specifications:
 3D Weight Generation
 --------------------
 
-For 3D grids with vertical levels, specify the vertical dimension:
+For 3D grids with masked levels, specify the masked dimension. This is 
+usually a vertical oceanic dimension like 'lev' or 'level'.
 
 .. code-block:: python
 
    # Generate 3D weights with 4 parallel processes
    weights_3d = generator.weights(
        method='con',
-       vertical_dim='lev',
+       mask_dim='lev',
        nproc=4
    )
 
 The 3D weight generation:
 
-* Processes each vertical level separately
+* Processes each masked level separately
 * Uses multiprocessing for efficiency
-* Returns weights with vertical dimension preserved
+* Returns weights with masked dimension preserved
 * Includes level-specific masking information
 
 
@@ -181,7 +182,7 @@ Examples
    generator = CdoGenerate('era5.nc', 'r180x90')
    weights = generator.weights(method='con')
 
-**3D Regridding with Vertical Levels:**
+**3D Regridding with Masked Levels:**
 
 .. code-block:: python
 
@@ -189,7 +190,7 @@ Examples
    generator = CdoGenerate('model_data.nc', 'obs_grid.nc')
    weights_3d = generator.weights(
        method='bil',
-       vertical_dim='plev',
+      mask_dim='level',
        nproc=6
    )
 

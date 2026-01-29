@@ -86,11 +86,11 @@ class GridInspector():
 
         gridtype = GridType(dims=[], weights=self.data)
 
-        # get vertical info from the weights coords if available
+        # get masked info from the weights coords if available
         if self.data.coords:
-            vertical_dim = list(self.data.coords)[0]
-            self.loggy.debug('Vertical dimension read from weights: %s', vertical_dim)
-            gridtype.vertical_dim = vertical_dim
+            mask_dim = list(self.data.coords)[0]
+            self.loggy.debug('Masked dimension read from weights: %s', mask_dim)
+            gridtype.mask_dim = mask_dim
 
         self.grids.append(gridtype)
 
@@ -119,8 +119,8 @@ class GridInspector():
         self.loggy.debug('Grid details: %s', gridtype.dims)
         if gridtype.horizontal_dims:
             self.loggy.debug('  Horizontal dims: %s', gridtype.horizontal_dims)
-        if gridtype.vertical_dim:
-            self.loggy.debug('  Vertical dim: %s', gridtype.vertical_dim)
+        if gridtype.mask_dim:
+            self.loggy.debug('  Masked dim: %s', gridtype.mask_dim)
         if gridtype.time_dims:
             self.loggy.debug('  Time dims: %s', gridtype.time_dims)
         if gridtype.other_dims:

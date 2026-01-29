@@ -16,7 +16,7 @@ It relies on the `GridType()` class which identify the properties of each xarray
 
 Masks are treated in a simple way but correctly transfered from source to target grid. 
 
-A specific treatment for mask changing along the vertical dimension can be applied through the `vertical_dim` keyword. 
+A specific treatment for mask changing along the vertical dimension can be applied through the `mask_dim` keyword. 
 Indeed, 3D weights are computed specifically for each level and then stored together in specific files so that it guarantees precise mask handling.
 
 
