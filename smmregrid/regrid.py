@@ -123,7 +123,6 @@ class Regridder(object):
         self.remap_area_min = float(remap_area_min)
         if self.remap_area_min < 0.0 or self.remap_area_min > 1.0:
             raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
-
         # Is there already a weights file?
         if weights is not None:
             self.loggy.info('Init from weights selected!')
@@ -348,7 +347,6 @@ class Regridder(object):
         weights = gridtype.weights
         weights_matrix = gridtype.weights_matrix
         masked = gridtype.masked
-        level_index = gridtype.level_index
         horizontal_dims = gridtype.horizontal_dims
 
         # CDO 2.2.0 fix
@@ -362,24 +360,21 @@ class Regridder(object):
         if ("bnds" in source_data.name or "bounds" in source_data.name):
             return source_data
 
-        # If a special additional coordinate is present pick correct levels from weights
-        coord = next((coord for coord in source_data.coords if coord.startswith(level_index)), None)
-        if coord:  # if a coordinate starting with level_index is found
-            levlist = source_data.coords[coord].values.tolist()
-            levlist = [levlist] if numpy.isscalar(levlist) else levlist
-        else:
-            levlist = list(range(0, source_data.coords[mask_dim].values.size))
-
         data3d_list = []
-        for lev, levidx in enumerate(levlist):
-            self.loggy.debug('Processing masked level %s - level_index %s', lev, levidx)
-            xa = source_data.isel(**{mask_dim: lev})
-            wa = weights.isel(**{mask_dim: levidx})
+        # create pandas object for fast level index retrieval
+        mask_index = weights.coords[mask_dim].to_index()
+        for idx, lev in enumerate(source_data.coords[mask_dim].values):
+            # get the index of the level for weights selection (widx, which might be different from idx)
+            widx = mask_index.get_loc(lev)
+            self.loggy.debug('Processing vertical level %s - level_index %s', lev, widx)
+            # use isel since it faster
+            xa = source_data.isel(**{mask_dim: idx})
+            wa = weights.isel(**{mask_dim: widx})
             self.loggy.debug('Weight number of links is %s', wa.link_length.values)
             nl = wa.link_length.values
             wa = wa.isel(**{links_dim: slice(0, nl)})
-            wm = weights_matrix[levidx]
-            mm = masked[levidx]
+            wm = weights_matrix[widx]
+            mm = masked[widx]
             data3d_list.append(self.apply_weights(
                 xa, wa, weights_matrix=wm,
                 masked=mm, horizontal_dims=horizontal_dims)
@@ -391,14 +386,17 @@ class Regridder(object):
         target_horizontal_dims = target_gridtypes[0].horizontal_dims
 
         if self.transpose:
-            dims = list(data3d.dims)
-            index = min([i for i, s in enumerate(dims) if s in target_horizontal_dims])
-            dimst = dims[1:index] + [dims[0]] + dims[index:]
-            data3d = data3d.transpose(*dimst)
+            data3d = self._transpose_output(data3d, target_horizontal_dims)
+        return data3d
 
-            return data3d
-
-        raise ValueError(f'Cannot transpose output dimensions {data3d.dims} over {target_horizontal_dims}')
+    def _transpose_output(self, data3d, target_horizontal_dims):
+        """
+        Transpose the output data array to place the vertical dimension as first
+        """
+        dims = list(data3d.dims)
+        index = min((i for i, s in enumerate(dims) if s in target_horizontal_dims))
+        dimst = dims[1:index] + [dims[0]] + dims[index:]
+        return data3d.transpose(*dimst)
 
     def regrid2d(self, source_data, datagridtype):
         """

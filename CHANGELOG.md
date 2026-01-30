@@ -5,8 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+- Support for python 3.14 (#57)
+- Vertical coordinate in weights now correspond to the data coordinates, rather than a list (#55)
 - Replace `vertical_dim` to more correct `mask_dim` as changing direction for mask (#56)
 - Introduction `check_nan` option to detect if a vertical dimension has NaN values (#50)
+
 
 ## [v0.1.3]
 

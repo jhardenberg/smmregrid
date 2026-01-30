@@ -83,12 +83,21 @@ def test_generation_from_cdo(source_grid, target_grid, src_grid_size, dst_grid_s
     assert weights.sizes['src_grid_size'] == src_grid_size
     assert weights.sizes['dst_grid_size'] == dst_grid_size
 
-
 def test_check_nan_auto():
-
+    """Test to verify that NaN are preserved with automatic check_nan"""
     xfield = xarray.open_dataset(os.path.join(INDIR, 'ua-ipsl.nc'))
     regrid = Regridder(source_grid=xfield, target_grid='r90x45', loglevel='debug', check_nan=True)
     rr = regrid.regrid(xfield.isel(time=0))
     count = rr['ua'].isnull().sum(dim=['lon', 'lat']).compute()
     assert count[-1] == 0, f"NaN values found in the regridded data: {count}"
     assert count[1] == 589, f"NaN values found in the regridded data: {count}"
+
+def test_weights_vertical_dim():
+    """Test to verify that weights are created with vertical_dim coordinate"""
+    xfield = xarray.open_dataset(os.path.join(INDIR, 'so3d-nemo.nc'))
+    xfield = xfield.isel(lev=slice(0, 5))
+    generator = CdoGenerate(source_grid=xfield, target_grid='r90x45', loglevel='debug')
+    weights = generator.weights(method="nn", vertical_dim='lev')
+    assert 'lev' in weights.dims, "Vertical coordinate 'lev' not found in weights dimensions"
+    assert weights.sizes['lev'] == xfield.sizes['lev'], "Mismatch in vertical levels size"
+    assert xfield.lev.equals(weights.lev)

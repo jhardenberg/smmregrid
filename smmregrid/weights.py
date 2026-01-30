@@ -1,6 +1,6 @@
 """Weight calculation utilities"""
 
-import dask.array
+import dask
 import sparse
 
 
@@ -10,21 +10,17 @@ def compute_weights_matrix3d(weights, mask_dim='lev'):
     """
 
     # CDO 2.2.0 fix
-    if "numLinks" in weights.dims:
-        links_dim = "numLinks"
-    else:
-        links_dim = "num_links"
+    links_dim = "numLinks" if "numLinks" in weights.dims else "num_links"
+
+    # precompute link lengths
+    link_length = weights["link_length"].values
 
     sparse_weights = []
-    nvert = weights[mask_dim].values.size
-    for i in range(0, nvert):
-        w = weights.loc[{mask_dim: i}]
-        nl = w.link_length.values
-        w = w.isel(**{links_dim: slice(0, nl)})
+    for i, nl in enumerate(link_length):
+        w = weights.isel({mask_dim: i, links_dim: slice(0, nl)})
         sparse_weights.append(compute_weights_matrix(w))
 
     return sparse_weights
-
 
 def compute_weights_matrix(weights):
     """
@@ -59,34 +55,50 @@ def mask_tensordot(src_mask, weights_matrix):
 def mask_weights(weights, weights_matrix, mask_dim=None):
     """This functions precompute the mask for the target interpolation
     Takes as input the weights from CDO and the precomputed weights matrix
-    Return the target mask: handle the 3d case"""
+    Return the target mask: handle the 3d case.
+    
+    Claude-based solution with full lazy evaluation and no in-place modification.
+    
+    Args:
+        weights: xarray Dataset containing the weights and source mask.
+        weights_matrix: Precomputed weights matrix (sparse arrays).
+        mask_dim: Name of the mask dimension if 3D regridding is used.
+    """
 
     src_mask = weights.src_grid_imask
     if mask_dim is not None:
-        for nlev in range(len(weights[mask_dim])):
-            mask = src_mask.loc[{mask_dim: nlev}].data
-            weights['dst_grid_imask'].loc[{mask_dim: nlev}] = mask_tensordot(mask, weights_matrix[nlev])
+        # Create list of masked arrays lazily
+        masked_levels = [
+            mask_tensordot(src_mask.isel({mask_dim: i}).data, weights_matrix[i])
+            for i in range(weights.sizes[mask_dim])
+        ]
+        # Stack all levels at once (lazy operation)
+        dst_mask = dask.array.stack(masked_levels, axis=0)
+        # Create new DataArray without in-place modification
+        weights = weights.assign(dst_grid_imask=([mask_dim] + list(weights['dst_grid_imask'].dims[1:]), dst_mask))
     else:
         mask = src_mask.data
-        weights['dst_grid_imask'].data = mask_tensordot(mask, weights_matrix)
+        dst_mask = mask_tensordot(mask, weights_matrix)
+        weights = weights.assign(dst_grid_imask=(weights['dst_grid_imask'].dims, dst_mask))
 
     return weights
 
 
-# def check_mask(weights, mask_dim=None):
-#     """Check if the target mask is empty or full and
-#     return a bool to be passed to the regridder.
-#     Handle the 3d case (5x time faster)"""
+# def mask_weights(weights, weights_matrix, mask_dim=None):
+#     """This functions precompute the mask for the target interpolation
+#     Takes as input the weights from CDO and the precomputed weights matrix
+#     Return the target mask: handle the 3d case"""
 
-#     wdst = weights['dst_grid_imask']
+#     src_mask = weights.src_grid_imask
 #     if mask_dim is not None:
-#         check = wdst.mean(dim=tuple(dim for dim in wdst.dims if dim != mask_dim))
-#         out = (check != 1).data.tolist()
+#         for i in range(weights.sizes[mask_dim]):
+#             mask = src_mask.isel({mask_dim: i}).data
+#             weights['dst_grid_imask'].isel({mask_dim: i}).data[:] = mask_tensordot(mask, weights_matrix[i])
 #     else:
-#         check = wdst.mean()
-#         out = (check != 1).data
-#     return out
+#         mask = src_mask.data
+#         weights['dst_grid_imask'].data = mask_tensordot(mask, weights_matrix)
 
+#     return weights
 
 def check_mask(weights, mask_dim=None):
     """
