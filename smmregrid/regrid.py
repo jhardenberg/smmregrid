@@ -53,8 +53,8 @@ class Regridder(object):
     """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, vert_coord=None, vertical_dim=None,
-                 space_dims=None, horizontal_dims=None, cdo_extra=None, cdo_options=None,
+                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None, vertical_dim=None,
+                 horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  check_nan=False,
                  cdo='cdo', loglevel='WARNING'):
         """
@@ -73,7 +73,7 @@ class Regridder(object):
             source_grid (xarray.DataArray or str): Source grid dataset or file path.
             target_grid (xarray.DataArray): Target grid dataset for regridding.
             weights (xarray.Dataset): Pre-computed interpolation weights.
-            vertical_dim (str): Name of the vertical coordinate for
+            mask_dim (str): Name of the masked coordinate for
                                 3D weights generation (default: None).
             horizontal_dims (list): List of spatial dimensions to
                                     interpolate (default: None).
@@ -81,10 +81,10 @@ class Regridder(object):
             remap_area_min (float): Minimum area for remapping in conservative remapping.
                                     Larger values avoid mask erosion.
             transpose (bool): If True, transpose the output such that
-                              the vertical coordinate is placed just before the
+                              the masked coordinate is placed just before the
                               other spatial coordinates (default: True).
             check_nan (bool): If True, check for NaN variation in the source grid
-                              to define the vertical dimension.
+                              to define the masked dimension.
             cdo (str): Path to the CDO executable (default: 'cdo').
             cdo_extra (str): Extra command to be passed to CDO
             cdo_options(str): Extra options to be passed to CDO
@@ -96,7 +96,7 @@ class Regridder(object):
             KeyError: If no grid types are found in the data.
 
         Warnings:
-            DeprecationWarning: If deprecated arguments 'vert_coord' or 'space_dims' are used.
+            DeprecationWarning: If deprecated arguments 'vertical_dim` is used. 
         """
 
         if (source_grid is None or target_grid is None) and (weights is None):
@@ -104,20 +104,19 @@ class Regridder(object):
                 "Either weights or source_grid/target_grid must be supplied"
             )
 
-        vertical_dim = deprecated_argument(vert_coord, vertical_dim, 'vert_coord', 'vertical_dim')
-        horizontal_dims = deprecated_argument(space_dims, horizontal_dims, 'space_dims', 'horizontal_dims')
+        mask_dim = deprecated_argument(vertical_dim, mask_dim, 'vertical_dim', 'mask_dim')
 
         # set up logger
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
         self.loglevel = loglevel
         self.transpose = transpose
-        vertical_dim = tolist(vertical_dim)
+        mask_dim = tolist(mask_dim)
         horizontal_dims = tolist(horizontal_dims)
-        if vertical_dim:
-            self.loggy.info('Forcing vertical_dim from input: expecting a single-gridtype dataset')
+        if mask_dim:
+            self.loggy.info('Forcing mask_dim from input: expecting a single-gridtype dataset')
         if horizontal_dims:
             self.loggy.info('Forcing horizontal_dim from input: expecting a single-gridtype dataset')
-        self.extra_dims = {'vertical': vertical_dim, 'horizontal': horizontal_dims}
+        self.extra_dims = {'mask': mask_dim, 'horizontal': horizontal_dims}
 
         # TODO: this might be overridden at regrid level
         self.loggy.debug("Minimum remap area: %s", remap_area_min)
@@ -160,7 +159,7 @@ class Regridder(object):
                 self.loggy.info('Processing grid number %s', index)
                 self.loggy.debug('Processing grids %s', gridtype.dims)
                 self.loggy.debug('Horizontal dimensions are %s', gridtype.horizontal_dims)
-                self.loggy.debug('Vertical dimension is %s', gridtype.vertical_dim)
+                self.loggy.debug('Mask dimension is %s', gridtype.mask_dim)
                 self.loggy.debug('Other dimensions are %s', gridtype.other_dims)
                 self.loggy.debug('Variables are %s', gridtype.variables)
 
@@ -186,12 +185,12 @@ class Regridder(object):
                                         cdo=cdo, cdo_options=cdo_options,
                                         cdo_extra=cdo_extra, loglevel=loglevel)
                 gridtype.weights = generator.weights(method=method,
-                                                     vertical_dim=gridtype.vertical_dim)
+                                                     mask_dim=gridtype.mask_dim)
 
         for gridtype in self.grids:
-            if gridtype.vertical_dim:
+            if gridtype.mask_dim:
                 gridtype.weights_matrix = compute_weights_matrix3d(gridtype.weights,
-                                                                   gridtype.vertical_dim)
+                                                                   gridtype.mask_dim)
             else:
                 gridtype.weights_matrix = compute_weights_matrix(gridtype.weights)
 
@@ -201,8 +200,8 @@ class Regridder(object):
                 gridtype.masked = gridtype.weights.dst_grid_masked.data
             else:
                 # compute the destination mask now
-                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.vertical_dim)
-                gridtype.masked = check_mask(gridtype.weights, gridtype.vertical_dim)
+                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim)
+                gridtype.masked = check_mask(gridtype.weights, gridtype.mask_dim)
 
     def _gridtype_from_weights(self, weights):
         """
@@ -220,7 +219,7 @@ class Regridder(object):
 
         # the vertical dimension has to show up into the extra dimensions
         # to cover the case that it is not a standard dimension: possibly better implementation available
-        self.extra_dims['vertical'] = [gridtype[0].vertical_dim]
+        self.extra_dims['mask'] = [gridtype[0].mask_dim]
 
         return gridtype
 
@@ -296,8 +295,8 @@ class Regridder(object):
         datagrids = grid_inspect.get_gridtype()
 
         for datagridtype in datagrids:
-            if datagridtype.vertical_dim:
-                # if this is a 3D we specified the vertical coord and it has it
+            if datagridtype.mask_dim:
+                # if this is a 3D we specified the masked coord and it has it
                 return self.regrid3d(source_data, datagridtype)
             # 2d case
             return self.regrid2d(source_data, datagridtype)
@@ -321,7 +320,7 @@ class Regridder(object):
         """
         Regrid a 3D source data array to match the target grid.
 
-        This method applies the necessary weights and handles vertical coordinates.
+        This method applies the necessary weights and handles masked coordinates.
 
         Args:
             source_data (xarray.DataArray): The 3D source data to be regridded.
@@ -345,7 +344,7 @@ class Regridder(object):
             return xarray.DataArray(data=None)
 
         # select the gridtype to be used
-        vertical_dim = gridtype.vertical_dim
+        mask_dim = gridtype.mask_dim
         weights = gridtype.weights
         weights_matrix = gridtype.weights_matrix
         masked = gridtype.masked
@@ -369,13 +368,13 @@ class Regridder(object):
             levlist = source_data.coords[coord].values.tolist()
             levlist = [levlist] if numpy.isscalar(levlist) else levlist
         else:
-            levlist = list(range(0, source_data.coords[vertical_dim].values.size))
+            levlist = list(range(0, source_data.coords[mask_dim].values.size))
 
         data3d_list = []
         for lev, levidx in enumerate(levlist):
-            self.loggy.debug('Processing vertical level %s - level_index %s', lev, levidx)
-            xa = source_data.isel(**{vertical_dim: lev})
-            wa = weights.isel(**{vertical_dim: levidx})
+            self.loggy.debug('Processing masked level %s - level_index %s', lev, levidx)
+            xa = source_data.isel(**{mask_dim: lev})
+            wa = weights.isel(**{mask_dim: levidx})
             self.loggy.debug('Weight number of links is %s', wa.link_length.values)
             nl = wa.link_length.values
             wa = wa.isel(**{links_dim: slice(0, nl)})
@@ -385,7 +384,7 @@ class Regridder(object):
                 xa, wa, weights_matrix=wm,
                 masked=mm, horizontal_dims=horizontal_dims)
             )
-        data3d = xarray.concat(data3d_list, dim=vertical_dim, coords='different', compat='equals')
+        data3d = xarray.concat(data3d_list, dim=mask_dim, coords='different', compat='equals')
 
         # get dimensional info on target grid. TODO: can be moved at the init?
         target_gridtypes = GridInspector(data3d, clean=True, loglevel=self.loglevel).get_gridtype()
@@ -605,8 +604,8 @@ class Regridder(object):
         Check for NaN variation in the source grid and update the gridtype if necessary.
         """
         # check for NaN variation in the source grid
-        if gridtype.vertical_dim:
-            self.loggy.info('Gridtype already has a vertical dimension %s', gridtype.vertical_dim)
+        if gridtype.mask_dim:
+            self.loggy.info('Gridtype already has a masked dimension %s', gridtype.mask_dim)
             return gridtype
 
         var = next(iter(gridtype.variables))
@@ -621,7 +620,7 @@ class Regridder(object):
 
         self.loggy.warning('Found NaN variation in dimensions: %s', nan_dims)
         # update extra dimension for future calls
-        self.extra_dims['vertical'] = nan_dims
+        self.extra_dims['mask'] = nan_dims
         return GridInspector(source_grid, extra_dims=self.extra_dims,
                              loglevel=self.loglevel, clean=True).get_gridtype()[0]
 
@@ -638,7 +637,7 @@ def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo
         source_data (:class:`xarray.DataArray`): Source variable
         target_grid (:class:`coecms.grid.Grid` or :class:`xarray.DataArray`): Target grid / sample variable
         weights (:class:`xarray.Dataset`): Pre-computed interpolation weights
-        transpose (bool): If True, transpose the output so that the vertical
+        transpose (bool): If True, transpose the output so that the masked
                           coordinate is just before the other spatial coordinates (default: True)
 
         cdo (path): path of cdo executable ["cdo"]
@@ -648,11 +647,3 @@ def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo
 
     regridder = Regridder(source_data, target_grid=target_grid, weights=weights, cdo=cdo, transpose=transpose)
     return regridder.regrid(source_data)
-
-
-# def combine_2d_to_3d(array_list, dim_name, dim_values):
-#     """
-#     Function to combine a list of 2D xarrays into a 3D one adding a vertical coordinate lev
-#     """
-#     new_array = [x.assign_coords({dim_name: d}) for x, d in zip(array_list, dim_values)]
-#     return xarray.concat(new_array, dim_name)

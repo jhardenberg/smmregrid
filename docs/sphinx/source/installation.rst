@@ -5,15 +5,22 @@ Installation
 smmregrid is a lightweight python package, but it depends on ``cdo`` for weights installation, thus both installation options requires conda/mamba. 
 We recommend to use `mamba <https://mamba.readthedocs.io/en/latest/user_guide/mamba.html>`_ since it provides a lighter and deal in a better way with dependencies.
 
+Using conda/mamba
+--------------------
+
+Simplest way is to install ``smmregrid`` using conda or mamba getting the code from conda-forge channel.
+
+    > mamba create -n smmregrid -c conda-forge smmregrid
+
+This will install ``smmregrid`` along with all required binary dependencies, including ``cdo`` and ``eccodes``.
+
+.. note::
+   Make sure to have [mamba](https://mamba.readthedocs.io/en/latest/user_guide/mamba.html) 
+   or [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html) installed on your system. 
+
+
 Using PyPi
 ----------
-
-.. warning::
-
-    Please note that although smmregrid is distributed via PyPi, it depends on packages that currently are available 
-    only on conda-forge and on configuration files available from the GitHub repository.
-    Therefore, the installation via pip requires the creation of a conda environment as well as the clone from the repository.
-
 
 It will bring you the last version available on PyPi.
 You can create a conda/mamba environment which incudes the python, `eccodes <https://github.com/ecmwf/eccodes-python>`_ and `cdo <https://code.mpimet.mpg.de/projects/cdo/>`_ dependencies, and then install smmregrid.
@@ -28,7 +35,7 @@ However, you should start by cloning the repository from GitHub, since the confi
 Using GitHub
 ------------
 
-This method will allow you to have access at the most recent ECmean4 version but it requires a bit more of effort.
+This method will allow you to have access at the most recent smmregrid (i.e. unreleased main) version but it requires a bit more of effort.
 
 As before, should clone from the Github Repository ::
 
@@ -40,7 +47,7 @@ As before, should clone from the Github Repository ::
     If you want to be a developer you should clone with SSH and you should add your own SSH key on the GitHub portal: 
     please check the `procedure on the Github website <https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account>`_ .
 
-Then you can through the ECmean4 folder ::
+Then you can through the smmregrid folder ::
 
     > cd smmregrid
 
