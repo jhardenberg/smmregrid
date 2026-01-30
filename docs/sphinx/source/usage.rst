@@ -2,7 +2,10 @@ Basic Usage
 ===========
 
 `smmregrid` can be used in two ways. By feeding to the tool a previously generated weights computed
-with cdo or by creating the weights starting from the source and the target grid.
+with CDO or by creating the weights starting from the source and the target grid.
+
+.. note::   
+    Remapping functionalities are limited to the grids supported by CDO.
 
 For further details on the different usages, please consult the `demo notebook <https://github.com/jhardenberg/smmregrid/blob/main/demo.ipynb>`_
 
@@ -23,7 +26,7 @@ Then activate the sparse smmregrid `Regridder()` class and run the `regrid()` me
 
     from smmregrid import Regridder, CdoGenerate
     weights = CdoGenerate(filein, target_grid).weights(method='con')
-    interpolator = Regridder(weights=wfield)
+    interpolator = Regridder(weights=weights)
     myfile = interpolator.regrid(xfield[var])
 
 Starting from data

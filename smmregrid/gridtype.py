@@ -7,7 +7,7 @@ DEFAULT_DIMS = {
     'horizontal': ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
                    'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
                    'nav_lon', 'nav_lat', 'rgrid'],
-    'vertical': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
+    'mask': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
     'time': ['time', 'time_counter'],
 }
 
@@ -21,7 +21,7 @@ class GridType:
 
         Args:
             dims (list): A list of default dimensions for the grid (e.g., ['time', 'lat', 'lon']).
-            extra_dims (dict, optional): A dictionary including keys 'vertical', 'time', and 'horizontal'
+            extra_dims (dict, optional): A dictionary including keys 'mask', 'time', and 'horizontal'
                                           that can be used to extend the default dimensions. Defaults to None.
             override (bool, optional): If True, it will override the default dimensions with the provided ones.
                                          Defaults to False.
@@ -30,8 +30,8 @@ class GridType:
 
         Attributes:
             horizontal_dims (list): The identified horizontal dimensions from the input.
-            vertical_dim (str or None): The identified vertical dimension, if applicable.
-            dims (list): The dimensions defined for the grid. A combination of horizontal and vertical.
+            mask_dim (str or None): The identified masked dimension, if applicable.
+            dims (list): The dimensions defined for the grid. A combination of horizontal and masked dimensions.
             time_dims (list): The identified time dimensions from the input.
             other_dims (list): The dimensions which are there but are not identified automatically.
             variables (dict): A dictionary holding identified variables and their coordinates.
@@ -49,8 +49,8 @@ class GridType:
 
         default_dims = self._handle_default_dimensions(extra_dims, override=override)
         self.horizontal_dims = self._identify_dims('horizontal', dims, default_dims)
-        self.vertical_dim = self._identify_dims('vertical', dims, default_dims)
-        self.dims = (self.horizontal_dims or []) + ([self.vertical_dim] if self.vertical_dim else [])
+        self.mask_dim = self._identify_dims('mask', dims, default_dims)
+        self.dims = (self.horizontal_dims or []) + ([self.mask_dim] if self.mask_dim else [])
         self.time_dims = self._identify_dims('time', dims, default_dims)
         self.other_dims = self._identify_other_dims(dims)
 
@@ -69,7 +69,7 @@ class GridType:
         Extend the default dimensions based on the provided extra dimensions.
 
         Args:
-            extra_dims (dict): A dictionary that can include 'vertical', 'time', and
+            extra_dims (dict): A dictionary that can include 'mask', 'time', and
                                'horizontal' keys for extending dimensions.
 
         Returns:
@@ -132,20 +132,20 @@ class GridType:
         Identify dimensions along a specified axis.
 
         Args:
-            axis (str): The axis to check ('horizontal', 'vertical', or 'time').
+            axis (str): The axis to check ('horizontal', 'mask', or 'time').
             default_dims (dict): The dictionary of default dimensions to check against.
 
         Returns:
-            list or str: A list of identified dimensions or a single identified vertical dimension.
+            list or str: A list of identified dimensions or a single identified masked dimension.
                           Returns None if no dimensions are identified.
 
         Raises:
-            ValueError: If more than one vertical dimension is identified.
+            ValueError: If more than one masked dimension is identified.
         """
 
         # Check if the axis is valid
-        if axis not in ['horizontal', 'vertical', 'time']:
-            raise ValueError(f"Invalid axis '{axis}'. Must be one of 'horizontal', 'vertical', or 'time'.")
+        if axis not in ['horizontal', 'mask', 'time']:
+            raise ValueError(f"Invalid axis '{axis}'. Must be one of 'horizontal', 'mask', or 'time'.")
 
         # Check if the axis is in the default dimensions
         if axis not in default_dims:
@@ -153,24 +153,24 @@ class GridType:
 
         # Identify dimensions based on the provided axis
         identified_dims = list(set(dims).intersection(default_dims[axis]))
-        if axis == 'vertical':
+        if axis == 'mask':
             if len(identified_dims) > 1:
-                raise ValueError(f'Only one vertical dimension can be processed at the time: check {identified_dims}')
+                raise ValueError(f'Only one masked dimension can be processed at the time: check {identified_dims}')
             if len(identified_dims) == 1:
-                identified_dims = identified_dims[0]  # unlist the single vertical dimension
+                identified_dims = identified_dims[0]  # unlist the single masked dimension
         return identified_dims if identified_dims else None
 
     def _identify_other_dims(self, dims):
         """
-        Calculate and return the dimensions that are not part of horizontal_dims, vertical_dim, or time_dims.
+        Calculate and return the dimensions that are not part of horizontal_dims, mask_dim, or time_dims.
 
         Returns:
-            set: A set of unused dimensions that are not part of horizontal, vertical, or time dimensions.
+            set: A set of unused dimensions that are not part of horizontal, mask, or time dimensions.
         """
         # Safely convert identified dimensions to sets, handling None values
         horizontal_dims = set(self.horizontal_dims) if self.horizontal_dims else set()
-        vertical_dim = {self.vertical_dim} if self.vertical_dim else set()  # Use {} for single value
+        mask_dim = {self.mask_dim} if self.mask_dim else set()  # Use {} for single value
         time_dims = set(self.time_dims) if self.time_dims else set()
 
         # Return the unused dimensions by subtracting used dimensions from all dimensions
-        return list(set(dims) - (horizontal_dims | vertical_dim | time_dims))
+        return list(set(dims) - (horizontal_dims | mask_dim | time_dims))
