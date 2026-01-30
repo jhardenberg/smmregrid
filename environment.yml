@@ -7,7 +7,7 @@ name : smmregrid
 channels:
   - conda-forge
 dependencies:
-  - python>=3.8,<3.14
+  - python>=3.8,<=3.14
   - ecCodes
   - numba
   - cdo>=2.5.0
