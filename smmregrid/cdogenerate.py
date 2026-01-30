@@ -307,38 +307,37 @@ class CdoGenerate():
     #     if not isinstance(tmpfile, str):
     #         os.remove(tmpfile.name)
 
-    def weightslist_to_3d(self, ds_list, method='ycon', mask_coord=xarray.DataArray):
+    def weightslist_to_3d(self, weights_list, method='ycon', mask_coord=xarray.DataArray):
         """Combine a list of 2D CDO weights into a 3D one.
         
         Args:
             ds_list (list): List of xarray.Dataset with 2D weights
             method (str): Remap method, to determine if dst_grid_area and dst_grid_frac
                           need to be included
-            vertical_coord (xarray.DataArray): Vertical coordinate to use for the 3D weights
+            mask_coord (xarray.DataArray): Coordinate to use for the 3D weights
         """
 
-        mask_dim = mask_coord.dims[0]
-        links_dim = "numLinks" if "numLinks" in ds_list[0].dims else "num_links"
-        
-        nl = [ds.src_address.size for ds in ds_list]
-        nl_max = max(nl)
-        nlda = xarray.DataArray(nl, coords={mask_dim: mask_coord}, name="link_length")
+        links_dim = "numLinks" if "numLinks" in weights_list[0].dims else "num_links"
+        number_links = [ds.src_address.size for ds in weights_list]
+        links_array = xarray.DataArray(number_links, coords={mask_coord.name: mask_coord.values}, name="link_length")
 
         varlist = ["src_address", "dst_address", "remap_matrix", "src_grid_imask", "dst_grid_imask"]
         # Add dst_grid_area and dst_grid_frac only for conservative methods
         if method in ['ycon', 'con2', 'con']:
             varlist += ["dst_grid_area", "dst_grid_frac"]
-        ds0 = ds_list[0].drop_vars(varlist)
+        untouched_array = weights_list[0].drop_vars(varlist)
 
-        new_array = []
-        for x, v in zip(ds_list, mask_coord.values):
+        modified_array  = []
+        nl_max = max(number_links)
+        for x, v in zip(weights_list, mask_coord.values):
             nl1 = x.src_address.size
             xplist = [x[vname].pad(**{links_dim: (0, nl_max - nl1), "mode": 'constant', "constant_values": 0})
                       for vname in varlist]
             xmerged = xarray.merge(xplist)
-            new_array.append(xmerged.assign_coords({mask_dim: v}))
+            modified_array.append(xmerged.assign_coords({mask_coord.name: v}))
+        modified_array =  xarray.concat(modified_array, mask_coord.name, coords='different', compat='equals')
 
-        return xarray.merge([nlda, ds0, xarray.concat(new_array, mask_dim, coords='different', compat='equals')],
+        return xarray.merge([links_array, untouched_array, modified_array],
                             combine_attrs='no_conflicts')
     
     def areas(self, target=False):
