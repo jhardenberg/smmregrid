@@ -80,7 +80,7 @@ Constructor Parameters
 
 **Dimension Control:**
 
-* **mask_dim** (*str*, optional): Name of vertical coordinate for 3D regridding.
+* **mask_dim** (*str*, optional): Name of coordinate with varying mask, that will be used for 3D regridding.
   Forces recognition of this dimension as vertical even if not in standard list.
 
 * **horizontal_dims** (*list*, optional): List of spatial dimensions to interpolate.
@@ -107,70 +107,13 @@ Constructor Parameters
 
 * **loglevel** (*str*, default: 'WARNING'): Logging verbosity level.
 
-Methods
--------
-
-regrid()
-~~~~~~~~
-
-Apply regridding to input data.
-
-.. code-block:: python
-
-   regridded_data = regridder.regrid(source_data)
-
-**Parameters:**
-
-* **source_data** (*xarray.Dataset* or *xarray.DataArray*): Data to be regridded.
-  Can handle both single variables (DataArray) and multi-variable datasets (Dataset).
-
-**Returns:** Regridded data with same structure as input but on target grid.
-
-**Features:**
-
-* **Multi-variable support**: Automatically processes all variables in Dataset
-* **Dimension preservation**: Maintains non-spatial dimensions (time, ensemble, etc.)
-* **Coordinate handling**: Properly transfers and updates coordinate information
-* **Chunking preservation**: Maintains Dask chunking for large datasets
-* **Attribute preservation**: Retains metadata and attributes from source data
-
-Grid Type Handling
--------------------
-
-The Regridder automatically detects and handles different grid types:
-
-**Single Grid Type:**
-
-.. code-block:: python
-
-   # Standard case - all variables share same spatial grid
-   regridder = Regridder('model.nc', 'obs_grid.nc')
-
-**Multiple Grid Types:**
-
-.. code-block:: python
-
-   # Mixed grids (e.g., atmospheric + ocean data)
-   regridder = Regridder('coupled_model.nc', 'target.nc', loglevel='INFO')
-   # Will detect multiple grids and handle appropriately
-
-**Forced Grid Recognition:**
-
-.. code-block:: python
-
-   # Force specific dimension recognition
-   regridder = Regridder(
-       'data.nc', 'target.nc',
-       mask_dim='model_level',    # Force vertical recognition
-       horizontal_dims=['xi', 'eta']  # Force horizontal recognition
-   )
 
 2D vs 3D Regridding
 -------------------
 
-**2D Regridding (default):**
+**2D/3D Regridding (default):**
 
-Applies to data without vertical structure:
+Applies to data without masked structure. This can be used for atmospheric 2D or 3D data.
 
 .. code-block:: python
 
@@ -178,19 +121,26 @@ Applies to data without vertical structure:
    regridder = Regridder('surface_temp.nc', 'r180x90')
    regridded = regridder.regrid(data)
 
-**3D Masked Regridding:**
+   # 3D surface data
+   regridder = Regridder('3d_wind.nc', 'r180x90')
+   regridded = regridder.regrid(data)
 
-For data with masked vertical levels, specify masked dimension:
+**3D masked Regridding:**
+
+For data with mask-changing levels, specify the dimension with varying mask using `mask_dim`.
+In this way smmregrid will compute specific weights for each level, without the risk of mixing masked and unmasked points.
 
 .. code-block:: python
 
-   # 3D atmospheric data
+   # 3D oceanic data
    regridder = Regridder(
-       'atmos_data.nc', 'target.nc',
-       mask_dim='plev'
+       'ocean_data.nc', 'target.nc',
+       mask_dim='depth'
    )
 
 **Automatic 3D Detection with NaN Analysis:**
+
+This is feature under test which allows smmregrid to automatically detect mask-changing dimension
 
 .. code-block:: python
 
@@ -220,14 +170,6 @@ For conservative methods ('con', 'con2', 'ycon'), additional masking options are
 Performance Optimization
 -------------------------
 
-**Memory Management:**
-
-.. code-block:: python
-
-   # For large datasets, use chunking-aware processing
-   import dask
-   with dask.config.set(scheduler='threads', num_workers=4):
-       regridded = regridder.regrid(large_dataset)
 
 **Pre-computed Weights:**
 
@@ -281,38 +223,4 @@ Examples
        'ocean_model.nc', 'obs_locations.nc', 
        method='con',
        check_nan=True,
-   )
-
-**High-Performance Regridding:**
-
-.. code-block:: python
-
-   # Pre-compute weights for multiple uses
-   from smmregrid import CdoGenerate
-   
-   generator = CdoGenerate('source.nc', 'target.nc')
-   weights = generator.weights(
-       method='con2',  # Second-order conservative
-       nproc=8         # Parallel weight generation
-   )
-   
-   # Fast regridding with pre-computed weights
-   regridder = Regridder(weights=weights, transpose=False)
-   
-   # Process multiple files efficiently
-   for file in file_list:
-       data = xr.open_dataset(file)
-       regridded = regridder.regrid(data)
-       regridded.to_netcdf(f'regridded_{file}')
-
-**Custom Grid Recognition:**
-
-.. code-block:: python
-
-   # Force recognition of non-standard dimension names
-   regridder = Regridder(
-       'custom_model.nc', 'standard_grid.nc',
-       horizontal_dims=['xi_rho', 'eta_rho'],  # ROMS ocean model
-       mask_dim='s_rho',                   # Sigma coordinates
-       loglevel='DEBUG'
    )

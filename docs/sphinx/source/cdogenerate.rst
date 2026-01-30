@@ -88,8 +88,8 @@ Generate interpolation weights for regridding.
   - 'fracarea': Normalize by fractional area (default)
   - 'destarea': Normalize by destination area
 
-* **mask_dim** (*str*, optional): Name of the vertical dimension for 3D weight generation.
-  If specified, generates 3D weights for each vertical level. To be used for vertical changing masks.
+* **mask_dim** (*str*, optional): Name of the mask-changing dimension for 3D weight generation.
+  If specified, generates 3D weights for each mask-changing level. Mostly used for oceanic 3D data.
 
 * **nproc** (*int*, default: 1): Number of processes for parallel 3D weight generation.
 

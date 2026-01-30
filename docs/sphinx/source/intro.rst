@@ -4,25 +4,24 @@ Introduction
 A compact regridder using sparse matrix multiplication
 ------------------------------------------------------
 
-`smmregrid` is a tool meant to work into python environment to perform efficiently regridding operation of dask-enable xarray.Dataset and xarray.DataArray.
+`smmregrid` is a tool meant to work within python to perform efficiently regridding operation of dask-enable xarray.Dataset and xarray.DataArray.
 It uses sparse matrix multiplication with basic manipulation of the coordinates and uses CDO as a backend to provide the computation of weights. 
-It can work from source and target grids, but most importantly it can also start from precomputed weights.
+It can be initialized from a pair of source/target files or xarray objects, but most importantly it can also start from precomputed weights.
 
-Please note that `smmregrid` is not meant to be "another interpolation tool", but rather a method to apply pre-computed weights within the python environment. 
+Please note that `smmregrid` is not meant to be "another interpolation tool", but rather a method to apply pre-computed weights within the python in dask-enabled way. 
 The speedup is estimated to be about ~1.5 to ~5 times compared to CDO itself, slightly lower if then files are written to the disk. 
 
-2D and 3D data are supported on all the grids supported by CDO (including gaussian reduced, healpix or unstructured grids with cell corners), both xarray.Dataset and xarray.DataArray can be used. 
-It relies on the `GridType()` class which identify the properties of each xarray.DataArray, detecting time, horizontal and vertical coordinates.
+2D and 3D data are supported on all the grids supported by CDO (including gaussian reduced, healpix or unstructured grids with available cell corners),
+Both xarray.Dataset and xarray.DataArray can be used. 
+Internally, it relies on the `GridType()` object which identify the properties of each xarray.DataArray, detecting time, horizontal and masked coordinates.
 
-Masks are treated in a simple way but correctly transfered from source to target grid. 
-
-A specific treatment for mask changing along the vertical dimension can be applied through the `mask_dim` keyword. 
+Indeed, a specific treatment for mask-changing dimensions is available. 
 Indeed, 3D weights are computed specifically for each level and then stored together in specific files so that it guarantees precise mask handling.
-
+This case is typical for vertical dimension in oceanic model, and it can be identified through the `mask_dim` keyword. 
 
 .. warning ::
 
-   1. It does not work (yet) with dataset/files including multiple horizontal grids
+   1. It does not work with dataset/files including multiple horizontal grids
    2. It does not work correctly if the Xarray.Dataset includes fields with time-varying missing points
 
 Acknowledgement
