@@ -361,9 +361,11 @@ class Regridder(object):
             return source_data
 
         data3d_list = []
+        # create pandas object for fast level index retrieval
+        mask_index = weights.coords[mask_dim].to_index()
         for idx, lev in enumerate(source_data.coords[mask_dim].values):
             # get the index of the level for weights selection (widx, which might be different from idx)
-            widx = int(numpy.where(weights.coords[mask_dim].values == lev)[0][0])
+            widx = mask_index.get_loc(lev)
             self.loggy.debug('Processing vertical level %s - level_index %s', lev, widx)
             # use isel since it faster
             xa = source_data.isel(**{mask_dim: idx})
