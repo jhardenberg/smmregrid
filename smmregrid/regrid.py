@@ -371,7 +371,7 @@ class Regridder(object):
                     f"{lev} not found in mask_dim {mask_index.name}. "
                     f"Available levels: {list(mask_index.values)}"
                 )
-            widx = mask_index.get_loc(lev)
+            widx = mask_index.get_loc(lev, method="nearest", tolerance=1e-5)
             self.loggy.debug('Processing vertical level %s - level_index %s', lev, widx)
             # use isel since it faster
             xa = source_data.isel(**{mask_dim: idx})
