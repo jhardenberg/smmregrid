@@ -337,8 +337,10 @@ class CdoGenerate():
             modified_array.append(xmerged.assign_coords({mask_coord.name: v}))
         modified_array =  xarray.concat(modified_array, mask_coord.name, coords='different', compat='equals')
 
-        return xarray.merge([links_array, untouched_array, modified_array],
+        merged_array = xarray.merge([links_array, untouched_array, modified_array],
                             combine_attrs='no_conflicts')
+        merged_array[mask_coord.name].attrs = mask_coord.attrs
+        return merged_array
     
     def areas(self, target=False):
         """Generate source areas or target areas"""
