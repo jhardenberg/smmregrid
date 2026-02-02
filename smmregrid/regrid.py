@@ -363,16 +363,16 @@ class Regridder(object):
         data3d_list = []
         # create pandas object for fast level index retrieval
         mask_index = weights.coords[mask_dim].to_index()
-    
         for idx, lev in enumerate(source_data.coords[mask_dim].values):
             # get the index of the level for weights selection (widx, which might be different from idx)
-            if lev not in mask_index:
+            # tolerance is necessary to avoid numerical issues, hard coded
+            widx = mask_index.get_indexer([lev], method="nearest", tolerance=1e-3)[0]
+            if widx == -1:
                 raise ValueError(
                     f"{lev} not found in mask_dim {mask_index.name}. "
                     f"Available levels: {list(mask_index.values)}"
                 )
             #widx = mask_index.get_loc(lev)
-            widx = mask_index.get_indexer([lev], method="nearest", tolerance=1e-4)[0]
             self.loggy.debug('Processing vertical level %s - level_index %s', lev, widx)
             # use isel since it faster
             xa = source_data.isel(**{mask_dim: idx})
