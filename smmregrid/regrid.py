@@ -364,7 +364,7 @@ class Regridder(object):
         # create pandas object for fast level index retrieval
         mask_index = weights.coords[mask_dim].to_index()
     
-        for idx, lev in enumerate(numpsource_data.coords[mask_dim].values):
+        for idx, lev in enumerate(source_data.coords[mask_dim].values):
             # get the index of the level for weights selection (widx, which might be different from idx)
             if lev not in mask_index:
                 raise ValueError(
