@@ -202,7 +202,7 @@ class CdoGenerate():
         for block in blocks:
             processes = []
             for lev in block:
-                self.loggy.info("Generating level: %s", str(lev))
+                self.loggy.info("Generating level: %s at depth %s", str(lev), sgrid[mask_dim].values[lev])
                 cdo_extra_vertical = [f"-sellevidx,{lev + 1}"]
                 ppp = Process(target=self._weights_worker,
                               args=(wlist, lev),
