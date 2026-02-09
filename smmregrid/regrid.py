@@ -528,12 +528,11 @@ class Regridder(object):
         # define and compute the new mask
         if masked:
             # broadcast the mask on all the remaining dimensions and apply it with where
-            target_mask = dask.array.broadcast_to(
-                dst_grid_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
-            )
-            self.loggy.debug('Applying mask with shape %s', target_mask.shape)
-            target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
-            self.loggy.debug('Reshaped with %s masked points', dask.array.isnan(target_dask).sum().compute())
+            # Reshape mask to broadcastable shape (avoid intermediate boolean array creation)
+            mask_shape = [1 for d in kept_shape] + [-1]
+            target_mask = dst_grid_mask.data.reshape(mask_shape).astype(bool)
+            self.loggy.debug('Applying mask with shape %s', target_dask.shape)
+            target_dask = dask.array.where(target_mask, target_dask, numpy.nan)
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
