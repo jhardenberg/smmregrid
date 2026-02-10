@@ -202,7 +202,7 @@ class CdoGenerate():
         for block in blocks:
             processes = []
             for lev in block:
-                self.loggy.info("Generating level: %s", str(lev))
+                self.loggy.info("Generating level: %s at depth %s", str(lev), sgrid[mask_dim].values[lev])
                 cdo_extra_vertical = [f"-sellevidx,{lev + 1}"]
                 ppp = Process(target=self._weights_worker,
                               args=(wlist, lev),
@@ -337,8 +337,10 @@ class CdoGenerate():
             modified_array.append(xmerged.assign_coords({mask_coord.name: v}))
         modified_array =  xarray.concat(modified_array, mask_coord.name, coords='different', compat='equals')
 
-        return xarray.merge([links_array, untouched_array, modified_array],
+        merged_array = xarray.merge([links_array, untouched_array, modified_array],
                             combine_attrs='no_conflicts')
+        merged_array[mask_coord.name].attrs = mask_coord.attrs
+        return merged_array
     
     def areas(self, target=False):
         """Generate source areas or target areas"""

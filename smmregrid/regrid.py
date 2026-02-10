@@ -286,6 +286,12 @@ class Regridder(object):
         Raises:
             ValueError: If the input data does not match expected dimensions.
         """
+        scalars = self._identify_scalar_coords(source_data)
+        if scalars:
+            self.loggy.warning(
+                "Found scalar coordinates %s. If have selected a along a masked dimensions,"
+                "regridding might fail. "
+                "Please consider subsetting with [] or with slice", scalars)
 
         self.loggy.debug('Getting GridType from source_data')
         grid_inspect = GridInspector(source_data,
@@ -299,6 +305,16 @@ class Regridder(object):
                 return self.regrid3d(source_data, datagridtype)
             # 2d case
             return self.regrid2d(source_data, datagridtype)
+
+    def _identify_scalar_coords(self, source_data):
+        """
+        This method checks for coordinates that have no dimensions (i.e., scalar) and returns a list of their names.
+
+        Args:
+            source_data (xarray.DataArray): The source data array to check for scalar coordinates.
+        """
+
+        return [name for name, coord in source_data.coords.items() if coord.dims == ()]
 
     def _get_gridtype(self, datagridtype):
 
@@ -365,7 +381,14 @@ class Regridder(object):
         mask_index = weights.coords[mask_dim].to_index()
         for idx, lev in enumerate(source_data.coords[mask_dim].values):
             # get the index of the level for weights selection (widx, which might be different from idx)
-            widx = mask_index.get_loc(lev)
+            # tolerance is necessary to avoid numerical issues, hard coded
+            widx = mask_index.get_indexer([lev], method="nearest", tolerance=1e-3)[0]
+            if widx == -1:
+                raise ValueError(
+                    f"{lev} not found in mask_dim {mask_index.name}. "
+                    f"Available levels: {list(mask_index.values)}"
+                )
+            #widx = mask_index.get_loc(lev)
             self.loggy.debug('Processing vertical level %s - level_index %s', lev, widx)
             # use isel since it faster
             xa = source_data.isel(**{mask_dim: idx})
@@ -473,6 +496,9 @@ class Regridder(object):
         dst_cdo_grid = weights.attrs['dest_grid']
         self.loggy.info('Interpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
 
+        # src grid properties
+        src_grid_shape = weights.src_grid_dims.values
+
         # destination grid properties
         dst_grid_shape = weights.dst_grid_dims.values
         dst_frac_area = weights.dst_grid_frac
@@ -492,7 +518,7 @@ class Regridder(object):
             self.loggy.error('smmregrid can identify only %s', source_data.dims)
             raise KeyError('Dimensions mismatch')
 
-        self.loggy.info('Regridding from %s to %s', source_data.shape, dst_grid_shape)
+        self.loggy.info('Regridding from %s to %s', src_grid_shape, dst_grid_shape)
 
         # Find dimensions to keep
         kept_dims = [dim for dim in source_data.dims if dim not in horizontal_dims]
@@ -521,12 +547,11 @@ class Regridder(object):
         # define and compute the new mask
         if masked:
             # broadcast the mask on all the remaining dimensions and apply it with where
-            target_mask = dask.array.broadcast_to(
-                dst_grid_mask.data.reshape([1 for d in kept_shape] + [-1]), target_dask.shape
-            )
-            self.loggy.debug('Applying mask with shape %s', target_mask.shape)
-            target_dask = dask.array.where(target_mask != 0.0, target_dask, numpy.nan)
-            self.loggy.debug('Reshaped with %s masked points', dask.array.isnan(target_dask).sum().compute())
+            # Reshape mask to broadcastable shape (avoid intermediate boolean array creation)
+            mask_shape = [1 for d in kept_shape] + [-1]
+            target_mask = dst_grid_mask.data.reshape(mask_shape).astype(bool)
+            self.loggy.debug('Applying mask with shape %s', target_dask.shape)
+            target_dask = dask.array.where(target_mask, target_dask, numpy.nan)
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
