@@ -286,6 +286,12 @@ class Regridder(object):
         Raises:
             ValueError: If the input data does not match expected dimensions.
         """
+        scalars = self._identify_scalar_coords(source_data)
+        if scalars:
+            self.loggy.warning(
+                "Found scalar coordinates %s. If have selected a along a masked dimensions,"
+                "regridding might fail. "
+                "Please consider subsetting with [] or with slice", scalars)
 
         self.loggy.debug('Getting GridType from source_data')
         grid_inspect = GridInspector(source_data,
@@ -299,6 +305,16 @@ class Regridder(object):
                 return self.regrid3d(source_data, datagridtype)
             # 2d case
             return self.regrid2d(source_data, datagridtype)
+
+    def _identify_scalar_coords(self, source_data):
+        """
+        This method checks for coordinates that have no dimensions (i.e., scalar) and returns a list of their names.
+
+        Args:
+            source_data (xarray.DataArray): The source data array to check for scalar coordinates.
+        """
+
+        return [name for name, coord in source_data.coords.items() if coord.dims == ()]
 
     def _get_gridtype(self, datagridtype):
 
@@ -480,6 +496,9 @@ class Regridder(object):
         dst_cdo_grid = weights.attrs['dest_grid']
         self.loggy.info('Interpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
 
+        # src grid properties
+        src_grid_shape = weights.src_grid_dims.values
+
         # destination grid properties
         dst_grid_shape = weights.dst_grid_dims.values
         dst_frac_area = weights.dst_grid_frac
@@ -499,7 +518,7 @@ class Regridder(object):
             self.loggy.error('smmregrid can identify only %s', source_data.dims)
             raise KeyError('Dimensions mismatch')
 
-        self.loggy.info('Regridding from %s to %s', source_data.shape, dst_grid_shape)
+        self.loggy.info('Regridding from %s to %s', src_grid_shape, dst_grid_shape)
 
         # Find dimensions to keep
         kept_dims = [dim for dim in source_data.dims if dim not in horizontal_dims]
