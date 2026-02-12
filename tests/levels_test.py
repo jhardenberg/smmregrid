@@ -19,6 +19,10 @@ def test_plev_gaussian_levels(method):
 def test_nemo_3d_levels(method):
     """NEMO 3D levels test with level selection"""
     fff = check_cdo_regrid_levels(os.path.join(INDIR, 'so3d-nemo.nc'), tfile,
+                                  "lev", 16, remap_method=method)  # single level
+    assert fff is True, "Single 3D level test failed"
+
+    fff = check_cdo_regrid_levels(os.path.join(INDIR, 'so3d-nemo.nc'), tfile,
                                   "lev", [14, 17], remap_method=method)
     assert fff is True, "Multiple levels test failed"
 

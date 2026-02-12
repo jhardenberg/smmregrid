@@ -286,12 +286,7 @@ class Regridder(object):
         Raises:
             ValueError: If the input data does not match expected dimensions.
         """
-        scalars = self._identify_scalar_coords(source_data)
-        if scalars:
-            self.loggy.warning(
-                "Found scalar coordinates %s. If have selected a along a masked dimensions,"
-                "regridding might fail. "
-                "Please consider subsetting with [] or with slice", scalars)
+        source_data = self._identify_scalar_coords(source_data)
 
         self.loggy.debug('Getting GridType from source_data')
         grid_inspect = GridInspector(source_data,
@@ -314,7 +309,10 @@ class Regridder(object):
             source_data (xarray.DataArray): The source data array to check for scalar coordinates.
         """
 
-        return [name for name, coord in source_data.coords.items() if coord.dims == ()]
+        scalar_coords = [name for name, coord in source_data.coords.items() if coord.dims == ()]
+        for scalar in scalar_coords:
+            source_data = source_data.expand_dims(scalar)
+        return source_data
 
     def _get_gridtype(self, datagridtype):
 
