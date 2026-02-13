@@ -5,6 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+- Expand scalar dimension to allow for single level selection along `mask_dim` (#59)
 - Support for python 3.14 (#57)
 - `mask_dim` keep same attributes as original data in 3D weights (#58)
 - Vertical coordinate in weights now correspond to the data coordinates, rather than a list (#55)
