@@ -293,16 +293,24 @@ class Regridder(object):
                                      extra_dims=self.extra_dims,
                                      loglevel=self.loglevel)
         datagrids = grid_inspect.get_gridtype()
+        self.loggy.debug('GridType obtained from source_data: %s', datagrids)
 
-        for datagridtype in datagrids:
-            if datagridtype.mask_dim:
-                # if this is a 3D we specified the masked coord and it has it
-                # added squeeze to avoid issues with single level selection
-                # TODO: apply squeeze only along the scalar dimension, not in general
-                return self.regrid3d(source_data, datagridtype).squeeze()
-            # 2d case
-            return self.regrid2d(source_data, datagridtype).squeeze()
+        # if no gridtype is found, ignore it
+        if not datagrids:
+            return
 
+        if len(datagrids) > 1:
+            raise ValueError(f'Multiple GridType found in the data: {len(datagrids)}. '
+                             f'Cannot decide which one to use for regridding')
+
+        if datagrids[0].mask_dim:
+            # if this is a 3D we specified the masked coord and it has it
+            # added squeeze to avoid issues with single level selection
+            # TODO: apply squeeze only along the scalar dimension, not in general
+            return self.regrid3d(source_data, datagrids[0]).squeeze()
+        # 2d case
+        return self.regrid2d(source_data, datagrids[0]).squeeze()
+    
     def _expand_scalar_coords(self, source_data):
         """
         This method checks for coordinates that have no dimensions (i.e., scalar) and expands them.
