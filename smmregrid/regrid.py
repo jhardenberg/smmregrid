@@ -297,6 +297,8 @@ class Regridder(object):
         for datagridtype in datagrids:
             if datagridtype.mask_dim:
                 # if this is a 3D we specified the masked coord and it has it
+                # added squeeze to avoid issues with single level selection
+                # TODO: apply squeeze only along the scalar dimension, not in general
                 return self.regrid3d(source_data, datagridtype).squeeze()
             # 2d case
             return self.regrid2d(source_data, datagridtype).squeeze()
