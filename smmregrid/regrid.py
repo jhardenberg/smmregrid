@@ -297,9 +297,9 @@ class Regridder(object):
         for datagridtype in datagrids:
             if datagridtype.mask_dim:
                 # if this is a 3D we specified the masked coord and it has it
-                return self.regrid3d(source_data, datagridtype)
+                return self.regrid3d(source_data, datagridtype).squeeze()
             # 2d case
-            return self.regrid2d(source_data, datagridtype)
+            return self.regrid2d(source_data, datagridtype).squeeze()
 
     def _expand_scalar_coords(self, source_data):
         """

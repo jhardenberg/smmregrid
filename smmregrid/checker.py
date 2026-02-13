@@ -124,4 +124,4 @@ def final_comparison(cdofield, rfield):
     print("CDO field nans:", cdofield.isnull().sum().values)
     print("Regrid field nans:", rfield.isnull().sum().values)
     print("Avg difference:", np.nanmean(np.abs(cdofield - rfield)))
-    return np.allclose(cdofield.squeeze(), rfield.squeeze(), equal_nan=True)
+    return np.allclose(cdofield, rfield, equal_nan=True)
