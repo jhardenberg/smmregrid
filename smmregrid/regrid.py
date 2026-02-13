@@ -310,7 +310,7 @@ class Regridder(object):
             return self.regrid3d(source_data, datagrids[0]).squeeze()
         # 2d case
         return self.regrid2d(source_data, datagrids[0]).squeeze()
-    
+
     def _expand_scalar_coords(self, source_data):
         """
         This method checks for coordinates that have no dimensions (i.e., scalar) and expands them.
