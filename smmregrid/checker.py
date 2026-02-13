@@ -65,18 +65,17 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
         rfield = rfield[smmvar].to_array()
         cdofield = cdofield[cdovar].to_array()
 
-    # check if arrays are equal with numerical tolerance
-    checker = np.allclose(cdofield, rfield, equal_nan=True)
-    return checker
+    return final_comparison(cdofield, rfield)
 
 
 def check_cdo_regrid_levels(finput, ftarget, mask_dim, levels, remap_method='con',
                             remap_area_min=0.5, access='Dataset',
                             extrapolate=True, loglevel='INFO'):
-    """Given a file to be interpolated finput over the ftarget grid,
+    """
+    Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
-    This is a variant to check the level memory feature (idx_3d)."""
+    """
 
     # define files and open input file
     xfield = xr.open_mfdataset(finput)
@@ -114,6 +113,15 @@ def check_cdo_regrid_levels(finput, ftarget, mask_dim, levels, remap_method='con
         rfield = rfield[smmvar].to_array()
         cdofield = cdofield[cdovar].to_array()
 
-    # check if arrays are equal with numerical tolerance
-    checker = np.allclose(cdofield, rfield, equal_nan=True)
-    return checker
+    return final_comparison(cdofield, rfield)
+
+def final_comparison(cdofield, rfield):
+    """Final comparison of the two fields, with some diagnostics"""
+
+    cdofield = cdofield.compute()
+    rfield = rfield.compute()
+
+    print("CDO field nans:", cdofield.isnull().sum().values)
+    print("Regrid field nans:", rfield.isnull().sum().values)
+    print("Avg difference:", np.nanmean(np.abs(cdofield - rfield)))
+    return np.allclose(cdofield.squeeze(), rfield.squeeze(), equal_nan=True)

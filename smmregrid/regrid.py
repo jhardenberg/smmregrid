@@ -286,7 +286,7 @@ class Regridder(object):
         Raises:
             ValueError: If the input data does not match expected dimensions.
         """
-        source_data = self._identify_scalar_coords(source_data)
+        source_data = self._expand_scalar_coords(source_data)
 
         self.loggy.debug('Getting GridType from source_data')
         grid_inspect = GridInspector(source_data,
@@ -301,9 +301,10 @@ class Regridder(object):
             # 2d case
             return self.regrid2d(source_data, datagridtype)
 
-    def _identify_scalar_coords(self, source_data):
+    def _expand_scalar_coords(self, source_data):
         """
-        This method checks for coordinates that have no dimensions (i.e., scalar) and returns a list of their names.
+        This method checks for coordinates that have no dimensions (i.e., scalar) and expands them.
+        This solves issues with levels selection along the masked dimension.
 
         Args:
             source_data (xarray.DataArray): The source data array to check for scalar coordinates.
@@ -311,6 +312,7 @@ class Regridder(object):
 
         scalar_coords = [name for name, coord in source_data.coords.items() if coord.dims == ()]
         for scalar in scalar_coords:
+            self.loggy.debug('Expanding scalar coordinate %s', scalar)
             source_data = source_data.expand_dims(scalar)
         return source_data
 
