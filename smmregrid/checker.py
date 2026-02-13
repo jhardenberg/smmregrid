@@ -118,9 +118,11 @@ def check_cdo_regrid_levels(finput, ftarget, mask_dim, levels, remap_method='con
 def final_comparison(cdofield, rfield):
     """Final comparison of the two fields, with some diagnostics"""
 
-    cdofield = cdofield.compute()
-    rfield = rfield.compute()
+    cdofield = cdofield.squeeze().compute()
+    rfield = rfield.squeeze().compute()
 
+    print("CDO field shape:", cdofield.shape)
+    print("Regrid field shape:", rfield.shape)
     print("CDO field nans:", cdofield.isnull().sum().values)
     print("Regrid field nans:", rfield.isnull().sum().values)
     print("Avg difference:", np.nanmean(np.abs(cdofield - rfield)))
