@@ -7,12 +7,12 @@ name = "smmregrid"
 dynamic = ["version"]
 authors = [
   { name="Jost von Hardenberg", email="jost.hardenberg@polito.it" },
-  { name="Paolo Davini", email="p.davini@isac.cnr.it" },
+  { name="Paolo Davini", email="paolo.davini@cnr.it" },
   { name="Scott Wales", email="scott.wales@unimelb.edu.au"}
 ]
 description = "Regridding based on sparse matrix multiplication"
 readme = "README.md"
-requires-python = ">=3.8,<=3.14"
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Intended Audience :: Science/Research",
