@@ -16,12 +16,22 @@ def test_plev_gaussian_levels(method):
 
 
 @pytest.mark.parametrize("method", ['con'])
-def test_nemo_3d_levels(method):
+def test_nemo_3d_single_level(method):
+    """NEMO 3D levels test with level selection"""
+    fff = check_cdo_regrid_levels(os.path.join(INDIR, 'so3d-nemo.nc'), tfile,
+                                  "lev", 16, remap_method=method)  # single level
+    assert fff is True, "Single selected 3D level test failed"
+
+@pytest.mark.parametrize("method", ['con'])
+def test_nemo_3d_multiple_levels(method):
     """NEMO 3D levels test with level selection"""
     fff = check_cdo_regrid_levels(os.path.join(INDIR, 'so3d-nemo.nc'), tfile,
                                   "lev", [14, 17], remap_method=method)
     assert fff is True, "Multiple levels test failed"
 
+@pytest.mark.parametrize("method", ['con'])
+def test_nemo_3d_single_level_extrapolate(method):
+    """NEMO 3D levels test with level selection and extrapolation"""
     fff = check_cdo_regrid_levels(os.path.join(INDIR, 'so3d-nemo.nc'), tfile,
-                                  "lev", [15], remap_method=method)  # single level
-    assert fff is True, "Single 3D level test failed"
+                                  "lev", [15], remap_method=method)  # single level with slice
+    assert fff is True, "Single sliced 3D level test failed"

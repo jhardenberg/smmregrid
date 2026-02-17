@@ -48,7 +48,7 @@ TEST_FILES = [
     ("tas-healpix2.nc", "HEALPix"),
     ("tos-fesom.nc", "Unstructured"),
     ("ua-so_mix_ecearth.nc", "GaussianRegular"),
-    ("healpix_0.nc", "Unknown"),
+    ("healpix_0.nc", "Undefined"),
     ("onlytos-ipsl.nc", "Curvilinear"),
     ("regional.nc", "Regular"),
     ("tas-ecearth.nc", "GaussianRegular"),

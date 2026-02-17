@@ -143,11 +143,6 @@ In this way smmregrid will compute specific weights for each level, without the 
    When using `mask_dim`, ensure that the specified dimension is correctly identified as the one with varying mask. 
    Incorrect specification may lead to unexpected regridding results.
 
-.. warning:: 
-
-   If you select a field along the `mask_dim` and then regrid, always use `slice` or `[]` operators. 
-   Level selection based on integer might cause unexpected results, since the mask might not be correctly identified.
-
 **Automatic 3D Detection with NaN Analysis:**
 
 This is feature under test which allows smmregrid to automatically detect mask-changing dimension

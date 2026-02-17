@@ -58,26 +58,47 @@ class GridInspector():
         """
 
         if isinstance(self.data, xr.Dataset):
-            self.data.map(self._inspect_dataarray_grid, keep_attrs=False)
-        if isinstance(self.data, xr.DataArray):
-            self._inspect_dataarray_grid(self.data)
-
-        # get variables associated to the grid
-        for gridtype in self.grids:
-            self.identify_variables(gridtype)
+            bounds_vars = set(self._identify_spatial_bounds(self.data))
+            
+            # Single pass: create grids and assign variables simultaneously
+            for var in self.data.data_vars:
+                if var not in bounds_vars:
+                    self._inspect_and_assign_variable(self.data[var], var)
+            
+            # Set bounds for all grids
+            for gridtype in self.grids:
+                gridtype.bounds = list(bounds_vars)
+                    
+        elif isinstance(self.data, xr.DataArray):
+            self._inspect_and_assign_variable(self.data)
 
         # get grid format
         self._identify_grid_format(self.data)
 
-    def _inspect_dataarray_grid(self, data_array):
+    def _inspect_and_assign_variable(self, data_array, var_name=None):
         """
-        Helper method to inspect a single DataArray and identify its grid type.
-        If the data_array is a bounds variable, it is not added to the grids list.
+        Inspect DataArray, find/create its GridType, and assign the variable to it.
+        
+        Args:
+            data_array: The DataArray to inspect
+            var_name: Variable name (for Dataset), or None to use data_array.name
         """
-        grid_key = tuple(data_array.dims)
-        gridtype = GridType(dims=grid_key, extra_dims=self.extra_dims)
-        if gridtype not in self.grids and not self._is_bounds(data_array.name):
+
+        # Create candidate GridType
+        candidate_gridtype = GridType(dims=tuple(data_array.dims), extra_dims=self.extra_dims)
+
+        # Find existing gridtype in a single pass
+        for gridtype in self.grids:
+            if gridtype == candidate_gridtype:
+                break
+        else:
+            gridtype = candidate_gridtype
             self.grids.append(gridtype)
+
+        # Assign variable to gridtype (overwrite dictionary across all vars with same dims)
+        gridtype.variables[var_name or data_array.name] = {
+            'coords': list(data_array.coords),
+        }
 
     def _inspect_weights(self):
         """
@@ -132,72 +153,14 @@ class GridInspector():
         """
         Remove degenerate grids which are used by not relevant variables
         """
-        removed = []
+        # Log grids being removed before filtering
+        # for gridtype in self.grids:
+        #     if not gridtype.dims:
+        #         self.loggy.info('Removing the grid defined by %s with no spatial dimensions',
+        #                         gridtype.dims)
 
-        # Iterate through grids
-        for gridtype in self.grids:
-            # Check if any variable in the grid contains 'bnds'
-            if not gridtype.dims:
-                removed.append(gridtype)
-                self.loggy.info('Removing the grid defined by %s with with no spatial dimensions',
-                                gridtype.dims)
-            # elif all('bnds' in variable for variable in gridtype.variables):
-            #    removed.append(gridtype)  # Add to removed list
-            #    self.loggy.info('Removing the grid defined by %s with variables containing "bnds"',
-            #                     gridtype.dims)
-            # elif all('bounds' in variable for variable in gridtype.variables):
-            #    removed.append(gridtype)  # Add to removed list
-            #    self.loggy.info('Removing the grid defined by %s with variables containing "bounds"',
-            #                    gridtype.dims)
+        self.grids = [gridtype for gridtype in self.grids if gridtype.dims]
 
-        for remove in removed:
-            self.grids.remove(remove)
-
-    def _identify_variable(self, gridtype, var_data, var_name=None):
-        """Helper function to process individual variables.
-
-        Args:
-            gridtype (GridType): The Gridtype object of originally inspected from the data
-            var_data (xr.DataArray): An xarray DataArray containing variable data.
-            var_name (str, optional): The name of the variable. If None, uses the name from var_data.
-
-        Updates:
-            self.variables: Updates the variables dictionary with the variable's coordinates.
-        """
-        datagridtype = GridType(var_data.dims, extra_dims=self.extra_dims)
-
-        if datagridtype == gridtype:
-            gridtype.variables[var_name or var_data.name] = {
-                'coords': list(var_data.coords),
-            }
-
-    def identify_variables(self, gridtype):
-        """
-        Identify variables in the provided data that match the defined dimensions.
-
-        Args:
-            gridtype (GridType): The Gridtype object of originally inspected from the data
-
-        Raises:
-            TypeError: If the input data is neither an xarray Dataset nor DataArray.
-
-        Updates:
-            self.variables: Updates the variables dictionary with identified variables and their coordinates.
-            self.bounds: Updates the bounds list with identified bounds variables from the dataset.
-        """
-
-        if isinstance(self.data, xr.Dataset):
-            for var in self.data.data_vars:
-                self._identify_variable(gridtype, self.data[var], var)
-            gridtype.bounds = self._identify_spatial_bounds(self.data)
-            gridtype.variables = {
-                key: value
-                for key, value in gridtype.variables.items()
-                if key not in set(gridtype.bounds)
-            }
-
-        elif isinstance(self.data, xr.DataArray):
-            self._identify_variable(gridtype, self.data)
 
     def _is_bounds(self, var):
         """
@@ -215,13 +178,7 @@ class GridInspector():
         Returns:
             list: A list of bounds variable names identified in the dataset.
         """
-        bounds_variables = []
-
-        for var in data.data_vars:
-            if self._is_bounds(var):
-                bounds_variables.append(var)
-
-        return bounds_variables
+        return [var for var in data.data_vars if self._is_bounds(var)]
 
     def _identify_grid_format(self, data):
         """
@@ -276,7 +233,7 @@ class GridInspector():
             return "HEALPix"
 
         if not lat or not lon:
-            return "Unknown"
+            return "Undefined"
 
         # 2D coord-dim dependency
         if data[lat].ndim == 2 and data[lon].ndim == 2:

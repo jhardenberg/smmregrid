@@ -286,35 +286,45 @@ class Regridder(object):
         Raises:
             ValueError: If the input data does not match expected dimensions.
         """
-        scalars = self._identify_scalar_coords(source_data)
-        if scalars:
-            self.loggy.warning(
-                "Found scalar coordinates %s. If have selected a along a masked dimensions,"
-                "regridding might fail. "
-                "Please consider subsetting with [] or with slice", scalars)
+        source_data = self._expand_scalar_coords(source_data)
 
         self.loggy.debug('Getting GridType from source_data')
         grid_inspect = GridInspector(source_data,
                                      extra_dims=self.extra_dims,
                                      loglevel=self.loglevel)
         datagrids = grid_inspect.get_gridtype()
+        self.loggy.debug('GridType obtained from source_data: %s', datagrids)
 
-        for datagridtype in datagrids:
-            if datagridtype.mask_dim:
-                # if this is a 3D we specified the masked coord and it has it
-                return self.regrid3d(source_data, datagridtype)
-            # 2d case
-            return self.regrid2d(source_data, datagridtype)
+        # if no gridtype is found, ignore it
+        if not datagrids:
+            return
 
-    def _identify_scalar_coords(self, source_data):
+        if len(datagrids) > 1:
+            raise ValueError(f'Multiple GridType found in the data: {len(datagrids)}. '
+                             f'Cannot decide which one to use for regridding')
+
+        if datagrids[0].mask_dim:
+            # if this is a 3D we specified the masked coord and it has it
+            # added squeeze to avoid issues with single level selection
+            # TODO: apply squeeze only along the scalar dimension, not in general
+            return self.regrid3d(source_data, datagrids[0]).squeeze()
+        # 2d case
+        return self.regrid2d(source_data, datagrids[0]).squeeze()
+
+    def _expand_scalar_coords(self, source_data):
         """
-        This method checks for coordinates that have no dimensions (i.e., scalar) and returns a list of their names.
+        This method checks for coordinates that have no dimensions (i.e., scalar) and expands them.
+        This solves issues with levels selection along the masked dimension.
 
         Args:
             source_data (xarray.DataArray): The source data array to check for scalar coordinates.
         """
 
-        return [name for name, coord in source_data.coords.items() if coord.dims == ()]
+        scalar_coords = [name for name, coord in source_data.coords.items() if coord.dims == ()]
+        for scalar in scalar_coords:
+            self.loggy.debug('Expanding scalar coordinate %s', scalar)
+            source_data = source_data.expand_dims(scalar)
+        return source_data
 
     def _get_gridtype(self, datagridtype):
 
