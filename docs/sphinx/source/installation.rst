@@ -24,9 +24,7 @@ Using PyPi
 
 It will bring you the last version available on PyPi.
 You can create a conda/mamba environment which incudes the python, `eccodes <https://github.com/ecmwf/eccodes-python>`_ and `cdo <https://code.mpimet.mpg.de/projects/cdo/>`_ dependencies, and then install smmregrid.
-However, you should start by cloning the repository from GitHub, since the configuration files used for running ECmean4 are placed there ::
 
-    > git clone https://github.com/jvonhard/smmregrid.git
     > mamba create -n smmregrid "python>=3.8" cdo eccodes
     > mamba activate smmregrid
     > pip install smmregrid
