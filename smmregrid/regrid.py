@@ -55,7 +55,7 @@ class Regridder(object):
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None, vertical_dim=None,
                  horizontal_dims=None, cdo_extra=None, cdo_options=None,
-                 check_nan=False,
+                 check_nan=False, skipna=False, na_thres=1.0,
                  cdo='cdo', loglevel='WARNING'):
         """
         Initialize the Regridder for performing regridding operations.
@@ -98,6 +98,8 @@ class Regridder(object):
         Warnings:
             DeprecationWarning: If deprecated arguments 'vertical_dim` is used. 
         """
+        self.skipna = skipna
+        self.na_thres = na_thres
 
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
@@ -400,7 +402,8 @@ class Regridder(object):
             mm = masked[widx]
             data3d_list.append(self.apply_weights(
                 xa, wa, weights_matrix=wm,
-                masked=mm, horizontal_dims=horizontal_dims)
+                masked=mm, horizontal_dims=horizontal_dims,
+                skipna=self.skipna, na_thres=self.na_thres)
             )
         data3d = xarray.concat(data3d_list, dim=mask_dim, coords='different', compat='equals')
 
@@ -448,10 +451,12 @@ class Regridder(object):
             gridtype.weights,
             weights_matrix=gridtype.weights_matrix,
             masked=gridtype.masked,
-            horizontal_dims=gridtype.horizontal_dims)
+            horizontal_dims=gridtype.horizontal_dims,
+            skipna=self.skipna,
+            na_thres=self.na_thres)
 
     def apply_weights(self, source_data, weights, weights_matrix=None,
-                      masked=True, horizontal_dims=None):
+                      masked=True, horizontal_dims=None, skipna=False, na_thres=1.0):
         """
         Apply CDO weights to the source data, performing the regridding operation.
 
@@ -536,13 +541,29 @@ class Regridder(object):
             source_array = numpy.reshape(source_array, kept_shape + [-1])
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
-        # Handle input mask
-        dask.array.ma.set_fill_value(source_array, 1e20)
-        source_array = dask.array.ma.fix_invalid(source_array)
-        source_array = dask.array.ma.filled(source_array)
+        if skipna:
+            # handle NaNs by renormalization of the weights as in xESMF
+            non_nan_mask = dask.array.notnull(source_array)
+            source_array_zero_filled = dask.array.where(non_nan_mask, source_array, 0.0)
+            numerator = dask.array.tensordot(source_array_zero_filled, weights_matrix, axes=1)
+            denominator = dask.array.tensordot(non_nan_mask.astype(weights_matrix.dtype), weights_matrix, axes=1)
 
-        self.loggy.debug('Tensordot!')
-        target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
+            # Avoid division by zero
+            target_dask = dask.array.where(denominator > 0, numerator / denominator, numpy.nan)
+
+            # na_thres logic
+            if na_thres < 1.0:
+                total_weights = weights_matrix.sum(axis=0)
+                missing_fraction = 1.0 - (denominator / total_weights)
+                target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
+        else:
+            # Handle input mask
+            dask.array.ma.set_fill_value(source_array, 1e20)
+            source_array = dask.array.ma.fix_invalid(source_array)
+            source_array = dask.array.ma.filled(source_array)
+
+            self.loggy.debug('Tensordot!')
+            target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
         # define and compute the new mask
         if masked:
