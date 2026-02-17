@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+## [v0.1.4]
+
 - Support for python 3.14 (#57)
 - `mask_dim` keep same attributes as original data in 3D weights (#58)
 - Vertical coordinate in weights now correspond to the data coordinates, rather than a list (#55)
