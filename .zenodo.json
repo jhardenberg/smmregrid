@@ -1,0 +1,27 @@
+{
+    "creators": [
+      {
+        "affiliation": "CNR-ISAC, Italy",
+        "name": "Davini, Paolo",
+        "orcid": "0000-0003-3389-7849"
+      },
+      {
+        "affiliation": "Politecnico di Torino, Italy",
+        "name": "von Hardenberg, Jost",
+        "orcid": "0000-0002-5312-8070"
+      },
+      {
+        "affiliation": "Politecnico di Torino, Italy",
+        "name": "Nurisso, Matteo",
+        "orcid": "0000-0002-5962-0680"
+      },
+      { 
+        "name": "Tovazzi, Emanuele",
+        "affiliation": "CNR-ISAC, Italy",
+        "orcid": "0000-0001-9838-4249"
+      }
+    ],
+    "description": "smmregrid: A compact python regridder using sparse matrix multiplication",
+    "license": "Apache-2.0",
+    "title": "smmregrid"
+  }
