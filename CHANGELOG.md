@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+## [v0.1.5]
+
+- Fix bug which was breaking smmregrid for python 3.8, 3.9, 3.10
+
 ## [v0.1.4]
 
 - Support for python 3.14 (#57)
