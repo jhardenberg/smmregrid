@@ -27,7 +27,7 @@ pip install smmregrid
 Alternatively, you can clone the repo and use the environment file available
 
 ```
-git clone https://github.com/jvonhard/smmregrid.git
+git clone https://github.com/jhardenberg/smmregrid.git
 cd smmregrid
 mamba env create -f environment.yml
 mamba activate smmregrid

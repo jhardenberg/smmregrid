@@ -37,7 +37,7 @@ This method will allow you to have access at the most recent smmregrid (i.e. unr
 
 As before, should clone from the Github Repository ::
 
-    > git clone https://github.com/jvonhard/smmregrid.git
+    > git clone https://github.com/jhardenberg/smmregrid.git
     
 .. note ::
 

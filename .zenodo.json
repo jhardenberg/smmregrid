@@ -19,6 +19,9 @@
         "name": "Tovazzi, Emanuele",
         "affiliation": "CNR-ISAC, Italy",
         "orcid": "0000-0001-9838-4249"
+      },
+      {
+        "name": "Wales, Scott"
       }
     ],
     "description": "smmregrid: A compact python regridder using sparse matrix multiplication",
