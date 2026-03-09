@@ -305,6 +305,11 @@ class Regridder(object):
                 return self.regrid3d(source_data, datagridtype)
             # 2d case
             return self.regrid2d(source_data, datagridtype)
+        
+        # fall back for the case that we have no gridtype,
+        # or we have only scalar coordinates, 
+        # or we are trying to regrid bounds variables
+        return xarray.DataArray(data=None)
 
     def _identify_scalar_coords(self, source_data):
         """
