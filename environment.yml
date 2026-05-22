@@ -1,6 +1,4 @@
 # Create a suitable environment:
-# mamba env create -f environment.yml 
-# or 
 # conda env create -f environment.yml
 
 name : smmregrid
