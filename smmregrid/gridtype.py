@@ -8,7 +8,7 @@ DEFAULT_DIMS = {
                    'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
                    'nav_lon', 'nav_lat', 'rgrid'],
     'mask': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
-    'time': ['time', 'time_counter'],
+    'time': ['time', 'time_counter', 'valid_time'],
 }
 
 
