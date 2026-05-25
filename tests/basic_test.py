@@ -18,8 +18,9 @@ def test_healpix_extra(method):
         options = ['--force']
     else:
         options = ['--force', '-f', 'nc']
+    hpgrid='hpr0'
     wfield = CdoGenerate(os.path.join(INDIR, 'healpix_0.nc'), tfile,
-                         cdo_extra='-setgrid,hp1_nested',
+                         cdo_extra=f'-setgrid,{hpgrid}',
                          cdo_options=options,
                          loglevel='debug').weights(method=method)
     interpolator = Regridder(weights=wfield, loglevel='debug')
