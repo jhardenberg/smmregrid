@@ -1,6 +1,4 @@
 # Create a suitable environment:
-# mamba env create -f environment.yml 
-# or 
 # conda env create -f environment.yml
 
 name : smmregrid
@@ -8,7 +6,7 @@ channels:
   - conda-forge
 dependencies:
   - python>=3.8,<3.15
-  - ecCodes
+  - eccodes
   - numba
   - cdo>=2.5.0
   - pip

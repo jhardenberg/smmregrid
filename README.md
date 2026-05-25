@@ -14,7 +14,7 @@ A compact python regridder using sparse matrix multiplication
 The regridder uses CDO as a backend for weights computation, and then uses efficiently sparse matrix multiplication with dask to provide xarray lazy output. It supports all grids supported by CDO. 
 
 Please note that this tool is not thought as "another interpolation tool", but rather a method to apply pre-computed weights  within the python environment. 
-The speedup against CDO is estimated to be about ~1.5 to ~5 times, slightly lower if then files are written to the disk. 2D and 3D data are supported on all the grids supported by CDO, and special treatment can be assigned to vertical coordinates with changing mask (e.g. ocean 3D datasets). It works smoothly on both xarray.Dataset and xarray.DataArray. Attributes are kept and target grids can be both file on disk or CDO-compliant grids (e.g. r180x90, n128, etc).  
+The speedup against CDO is estimated to be about ~1.5 to ~5 times, slightly lower if then files are written to the disk. 2D and 3D data are supported on all the grids supported by CDO, and special treatment can be assigned to vertical coordinates with changing mask (e.g. ocean 3D datasets). It works smoothly on both xarray.Dataset and xarray.DataArray. Attributes are kept and target grids can be both file on disk or CDO-compliant grids (e.g. r180x90, F128, etc).  
 
 The tool works for python versions >=3.8. It is safer to run it through conda/mamba. Install with:
 

@@ -5,6 +5,7 @@ validate them against known CDO grid patterns.
 """
 
 import re
+import warnings
 
 # Define CDO regex patterns for each grid type (updated at CDO 2.4.4)
 # Define regex patterns for each grid type
@@ -14,11 +15,13 @@ CDO_GRID_PATTERNS = {
     "zonal_latitudes": re.compile(r"^zonal_\d+(\.\d+)?$"),
     "global_regular_NxM": re.compile(r"^r\d+x\d+$"),
     "one_grid_point": re.compile(r"^lon=(-?\d+(\.\d+)?)/lat=(-?\d+(\.\d+)?)$"),
-    "gaussian_grid_F": re.compile(r"^F\d+$"),
-    "gaussian_grid_n": re.compile(r"^n\d+$"),
+    "gaussian_grid_Ff": re.compile(r"^[Ff]\d+$"),
+    "gaussian_reduced_grid_Nn": re.compile(r"^[Nn]\d+$"),
+    "gaussian_octahedral_grid_Nn": re.compile(r"^[Oo]\d+$"),
     "icosahedral_gme": re.compile(r"^gme\d+$"),
     "healpix_grid": re.compile(r"^hp\d+(?:_(nested|ring))?$"),
-    "healpix_zoom": re.compile(r"^hpz\d+$")
+    "healpix_zoom": re.compile(r"^hpz\d+$"),
+    "healpix_refinement": re.compile(r"^hpr\d+$")
 }
 
 
@@ -40,6 +43,13 @@ class CdoGrid:
         # Check if the string matches any of the grid patterns
         for grid_type, pattern in CDO_GRID_PATTERNS.items():
             if pattern.match(grid_str):
+                if grid_type == "healpix_zoom":
+                    warnings.warn(
+                        f"The HEALPix zoom format '{grid_str}' (hpzN) is deprecated. "
+                        "Please use the HEALPix refinement format 'hprN' instead.",
+                        DeprecationWarning,
+                        stacklevel=3
+                    )
                 return grid_type
 
         # Return False if no patterns match
