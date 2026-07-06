@@ -17,7 +17,7 @@ INDIR = 'tests/data'
     ("temp3d-fesom.nc", 1, ['nod2', 'nz1'], ['temp'], "Unstructured"),
 ])
 def test_basic_gridinspector(file, ngrids, firstdims, variables, kind):
-    """test for GridInspector"""
+    """test for GridInspector which includes also GridDetector and GridType"""
     xfield = os.path.join('tests/data', file)
     xfield = xarray.open_dataset(xfield)
     grids = GridInspector(xfield, loglevel='debug').get_gridtype()
@@ -54,3 +54,16 @@ def test_get_gridtype_attr():
     assert set(gridinspect.get_gridtype_attr(grids, 'dims')) == set(['lon', 'lat'])
     assert gridinspect.get_gridtype_attr(grids, 'variables') == ['2t']
     assert gridinspect.get_gridtype_attr(grids, 'kind') == ['Regular']
+
+@pytest.mark.parametrize("file,variables", [
+    ("mix-cesm.nc", ['hfss']),
+    ("so3d-nemo.nc", ['so']),
+    ("ua-so_mix_ecearth.nc", ['ua', 'so']),
+])
+def test_get_gridtype_sample(file, variables):
+    """test for GridInspector get_gridtype_sample"""
+    xfield = os.path.join('tests/data', file)
+    gridinspect = GridInspector(xfield, loglevel='debug')
+    grids = gridinspect.get_gridtype()
+    sample = gridinspect.get_gridtype_sample_variable(grids)
+    assert sample == variables
