@@ -12,7 +12,13 @@ LON_COORDS = ["lon", "longitude", "nav_lon"]
 
 
 class GridDetector:
-    """Class to detect the grid type of a given xarray dataset or dataarray."""
+    """
+    Class to detect the grid type of a given xarray dataset or dataarray.
+    
+    Args:
+        lon (str): The name of the longitude coordinate. Default is "lon". Expand the list of possible names from LON_COORDS.
+        lat (str): The name of the latitude coordinate. Default is "lat". Expand the list of possible names from LAT_COORDS.
+    """
 
     def __init__(self, lon="lon", lat="lat"):
 
