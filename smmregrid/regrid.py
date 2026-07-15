@@ -563,6 +563,7 @@ class Regridder(object):
             # handle NaNs by renormalization of the weights as in xESMF
             non_nan_mask = dask.array.notnull(source_array)
             source_array_zero_filled = dask.array.where(non_nan_mask, source_array, 0.0)
+            self.loggy.debug('Tensordot with renormalization!')
             numerator = dask.array.tensordot(source_array_zero_filled, weights_matrix, axes=1)
             denominator = dask.array.tensordot(non_nan_mask.astype(weights_matrix.dtype), weights_matrix, axes=1)
 
@@ -578,22 +579,21 @@ class Regridder(object):
             missing_fraction = dask.array.clip(missing_fraction, 0.0, 1.0)
             target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
         else:
-            # Handle input mask
-            dask.array.ma.set_fill_value(source_array, 1e20)
-            source_array = dask.array.ma.fix_invalid(source_array)
-            source_array = dask.array.ma.filled(source_array)
+            # Handle input mask: apparently faster with this appraoch
+            invalid = dask.array.isnan(source_array) | dask.array.isinf(source_array)
+            source_array = dask.array.where(invalid, 1e20, source_array)
 
             self.loggy.debug('Tensordot!')
             target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
-        # define and compute the new mask
-        if masked:
-            # broadcast the mask on all the remaining dimensions and apply it with where
-            # Reshape mask to broadcastable shape (avoid intermediate boolean array creation)
-            mask_shape = [1 for d in kept_shape] + [-1]
-            target_mask = dst_grid_mask.data.reshape(mask_shape).astype(bool)
-            self.loggy.debug('Applying mask with shape %s', target_dask.shape)
-            target_dask = dask.array.where(target_mask, target_dask, numpy.nan)
+            # define and compute the new mask (alternative to skipna)
+            if masked:
+                # broadcast the mask on all the remaining dimensions and apply it with where
+                # Reshape mask to broadcastable shape (avoid intermediate boolean array creation)
+                mask_shape = [1 for d in kept_shape] + [-1]
+                target_mask = dst_grid_mask.data.reshape(mask_shape).astype(bool)
+                self.loggy.debug('Applying mask with shape %s', target_dask.shape)
+                target_dask = dask.array.where(target_mask, target_dask, numpy.nan)
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
@@ -601,10 +601,10 @@ class Regridder(object):
                 dask.array.broadcast_to(dst_frac_area, target_dask.shape) < self.remap_area_min,
                 numpy.nan, target_dask)
 
-        # after the tensordot, bring the NaN back in
+        # after the tensordot, bring the NaN back in (only needed for default path that uses 1e20)
         # Use greater than 1e19 to avoid numerical noise from interpolation.
-        # TODO: verify if after mask we still need this
-        target_dask = dask.array.where(target_dask > 1e19, numpy.nan, target_dask)
+        if not skipna:
+            target_dask = dask.array.where(target_dask > 1e19, numpy.nan, target_dask)
 
         if len(dst_grid_rank) == 2:
             tgt_shape = [dst_grid_shape[1], dst_grid_shape[0]]
