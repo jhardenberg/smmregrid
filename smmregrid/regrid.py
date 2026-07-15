@@ -261,7 +261,7 @@ class Regridder(object):
                 raise ValueError(f'Cannot process data with {len(datagrids)} GridType initializing from weights')
 
             # map on multiple dataarray
-            out = source_data.map(self.regrid_array, keep_attrs=False)
+            out = source_data.map(self.regrid_array, keep_attrs=True)
 
             # clean from degenerated variables
             degen_vars = [var for var in out.data_vars if out[var].dims == ()]
@@ -307,6 +307,11 @@ class Regridder(object):
                 return self.regrid3d(source_data, datagridtype)
             # 2d case
             return self.regrid2d(source_data, datagridtype)
+        
+        # fall back for the case that we have no gridtype,
+        # or we have only scalar coordinates, 
+        # or we are trying to regrid bounds variables
+        return xarray.DataArray(data=None)
 
     def _identify_scalar_coords(self, source_data):
         """

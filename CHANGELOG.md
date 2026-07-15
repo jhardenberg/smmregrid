@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+## [v0.1.6]
+
+- Pin for `cdo<2.6.1` to avoid bug in the more recent CDO versions (#68)
+- Introduce a `GridDetector` class where grid kind guessing is performed external from `GridInspector` (#68)
+- Add `valid_time` and `forecast_time` as time dimension for `Gridtype` guessing (#68)
+- Provide a new method for `GridInspector`to extract information on the minimum required data variables from a dataset with different gridtype (#68)
+
+## [v0.1.5]
+
+- Fix bug which was breaking smmregrid for python 3.8, 3.9, 3.10
+
+## [v0.1.4]
+
 - Support for python 3.14 (#57)
 - `mask_dim` keep same attributes as original data in 3D weights (#58)
 - Vertical coordinate in weights now correspond to the data coordinates, rather than a list (#55)

@@ -41,13 +41,22 @@ def test_nan_preserve(method):
 
 @pytest.mark.parametrize("method", ['nn'])
 def test_datarray(method):
-    """"Minimal test to verify regridding from DataArray"""
+    """"Minimal test to verify regridding from DataArray and Dataset"""
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     interpolator = Regridder(source_grid=xfield['tas'], target_grid=tfile,
                              loglevel='debug', method=method)
+
+    xfield['tas'].attrs['test_attr'] = 'test_value'
+
+    # Dataset                    
     interp = interpolator.regrid(source_data=xfield)
     assert interp['tas'].shape == (12, 180, 360)
+    assert hasattr(interp['tas'], 'test_attr')
 
+    # DataArray
+    interp = interpolator.regrid(source_data=xfield['tas'])
+    assert interp.shape == (12, 180, 360)
+    assert hasattr(interp, 'test_attr')
 
 @pytest.mark.parametrize("method", ['dis', 'con'])
 def test_horizontal_dims(method):

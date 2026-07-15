@@ -7,10 +7,10 @@ version: 2
 
 # Set the version of Python and other tools you might need
 build:
-  os: ubuntu-22.04
+  os: ubuntu-24.04
   tools:
-    python: "mambaforge-4.10"
-
+    python: miniforge3-latest
+    
 # set up the environment
 conda:
   environment: environment.yml

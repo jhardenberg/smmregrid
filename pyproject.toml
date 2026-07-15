@@ -7,12 +7,13 @@ name = "smmregrid"
 dynamic = ["version"]
 authors = [
   { name="Jost von Hardenberg", email="jost.hardenberg@polito.it" },
-  { name="Paolo Davini", email="p.davini@isac.cnr.it" },
+  { name="Paolo Davini", email="paolo.davini@cnr.it" },
   { name="Scott Wales", email="scott.wales@unimelb.edu.au"}
 ]
 description = "Regridding based on sparse matrix multiplication"
 readme = "README.md"
-requires-python = ">=3.8,<=3.14"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Intended Audience :: Science/Research",
@@ -55,11 +56,23 @@ all = [
 
 [project.urls]
 "Homepage" = "https://github.com/jhardenberg/smmregrid"
+"Documentation" = "https://smmregrid.readthedocs.io"
 "Bug Tracker" = "https://github.com/jhardenberg/smmregrid/issues"
 "Repository" = "https://github.com/jhardenberg/smmregrid"
+"Changelog" = "https://github.com/jhardenberg/smmregrid/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+packages = ["smmregrid"]
 
 [tool.setuptools.dynamic]
 version = {attr = "smmregrid.__version__"}
+
+[tool.pytest.ini_options]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["smmregrid"]
+omit = ["*/tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]
 ignore_errors = true
