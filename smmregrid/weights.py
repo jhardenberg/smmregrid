@@ -73,12 +73,12 @@ def mask_weights(weights, weights_matrix, mask_dim=None):
             for i in range(weights.sizes[mask_dim])
         ]
         # Stack all levels at once (lazy operation)
-        dst_mask = dask.array.stack(masked_levels, axis=0)
+        dst_mask = dask.array.stack(masked_levels, axis=0).compute()
         # Create new DataArray without in-place modification
         weights = weights.assign(dst_grid_imask=([mask_dim] + list(weights['dst_grid_imask'].dims[1:]), dst_mask))
     else:
         mask = src_mask.data
-        dst_mask = mask_tensordot(mask, weights_matrix)
+        dst_mask = mask_tensordot(mask, weights_matrix).compute()  # Compute the result to avoid lazy evaluation issues
         weights = weights.assign(dst_grid_imask=(weights['dst_grid_imask'].dims, dst_mask))
 
     return weights

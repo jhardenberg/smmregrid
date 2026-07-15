@@ -546,10 +546,9 @@ class Regridder(object):
         # Find dimensions to keep
         kept_dims = [dim for dim in source_data.dims if dim not in horizontal_dims]
         kept_shape = [source_data.sizes[dim] for dim in kept_dims]
-
         self.loggy.debug('Dimension to be ignored: %s', kept_dims)
-        if weights_matrix is None:
-            weights_matrix = compute_weights_matrix(weights)
+        #if weights_matrix is None:
+        #    weights_matrix = compute_weights_matrix(weights)
 
         # Remove the spatial axes, apply the weights, add the spatial axes back
         source_array = source_data.data
