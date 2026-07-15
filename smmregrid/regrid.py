@@ -569,11 +569,14 @@ class Regridder(object):
             # Avoid division by zero
             target_dask = dask.array.where(denominator > 0, numerator / denominator, numpy.nan)
 
-            # na_thres logic
-            if na_thres < 1.0:
-                total_weights = weights_matrix.sum(axis=0)
-                missing_fraction = 1.0 - (denominator / total_weights)
-                target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
+            # na_thres logic, safety check in init
+            total_weights = weights_matrix.sum(axis=0)
+            # safety check on total weights to avoid division by zero
+            safe_total_weights = dask.array.where(total_weights > 0, total_weights, 1.0)
+            missing_fraction = 1.0 - (denominator / safe_total_weights)
+            # clip missing_fraction to [0, 1] to avoid numerical issues
+            missing_fraction = dask.array.clip(missing_fraction, 0.0, 1.0)
+            target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
         else:
             # Handle input mask
             dask.array.ma.set_fill_value(source_array, 1e20)
