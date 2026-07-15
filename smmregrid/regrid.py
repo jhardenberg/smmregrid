@@ -47,6 +47,7 @@ from .gridinspector import GridInspector
 from .util import deprecated_argument, detect_nan_variation_dims, tolist
 
 DEFAULT_AREA_MIN = 0.5  # default minimum area for conservative remapping
+DEFAULT_NA_THRES = 1  # default threshold for skipna option: 1 is conserivative but seems to replicate CDO behavior
 
 
 class Regridder(object):
@@ -55,7 +56,7 @@ class Regridder(object):
     def __init__(self, source_grid=None, target_grid=None, weights=None,
                  method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None, vertical_dim=None,
                  horizontal_dims=None, cdo_extra=None, cdo_options=None,
-                 check_nan=False, skipna=False, na_thres=1.0,
+                 check_nan=False, skipna=False, na_thres=DEFAULT_NA_THRES,
                  cdo='cdo', loglevel='WARNING'):
         """
         Initialize the Regridder for performing regridding operations.
@@ -98,9 +99,6 @@ class Regridder(object):
         Warnings:
             DeprecationWarning: If deprecated arguments 'vertical_dim` is used. 
         """
-        self.skipna = skipna
-        self.na_thres = na_thres
-
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
@@ -125,6 +123,20 @@ class Regridder(object):
         self.remap_area_min = float(remap_area_min)
         if self.remap_area_min < 0.0 or self.remap_area_min > 1.0:
             raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
+
+        # set up skipna option as ESMF
+        self.skipna = skipna
+        # TODO: this might be overridden at regrid level
+        self.na_thres = float(na_thres)
+        if self.na_thres < 0.0 or self.na_thres > 1.0:
+            raise ValueError('The na_thres provided must be between 0.0 and 1.0')
+        
+        if self.skipna:
+            self.loggy.warning(
+                'skipna is enabled with na_thres=%s. This will affect the regridding behavior.',
+                self.na_thres
+            )
+
         # Is there already a weights file?
         if weights is not None:
             self.loggy.info('Init from weights selected!')
@@ -184,7 +196,8 @@ class Regridder(object):
 
                 generator = CdoGenerate(source_grid_array_to_cdo, target_grid,
                                         cdo=cdo, cdo_options=cdo_options,
-                                        cdo_extra=cdo_extra, loglevel=loglevel)
+                                        cdo_extra=cdo_extra, loglevel=loglevel,
+                                        skipna=skipna)
                 gridtype.weights = generator.weights(method=method,
                                                      mask_dim=gridtype.mask_dim)
 

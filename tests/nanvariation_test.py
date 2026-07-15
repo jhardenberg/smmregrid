@@ -1,18 +1,22 @@
 import xarray as xr
 import numpy as np
-import pytest
+import os
 from smmregrid import Regridder
+from smmregrid.checker import check_cdo_regrid
 
 def test_time_varying_nan():
+    """Test regridding with time-varying NaN values and skipna enabled."""
     # Create a source grid (e.g., 10x10)
     lon = np.linspace(0, 360, 10, endpoint=False)
     lat = np.linspace(-90, 90, 10)
-    time = [0, 1]
+    time = [0, 1, 2]
     
-    data = np.ones((2, 10, 10))
-    # Time step 0: no NaNs
-    # Time step 1: half the grid is NaNs
-    data[1, :, :5] = np.nan
+    data = np.ones((3, 10, 10))
+    # Time step 0: half the grid is NaNs
+    # Time step 1: one column is NaNs
+    # Time step 2: no NaNs
+    data[0, :, :5] = np.nan
+    data[1, :, :1] = np.nan
     
     src = xr.DataArray(
         data,
@@ -52,10 +56,24 @@ def test_time_varying_nan():
     # Verifications
     assert non_nan_skipna_1 > non_nan_default
     assert non_nan_skipna_1 > non_nan_skipna_01
-    
     # na_thres=0.1 should be similar to default because bilinear uses few neighbors
     # but still might have some differences
     assert non_nan_skipna_01 >= non_nan_default
 
-    # At time 0, everything should be full
-    assert out_skipna_1['tas'].isel(time=0).notnull().all().compute()
+    non_nan_default = out_default['tas'].isel(time=2).notnull().sum().compute().item()
+    non_nan_skipna_1 = out_skipna_1['tas'].isel(time=2).notnull().sum().compute().item()
+    non_nan_skipna_01 = out_skipna_01['tas'].isel(time=2).notnull().sum().compute().item()
+    assert non_nan_skipna_1 > non_nan_default 
+    assert non_nan_skipna_1 == non_nan_skipna_01
+
+    # At time 2, everything should be full
+    assert out_skipna_1['tas'].isel(time=2).notnull().all().compute()
+
+
+def test_berkely():
+    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
+
+    filein = os.path.join('tests/data/berkley.nc')
+    field = xr.open_mfdataset(filein)
+    assert check_cdo_regrid(filein, 'r180x90', loglevel='debug', skipna=True)
+    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True)

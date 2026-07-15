@@ -18,7 +18,10 @@ from .util import deprecated_argument, tolist
 class CdoGenerate():
     """CDO-based class to generate weights for smmregrid."""
 
-    def __init__(self, source_grid, target_grid=None, cdo_extra=None,
+    SUPPORTED_METHODS = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
+    SUPPORTED_NORM = ["fracarea", "destarea"]
+
+    def __init__(self, source_grid, target_grid=None,  skipna=False, cdo_extra=None,
                  cdo_options=None, cdo_download_path=None, cdo_icon_grids=None,
                  cdo="cdo", loglevel='warning'):
         """
@@ -34,6 +37,8 @@ class CdoGenerate():
             loglevel (str, optional): The logging level for messages. Default is 'warning'.
                                       Options include 'debug', 'info', 'warning',
                                       'error', and 'critical'.
+            skipna (bool, optional): If True, NaN values in the source grid will 
+                                     be treated as zeros during weight generation. Default is False.
             cdo_extra (list, optional): Additional CDO command-line options.
                                                Defaults to None.
             cdo_options (list, optional): Options for CDO commands. Defaults to None.
@@ -54,6 +59,9 @@ class CdoGenerate():
         self.source_grid = source_grid
         self.target_grid = target_grid
 
+        # skip na
+        self.skipna = skipna
+
         # define grid filenames
         self.source_grid_filename = None
         self.target_grid_filename = None
@@ -66,18 +74,29 @@ class CdoGenerate():
         if cdo_icon_grids:
             self.env["CDO_ICON_GRIDS"] = cdo_icon_grids
 
-    @staticmethod
-    def _safe_check(method, remap_norm):
+    def _safe_check(self, method, remap_norm):
         """Safety checks for weights generation """
 
-        supported_methods = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
-        if method not in supported_methods:
+        if method not in self.SUPPORTED_METHODS:
             raise ValueError('The remap method provided is not supported!')
-        if remap_norm not in ["fracarea", "destarea"]:
+        if remap_norm not in self.SUPPORTED_NORM:
             raise ValueError('The remap normalization provided is not supported!')
 
     def _prepare_grid(self, grid, target=False):
         """Helper function to prepare grid (file or dataset)."""
+
+        # prepare grid: if source_grid is a CDO grid, use it as is, otherwise prepare the file
+        if isinstance(grid, str) and not target and CdoGrid(grid).grid_kind:
+            self.loggy.info('CDO grid as %s to be used for areas/weights generation', grid)
+            return f"-const,1,{grid}"
+
+        # when skipna is True, fill NaNs with zeros for source grid areas/weights generation
+        if self.skipna and not target:
+            self.loggy.info("skipna is True, filling NaNs with zeros for source grid areas/weights generation.")
+            if not isinstance(grid, (xarray.Dataset, xarray.DataArray)):
+                self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
+                grid = xarray.open_dataset(grid)
+            grid = grid.fillna(0)  # Fill NaNs with zeros for area/weights generation
 
         # if grid is a Dataset or DataArray, save it to a temporary file
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
@@ -85,11 +104,6 @@ class CdoGenerate():
             grid.to_netcdf(grid_file.name)
             self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
             return grid_file.name
-
-        # prepare grid: if source_grid is a CDO grid, use it as is, otherwise prepare the file
-        if CdoGrid(grid).grid_kind and not target:
-            self.loggy.info('CDO grid as %s to be used for areas/weights generation', grid)
-            return f"-const,1,{grid}"
 
         # if grid is a string, assume it's a file path
         if isinstance(grid, str):
