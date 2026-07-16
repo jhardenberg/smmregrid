@@ -69,11 +69,18 @@ def test_time_varying_nan():
     # At time 2, everything should be full
     assert out_skipna_1['tas'].isel(time=2).notnull().all().compute()
 
-
-def test_berkely():
+def test_cdo_regrid_skipna_2d():
     """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
 
     filein = os.path.join('tests/data/berkley.nc')
-    field = xr.open_mfdataset(filein)
     assert check_cdo_regrid(filein, 'r180x90', loglevel='debug', skipna=True)
+    filein = os.path.join('tests/data/onlytos-ipsl.nc')
+    field = xr.open_mfdataset(filein)
+    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True)
+
+def test_cdo_regrid_skipna_3d():
+    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
+
+    filein = os.path.join('tests/data/so3d-nemo.nc')
+    field = xr.open_mfdataset(filein)
     assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True)
