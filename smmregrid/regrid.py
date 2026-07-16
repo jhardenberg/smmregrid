@@ -557,48 +557,38 @@ class Regridder(object):
 
         # identify valid data points (non-NaN) in the source array
         valid_data = dask.array.isfinite(source_array)
+        source_clean = dask.array.where(valid_data, source_array, 0.0)
+
+        # compute tensor dot for cleaned matrix and for validation mask
+        numerator = dask.array.tensordot(source_clean, weights_matrix, axes=1)
+
+        # TODO: this should be the same as the mask!
+        denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
+        total_weights = weights_matrix.sum(axis=0)
 
         if skipna:
             # handle NaNs by renormalization of the weights as in xESMF
-            source_clean = dask.array.where(valid_data, source_array, 0.0)
-            self.loggy.debug('Tensordot with renormalization!')
-            numerator = dask.array.tensordot(source_clean, weights_matrix, axes=1)
-            denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
-        
+            self.loggy.debug('Tensordot with renormalization!')    
             # Avoid division by zero
             denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
             target_dask = dask.array.where(denominator > 0, numerator / denominator, numpy.nan)
 
             # na_thres logic, safety check in init
-            # TODO: to what extent is this different from remap_area_min?
-            total_weights = weights_matrix.sum(axis=0)
             missing_fraction = 1.0 - (denominator / total_weights)
             target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
         else:
             self.loggy.debug('Tensordot!')
-            source_clean = dask.array.where(valid_data, source_array, 1e20)
-            target_dask = dask.array.tensordot(source_clean, weights_matrix, axes=1)
-
-            # after the tensordot, bring the NaN back in (only needed for default path that uses 1e20)
-            # Use greater than 1e19 to avoid numerical noise from interpolation.
-            target_dask = dask.array.where(target_dask > 1e15, numpy.nan, target_dask)
-
-            # TODO: alternative block that invliad the weights, verify it makes sense
-            # exact contamination tracking: how much weight came from invalid cells
-            #invalid_weight = dask.array.tensordot(
-            #    invalid.astype(weights_matrix.dtype), weights_matrix, axes=1
-            #)
-            # tolerance guards against floating point noise, not against magnitude of data
-            #target_dask = dask.array.where(invalid_weight > 1e-6, numpy.nan, target_dask)
+            # Explicitly mask complete contamination (no valid data at all)
+            target_dask = dask.array.where(denominator > 0, numerator, numpy.nan)
             
-            # define and compute the new mask
-            if masked:
-                # broadcast the mask on all the remaining dimensions and apply it with where
-                # Reshape mask to broadcastable shape (avoid intermediate boolean array creation)
-                mask_shape = [1 for d in kept_shape] + [-1]
-                target_mask = dst_grid_mask.data.reshape(mask_shape).astype(bool)
-                self.loggy.debug('Applying mask with shape %s', target_dask.shape)
-                target_dask = dask.array.where(target_mask, target_dask, numpy.nan)
+        # define and compute the new mask
+        #if masked:
+        #    # broadcast the mask on all the remaining dimensions and apply it with where
+        #    # Reshape mask to broadcastable shape (avoid intermediate boolean array creation)
+        #    mask_shape = [1 for d in kept_shape] + [-1]
+        #    target_mask = dst_grid_mask.data.reshape(mask_shape).astype(bool)
+        #    self.loggy.debug('Applying mask with shape %s', target_dask.shape)
+        #    target_dask = dask.array.where(target_mask, target_dask, numpy.nan)
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
