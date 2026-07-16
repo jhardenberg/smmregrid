@@ -22,7 +22,7 @@ def find_var(xfield):
 
 
 def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
-                     init_method='grids', mask_dim=None, vertical_dim=None, extrapolate=True,
+                     init_method='grids', mask_dim=None, extrapolate=True,
                      remap_area_min=0.0, loglevel='INFO', skipna=False):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
@@ -52,10 +52,10 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
         interpolator = Regridder(source_grid=finput, target_grid=ftarget, 
                                  remap_area_min=remap_area_min,
                                  method=remap_method, mask_dim=mask_dim, skipna=skipna,
-                                 vertical_dim=vertical_dim, loglevel=loglevel)
+                                 loglevel=loglevel)
     elif init_method == 'weights':
         wfield = CdoGenerate(finput, ftarget, loglevel=loglevel, skipna=skipna).weights(
-            method=remap_method, mask_dim=mask_dim, vertical_dim=vertical_dim)
+            method=remap_method, mask_dim=mask_dim)
         interpolator = Regridder(weights=wfield, loglevel=loglevel, remap_area_min=remap_area_min, skipna=skipna)
     else:
         raise KeyError('Unsupported init method')

@@ -114,7 +114,7 @@ class CdoGenerate():
 
     def weights(self, method="con", extrapolate=True,
                 remap_norm="fracarea",
-                mask_dim=None, vertical_dim=None, nproc=1):
+                mask_dim=None, nproc=1):
         """
         Generate weights for regridding using Climate Data Operators (CDO),
         accommodating both 2D and 3D grid cases.
@@ -130,7 +130,6 @@ class CdoGenerate():
             nproc (int, optional): Number of processes to use for parallel processing. Default is 1.
             mask_dim (str, optional): Name of the vertical dimension in the source grid, if applicable.
                                         Defaults to None. Use if the grid is 3D.
-            vertical_dim (str, optional): Deprecated. Use `mask_dim` instead. Defaults to None.
 
         Returns:
             xarray.Dataset: A dataset containing the generated weights
@@ -153,10 +152,6 @@ class CdoGenerate():
 
             The function logs the progress of weight generation, including the length of vertical dimensions
             and each level being processed.
-
-            Deprecation Warning: The `vertical_dim` parameter is deprecated and will be removed in future versions.
-            Users should migrate to using `mask_dim`, respectively.
-
         """
         if self.target_grid is None:
             raise TypeError('Target grid is not specified, cannot provide any regridding')
@@ -165,9 +160,6 @@ class CdoGenerate():
 
         # verify that method and normalization are suitable
         self._safe_check(method, remap_norm)
-
-        # vertical dimension
-        mask_dim = deprecated_argument(vertical_dim, mask_dim, 'vertical_dim', 'mask_dim')
 
         # prepare grid
         self.source_grid_filename = self._prepare_grid(self.source_grid)
@@ -417,7 +409,7 @@ class CdoGenerate():
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", gridpath=None,
                          icongridpath=None,  cdo_extra=None, cdo_options=None,
-                         mask_dim=None, vertical_dim=None,
+                         mask_dim=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
     """
     Wrapper function for the new cdo class to provide the old access
@@ -429,4 +421,4 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                             cdo_icon_grids=icongridpath, cdo_download_path=gridpath)
     return generator.weights(method=method, extrapolate=extrapolate,
                              remap_norm=remap_norm,
-                             mask_dim=mask_dim, vertical_dim=vertical_dim, nproc=nproc)
+                             mask_dim=mask_dim, nproc=nproc)

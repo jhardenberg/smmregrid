@@ -54,7 +54,7 @@ class Regridder(object):
     """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None, vertical_dim=None,
+                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None,
                  horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  check_nan=False, skipna=False, na_thres=DEFAULT_NA_THRES,
                  cdo='cdo', loglevel='WARNING'):
@@ -96,15 +96,11 @@ class Regridder(object):
             FileNotFoundError: If the specified source grid file does not exist.
             KeyError: If no grid types are found in the data.
 
-        Warnings:
-            DeprecationWarning: If deprecated arguments 'vertical_dim` is used. 
         """
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
             )
-
-        mask_dim = deprecated_argument(vertical_dim, mask_dim, 'vertical_dim', 'mask_dim')
 
         # set up logger
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
@@ -532,7 +528,8 @@ class Regridder(object):
         dst_grid_center_lat = weights.dst_grid_center_lat.data.reshape(dst_grid_shape[::-1])
         dst_grid_center_lon = weights.dst_grid_center_lon.data.reshape(dst_grid_shape[::-1])
 
-        axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
+        # Weight lat/lon in radians
+        axis_scale = 180.0 / math.pi  
 
         if not any(x in source_data.dims for x in horizontal_dims):
             self.loggy.error(
@@ -565,15 +562,15 @@ class Regridder(object):
             self.loggy.debug('Tensordot with renormalization!')
             numerator = dask.array.tensordot(source_array_zero_filled, weights_matrix, axes=1)
             denominator = dask.array.tensordot(non_nan_mask.astype(weights_matrix.dtype), weights_matrix, axes=1)
-
+        
             # Avoid division by zero
+            denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
             target_dask = dask.array.where(denominator > 0, numerator / denominator, numpy.nan)
 
             # na_thres logic, safety check in init
             total_weights = weights_matrix.sum(axis=0)
-            # safety check on total weights to avoid division by zero
-            safe_total_weights = dask.array.where(total_weights > 0, total_weights, 1.0)
-            missing_fraction = 1.0 - (denominator / safe_total_weights)
+            missing_fraction = 1.0 - (denominator / total_weights)
+
             # clip missing_fraction to [0, 1] to avoid numerical issues
             missing_fraction = dask.array.clip(missing_fraction, 0.0, 1.0)
             target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
