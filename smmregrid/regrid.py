@@ -556,7 +556,7 @@ class Regridder(object):
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
         # identify valid data points (non-NaN) in the source array
-        if masked: 
+        if masked or skipna: 
             valid_data = dask.array.isfinite(source_array)
             source_clean = dask.array.where(valid_data, source_array, 0.0)
         else: 
@@ -587,7 +587,6 @@ class Regridder(object):
         else:
             
             # Explicitly mask complete contamination (no valid data at all)
-            #target_dask = numerator
             target_dask = dask.array.where(denominator > 0, numerator, numpy.nan)
             
         # define and compute the new mask
