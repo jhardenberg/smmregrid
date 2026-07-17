@@ -577,13 +577,15 @@ class Regridder(object):
             denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
 
             # Avoid division by zero
-            total_weights = weights_matrix.sum(axis=0)
             denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
             target_dask = dask.array.where(dask.array.isfinite(denominator), numerator / denominator, numpy.nan)
 
             # na_thres logic, safety check in init
-            missing_fraction = 1.0 - (denominator / total_weights)
-            target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
+            #total_weights = weights_matrix.sum(axis=0)
+            #total_weights = 1.
+            #self.loggy.error('Total weights shape: %s', total_weights.mean().compute())
+            #missing_fraction = 1.0 - denominator
+            target_dask = dask.array.where(denominator < 1. - na_thres, numpy.nan, target_dask)
 
             
         # define and compute the new mask
