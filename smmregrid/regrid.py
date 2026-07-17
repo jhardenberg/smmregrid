@@ -558,36 +558,33 @@ class Regridder(object):
         # identify valid data points (non-NaN) in the source array
         if masked or skipna: 
             valid_data = dask.array.isfinite(source_array)
-            source_clean = dask.array.where(valid_data, source_array, 0.0)
-        else: 
-            valid_data = dask.array.ones_like(source_array, dtype=bool)
-            source_clean = source_array
+            source_array = dask.array.where(valid_data, source_array, 0.0)
 
         # compute tensor dot for cleaned matrix and for validation mask
         self.loggy.debug('Tensordot!')
-        numerator = dask.array.tensordot(source_clean, weights_matrix, axes=1)
+        numerator = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
         # TODO: this should be the same as the mask!
-        if masked and not skipna:
-            mask_shape = [1 for d in kept_shape] + [-1]
-            denominator = dst_grid_mask.data.reshape(mask_shape).astype(bool)
+        if not skipna:
+            if masked: 
+                mask_shape = [1 for d in kept_shape] + [-1]
+                denominator = dst_grid_mask.data.reshape(mask_shape).astype(bool)
+                target_dask = dask.array.where(denominator, numerator, numpy.nan)
+            else:
+                target_dask = numerator
         else:
             self.loggy.debug('Tensordot with renormalization!')    
             denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
 
-        if skipna:
             # Avoid division by zero
             total_weights = weights_matrix.sum(axis=0)
             denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
-            target_dask = dask.array.where(denominator > 0, numerator / denominator, numpy.nan)
+            target_dask = dask.array.where(dask.array.isfinite(denominator), numerator / denominator, numpy.nan)
 
             # na_thres logic, safety check in init
             missing_fraction = 1.0 - (denominator / total_weights)
             target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
-        else:
-            
-            # Explicitly mask complete contamination (no valid data at all)
-            target_dask = dask.array.where(denominator > 0, numerator, numpy.nan)
+
             
         # define and compute the new mask
         #if masked:
