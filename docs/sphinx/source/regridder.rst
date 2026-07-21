@@ -93,6 +93,15 @@ Constructor Parameters
   up the mask_dim accordingly. Useful for datasets with unpredicted vertical structures.
   Planned to be extended in a more automatic way in the future.
 
+* **skipna** (*bool*, default: False): If True, allows regridding of data with time-varying masks or vertical masks in 3D data without declaring mask_dim. 
+  It is based on renormalization of weights similarly to what done by ESMF. 
+  It replicates CDO behaviour for conservative and nearest neighbour. 
+  Can be faster than using mask_dim, but it is not guaranteed to be exactly the same as CDO for all methods.
+
+* **na_thres** (*float*, default: "auto"): Threshold for skipping NaN values during regridding. 
+  If the fraction of valid data in a source cell is below this threshold, the target cell will be set to NaN.
+  Default is "auto", which sets the threshold to 1.0 for conservative methods and 0.0 for others.
+
 **CDO Configuration:**
 
 * **cdo** (*str*, default: 'cdo'): Path to CDO executable.

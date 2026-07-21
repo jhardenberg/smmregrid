@@ -547,48 +547,9 @@ class Regridder(object):
             source_array = numpy.reshape(source_array, kept_shape + [-1])
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
-        # identify valid data points (non-NaN) in the source array
-        if masked or skipna: 
-            valid_data = dask.array.isfinite(source_array)
-            source_array = dask.array.where(valid_data, source_array, 0.0)
-
-        # compute tensor dot for cleaned matrix and for validation mask
-        self.loggy.debug('Tensordot!')
-        numerator = dask.array.tensordot(source_array, weights_matrix, axes=1)
-
-        # TODO: this should be the same as the mask!
-        if not skipna:
-            if masked: 
-                mask_shape = [1 for d in kept_shape] + [-1]
-                denominator = dst_grid_mask.data.reshape(mask_shape).astype(bool)
-                target_dask = dask.array.where(denominator, numerator, numpy.nan)
-            else:
-                target_dask = numerator
-        else:
-            self.loggy.debug('Tensordot with renormalization!')    
-            denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
-
-            # Avoid division by zero
-            denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
-            target_dask = dask.array.where(dask.array.isfinite(denominator), numerator / denominator, numpy.nan)
-
-            # na_thres logic, safety check in init
-            total_weights = weights_matrix.sum(axis=0)
-            #total_weights = 1.
-            #self.loggy.error('Total weights shape: %s', total_weights.mean().compute())
-            missing_fraction = 1.0 - denominator / total_weights
-            #target_dask = dask.array.where(denominator < 1. - na_thres, numpy.nan, target_dask)
-            target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
-
-            
-        # define and compute the new mask
-        #if masked:
-        #    # broadcast the mask on all the remaining dimensions and apply it with where
-        #    # Reshape mask to broadcastable shape (avoid intermediate boolean array creation)
-        #    mask_shape = [1 for d in kept_shape] + [-1]
-        #    target_mask = dst_grid_mask.data.reshape(mask_shape).astype(bool)
-        #    self.loggy.debug('Applying mask with shape %s', target_dask.shape)
-        #    target_dask = dask.array.where(target_mask, target_dask, numpy.nan)
+        target_dask = self.tensordot(
+            source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres
+        )
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
@@ -652,6 +613,48 @@ class Regridder(object):
         target_da.attrs.pop('CDI_grid_type', None)
 
         return target_da
+    
+    def tensordot(self, source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres):
+
+        # identify valid data points (non-NaN) in the source array and set them to zero for the tensordot operation
+        if masked or skipna: 
+            valid_data = dask.array.isfinite(source_array)
+            source_array = dask.array.where(valid_data, source_array, 0.0)
+
+        # compute tensor dot for cleaned matrix
+        self.loggy.debug('Tensordot!')
+        numerator = dask.array.tensordot(source_array, weights_matrix, axes=1)
+
+        # default case: no skipna
+        if not skipna:
+            if masked: 
+                # if mask is precomputed, use it to mask the output
+                mask_shape = [1 for d in kept_shape] + [-1]
+                denominator = dst_grid_mask.data.reshape(mask_shape).astype(bool)
+                return dask.array.where(denominator, numerator, numpy.nan)
+            # this is not masked, so numerator is the final output
+            return numerator
+        
+        # skipna is True, we need to renormalize the output based on valid data
+        # however, if all data is valid, we can return the numerator directly
+        if valid_data.all():
+            return numerator
+        
+        # renormalization is needed, compute the denominator
+        self.loggy.debug('Tensordot with renormalization!')    
+        denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
+
+        # Avoid division by zero
+        denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
+        target_dask = dask.array.where(dask.array.isfinite(denominator), numerator / denominator, numpy.nan)
+
+        # na_thres logic, safety check in init
+        total_weights = weights_matrix.sum(axis=0)
+        #total_weights = 1.
+        #self.loggy.error('Total weights shape: %s', total_weights.mean().compute())
+        missing_fraction = 1.0 - denominator / total_weights
+        #target_dask = dask.array.where(denominator < 1. - na_thres, numpy.nan, target_dask)
+        return dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
 
     def _check_nan_variation(self, source_grid, gridtype):
         """
