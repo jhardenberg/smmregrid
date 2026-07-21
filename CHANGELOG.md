@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+- Introduction of the `skipna` flag to renormalize weights to support time-varying and space-varying masks without declaring `mask_dim` (#70)
+- Optimization of tensordot operation to provide a speedup of 20-30% when `skipna=False` (#70)
+- `na_thres` introduce to control the behaviour on missing point (#70)
+
 ## [v0.1.6]
 
 - Pin for `cdo<2.6.1` to avoid bug in the more recent CDO versions (#68)
