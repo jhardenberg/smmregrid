@@ -4,6 +4,7 @@ import os
 import warnings
 import xarray
 from .cdogrid import CdoGrid
+from .log import setup_logger
 
 
 def check_gridfile(filename):
@@ -83,3 +84,58 @@ def detect_nan_variation_dims(field, time_dim, check_dims):
             dims_with_variation.append(dim)
 
     return dims_with_variation
+
+def resolve_na_thres(skipna, na_thres, method, loglevel='warning'):
+    """Resolve the na_thres value to use for NaN-aware regridding.
+
+    If na_thres is 'auto', pick a sensible default based on whether
+    skipna is enabled and which remapping method is used. Otherwise,
+    validate that the provided value is within [0.0, 1.0].
+
+    Parameters
+    ----------
+    skipna : bool
+        Whether NaN-skipping is enabled.
+    na_thres : float or str
+        The requested na_thres value, or 'auto' to derive it.
+    method : str
+        The remapping method (e.g. 'bil', 'bic', 'con', 'nn').
+    loglevel : str
+        The logging level to use.
+
+    Returns
+    -------
+    float
+        The resolved na_thres value.
+    """
+    loggy = setup_logger(level=loglevel, name='smmregrid.resolve_na_thres')
+    if na_thres == "auto":
+        if skipna:
+            loggy.info(
+                'skipna is enabled with na_thres=auto. na_thres will be set '
+                'to 1e-6 for bilinear and bicubic, and 1.0 for conservative '
+                'and nearest neighbor'
+            )
+            na_thres = 1e-6 if method in ('bil', 'bic') else 1.0
+        else:
+            loggy.info(
+                'skipna is disabled with na_thres=auto. na_thres will be set to 0.5'
+            )
+            na_thres = 0.5
+
+    na_thres = float(na_thres)
+    if na_thres < 0.0 or na_thres > 1.0:
+        raise ValueError('The na_thres provided must be between 0.0 and 1.0')
+
+    if skipna:
+        loggy.warning(
+            'skipna is enabled with na_thres=%s. This will affect the regridding behavior.',
+            na_thres
+        )
+    else:
+        loggy.info(
+            'skipna is disabled with na_thres=%s. This will affect the regridding behavior.',
+            na_thres
+        )
+
+    return na_thres

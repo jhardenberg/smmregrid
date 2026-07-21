@@ -53,9 +53,6 @@ Constructor Parameters
 * **cdo_download_path** (*str*, optional): Path where CDO should download grid files if needed.
   Sets the ``CDO_DOWNLOAD_PATH`` environment variable.
 
-* **cdo_icon_grids** (*str*, optional): Path to ICON grid files if working with ICON model data.
-  Sets the ``CDO_ICON_GRIDS`` environment variable.
-
 Methods
 -------
 
@@ -92,6 +89,11 @@ Generate interpolation weights for regridding.
   If specified, generates 3D weights for each mask-changing level. Mostly used for oceanic 3D data.
 
 * **nproc** (*int*, default: 1): Number of processes for parallel 3D weight generation.
+
+* **na_thres** (*float*, default: "auto"): Threshold for skipping NaN values during regridding. 
+  If the fraction of valid data in a source cell is below this threshold, the target cell will be set to NaN.
+  Default is "auto", which sets the threshold to 1.0 for conservative methods and 0.0 for others
+  when `skipna` is True and 0.5 when `skipna` is False.
 
 **Returns:** *xarray.Dataset* containing the regridding weights and mask information.
 

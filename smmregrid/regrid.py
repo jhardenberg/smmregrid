@@ -44,18 +44,20 @@ from .cdogenerate import CdoGenerate
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .gridinspector import GridInspector
-from .util import deprecated_argument, detect_nan_variation_dims, tolist
+from .util import detect_nan_variation_dims, tolist, resolve_na_thres
+from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES
 
-DEFAULT_AREA_MIN = 0.5  # default minimum area for conservative remapping
+# default minimum area for conservative remapping
+
 
 
 class Regridder(object):
     """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None, vertical_dim=None,
+                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None,
                  horizontal_dims=None, cdo_extra=None, cdo_options=None,
-                 check_nan=False,
+                 check_nan=False, skipna=False, na_thres=DEFAULT_NA_THRES,
                  cdo='cdo', loglevel='WARNING'):
         """
         Initialize the Regridder for performing regridding operations.
@@ -95,16 +97,11 @@ class Regridder(object):
             FileNotFoundError: If the specified source grid file does not exist.
             KeyError: If no grid types are found in the data.
 
-        Warnings:
-            DeprecationWarning: If deprecated arguments 'vertical_dim` is used. 
         """
-
         if (source_grid is None or target_grid is None) and (weights is None):
             raise ValueError(
                 "Either weights or source_grid/target_grid must be supplied"
             )
-
-        mask_dim = deprecated_argument(vertical_dim, mask_dim, 'vertical_dim', 'mask_dim')
 
         # set up logger
         self.loggy = setup_logger(level=loglevel, name='smmregrid.Regrid')
@@ -123,6 +120,11 @@ class Regridder(object):
         self.remap_area_min = float(remap_area_min)
         if self.remap_area_min < 0.0 or self.remap_area_min > 1.0:
             raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
+
+        # set up skipna option as ESMF
+        self.skipna = skipna
+        self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
+
         # Is there already a weights file?
         if weights is not None:
             self.loggy.info('Init from weights selected!')
@@ -182,7 +184,8 @@ class Regridder(object):
 
                 generator = CdoGenerate(source_grid_array_to_cdo, target_grid,
                                         cdo=cdo, cdo_options=cdo_options,
-                                        cdo_extra=cdo_extra, loglevel=loglevel)
+                                        cdo_extra=cdo_extra, loglevel=loglevel,
+                                        skipna=skipna, na_thres=self.na_thres)
                 gridtype.weights = generator.weights(method=method,
                                                      mask_dim=gridtype.mask_dim)
 
@@ -199,7 +202,7 @@ class Regridder(object):
                 gridtype.masked = gridtype.weights.dst_grid_masked.data
             else:
                 # compute the destination mask now
-                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim)
+                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim, nan_threshold=self.na_thres)
                 gridtype.masked = check_mask(gridtype.weights, gridtype.mask_dim)
 
     def _gridtype_from_weights(self, weights):
@@ -405,7 +408,8 @@ class Regridder(object):
             mm = masked[widx]
             data3d_list.append(self.apply_weights(
                 xa, wa, weights_matrix=wm,
-                masked=mm, horizontal_dims=horizontal_dims)
+                masked=mm, horizontal_dims=horizontal_dims,
+                skipna=self.skipna, na_thres=self.na_thres)
             )
         data3d = xarray.concat(data3d_list, dim=mask_dim, coords='different', compat='equals')
 
@@ -453,10 +457,12 @@ class Regridder(object):
             gridtype.weights,
             weights_matrix=gridtype.weights_matrix,
             masked=gridtype.masked,
-            horizontal_dims=gridtype.horizontal_dims)
+            horizontal_dims=gridtype.horizontal_dims,
+            skipna=self.skipna,
+            na_thres=self.na_thres)
 
     def apply_weights(self, source_data, weights, weights_matrix=None,
-                      masked=True, horizontal_dims=None):
+                      masked=True, horizontal_dims=None, skipna=False, na_thres=1.0):
         """
         Apply CDO weights to the source data, performing the regridding operation.
 
@@ -514,7 +520,8 @@ class Regridder(object):
         dst_grid_center_lat = weights.dst_grid_center_lat.data.reshape(dst_grid_shape[::-1])
         dst_grid_center_lon = weights.dst_grid_center_lon.data.reshape(dst_grid_shape[::-1])
 
-        axis_scale = 180.0 / math.pi  # Weight lat/lon in radians
+        # Weight lat/lon in radians
+        axis_scale = 180.0 / math.pi  
 
         if not any(x in source_data.dims for x in horizontal_dims):
             self.loggy.error(
@@ -528,10 +535,9 @@ class Regridder(object):
         # Find dimensions to keep
         kept_dims = [dim for dim in source_data.dims if dim not in horizontal_dims]
         kept_shape = [source_data.sizes[dim] for dim in kept_dims]
-
         self.loggy.debug('Dimension to be ignored: %s', kept_dims)
-        if weights_matrix is None:
-            weights_matrix = compute_weights_matrix(weights)
+        #if weights_matrix is None:
+        #    weights_matrix = compute_weights_matrix(weights)
 
         # Remove the spatial axes, apply the weights, add the spatial axes back
         source_array = source_data.data
@@ -541,33 +547,14 @@ class Regridder(object):
             source_array = numpy.reshape(source_array, kept_shape + [-1])
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
-        # Handle input mask
-        dask.array.ma.set_fill_value(source_array, 1e20)
-        source_array = dask.array.ma.fix_invalid(source_array)
-        source_array = dask.array.ma.filled(source_array)
-
-        self.loggy.debug('Tensordot!')
-        target_dask = dask.array.tensordot(source_array, weights_matrix, axes=1)
-
-        # define and compute the new mask
-        if masked:
-            # broadcast the mask on all the remaining dimensions and apply it with where
-            # Reshape mask to broadcastable shape (avoid intermediate boolean array creation)
-            mask_shape = [1 for d in kept_shape] + [-1]
-            target_mask = dst_grid_mask.data.reshape(mask_shape).astype(bool)
-            self.loggy.debug('Applying mask with shape %s', target_dask.shape)
-            target_dask = dask.array.where(target_mask, target_dask, numpy.nan)
+        target_dask = self.tensordot(
+            source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres
+        )
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
-            target_dask = dask.array.where(
-                dask.array.broadcast_to(dst_frac_area, target_dask.shape) < self.remap_area_min,
-                numpy.nan, target_dask)
-
-        # after the tensordot, bring the NaN back in
-        # Use greater than 1e19 to avoid numerical noise from interpolation.
-        # TODO: verify if after mask we still need this
-        target_dask = dask.array.where(target_dask > 1e19, numpy.nan, target_dask)
+            area_min = dask.array.broadcast_to(dst_frac_area, target_dask.shape)
+            target_dask = dask.array.where(area_min < self.remap_area_min, numpy.nan, target_dask)
 
         if len(dst_grid_rank) == 2:
             tgt_shape = [dst_grid_shape[1], dst_grid_shape[0]]
@@ -626,6 +613,48 @@ class Regridder(object):
         target_da.attrs.pop('CDI_grid_type', None)
 
         return target_da
+    
+    def tensordot(self, source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres):
+
+        # identify valid data points (non-NaN) in the source array and set them to zero for the tensordot operation
+        if masked or skipna: 
+            valid_data = dask.array.isfinite(source_array)
+            source_array = dask.array.where(valid_data, source_array, 0.0)
+
+        # compute tensor dot for cleaned matrix
+        self.loggy.debug('Tensordot!')
+        numerator = dask.array.tensordot(source_array, weights_matrix, axes=1)
+
+        # default case: no skipna
+        if not skipna:
+            if masked: 
+                # if mask is precomputed, use it to mask the output
+                mask_shape = [1 for d in kept_shape] + [-1]
+                denominator = dst_grid_mask.data.reshape(mask_shape).astype(bool)
+                return dask.array.where(denominator, numerator, numpy.nan)
+            # this is not masked, so numerator is the final output
+            return numerator
+        
+        # skipna is True, we need to renormalize the output based on valid data
+        # however, if all data is valid, we can return the numerator directly
+        if valid_data.all():
+            return numerator
+        
+        # renormalization is needed, compute the denominator
+        self.loggy.debug('Tensordot with renormalization!')    
+        denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
+
+        # Avoid division by zero
+        denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
+        target_dask = dask.array.where(dask.array.isfinite(denominator), numerator / denominator, numpy.nan)
+
+        # na_thres logic, safety check in init
+        total_weights = weights_matrix.sum(axis=0)
+        #total_weights = 1.
+        #self.loggy.error('Total weights shape: %s', total_weights.mean().compute())
+        missing_fraction = 1.0 - denominator / total_weights
+        #target_dask = dask.array.where(denominator < 1. - na_thres, numpy.nan, target_dask)
+        return dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
 
     def _check_nan_variation(self, source_grid, gridtype):
         """
