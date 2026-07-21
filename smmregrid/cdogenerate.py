@@ -409,7 +409,7 @@ class CdoGenerate():
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", gridpath=None,
-                         icongridpath=None,  cdo_extra=None, cdo_options=None,
+                         cdo_extra=None, cdo_options=None,
                          mask_dim=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
     """
@@ -419,7 +419,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                   DeprecationWarning)
     generator = CdoGenerate(source_grid=source_grid, target_grid=target_grid, loglevel=loglevel,
                             cdo_extra=cdo_extra, cdo_options=cdo_options, cdo=cdo,
-                            cdo_icon_grids=icongridpath, cdo_download_path=gridpath)
+                            cdo_download_path=gridpath)
     return generator.weights(method=method, extrapolate=extrapolate,
                              remap_norm=remap_norm,
                              mask_dim=mask_dim, nproc=nproc)

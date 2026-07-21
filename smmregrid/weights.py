@@ -84,23 +84,6 @@ def mask_weights(weights, weights_matrix, mask_dim=None, nan_threshold=0.5):
 
     return weights
 
-
-# def mask_weights(weights, weights_matrix, mask_dim=None):
-#     """This functions precompute the mask for the target interpolation
-#     Takes as input the weights from CDO and the precomputed weights matrix
-#     Return the target mask: handle the 3d case"""
-
-#     src_mask = weights.src_grid_imask
-#     if mask_dim is not None:
-#         for i in range(weights.sizes[mask_dim]):
-#             mask = src_mask.isel({mask_dim: i}).data
-#             weights['dst_grid_imask'].isel({mask_dim: i}).data[:] = mask_tensordot(mask, weights_matrix[i])
-#     else:
-#         mask = src_mask.data
-#         weights['dst_grid_imask'].data = mask_tensordot(mask, weights_matrix)
-
-#     return weights
-
 def check_mask(weights, mask_dim=None):
     """
     Check if the target mask has all values equal to 1.

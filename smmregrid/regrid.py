@@ -185,7 +185,7 @@ class Regridder(object):
                 generator = CdoGenerate(source_grid_array_to_cdo, target_grid,
                                         cdo=cdo, cdo_options=cdo_options,
                                         cdo_extra=cdo_extra, loglevel=loglevel,
-                                        skipna=skipna, na_thres=na_thres)
+                                        skipna=skipna, na_thres=self.na_thres)
                 gridtype.weights = generator.weights(method=method,
                                                      mask_dim=gridtype.mask_dim)
 
@@ -202,7 +202,7 @@ class Regridder(object):
                 gridtype.masked = gridtype.weights.dst_grid_masked.data
             else:
                 # compute the destination mask now
-                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim)
+                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim, nan_threshold=self.na_thres)
                 gridtype.masked = check_mask(gridtype.weights, gridtype.mask_dim)
 
     def _gridtype_from_weights(self, weights):

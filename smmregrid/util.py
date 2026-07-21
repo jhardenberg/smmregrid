@@ -138,5 +138,4 @@ def resolve_na_thres(skipna, na_thres, method, loglevel='warning'):
             na_thres
         )
 
-
     return na_thres

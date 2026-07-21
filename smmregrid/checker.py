@@ -1,11 +1,9 @@
 """Module for cdo-smmregrid comparison"""
-"""Module for cdo-smmregrid comparison"""
 
 import numpy as np
 import xarray as xr
 from cdo import Cdo
 from smmregrid import Regridder, CdoGenerate
-from smmregrid.regrid import DEFAULT_AREA_MIN, DEFAULT_NA_THRES
 
 cdo = Cdo()
 
@@ -93,8 +91,8 @@ def _compare(xfield, cdofield, interpolator, access='Dataset'):
 
 def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
                      init_method='grids', mask_dim=None, extrapolate=True,
-                     remap_area_min=DEFAULT_AREA_MIN,
-                     loglevel='INFO', skipna=False, na_thres=DEFAULT_NA_THRES):
+                     remap_area_min=0.0, # this is set to 0 since tests were developed like this
+                     loglevel='INFO', skipna=False, na_thres="auto"):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests."""
@@ -114,9 +112,9 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
 
 
 def check_cdo_regrid_levels(finput, ftarget, mask_dim, levels, remap_method='con',
-                            remap_area_min=DEFAULT_AREA_MIN, access='Dataset',
+                            remap_area_min=0.0, access='Dataset',
                             extrapolate=True, loglevel='INFO', skipna=False,
-                            na_thres=DEFAULT_NA_THRES):
+                            na_thres="auto"):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
