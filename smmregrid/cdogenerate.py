@@ -298,7 +298,7 @@ class CdoGenerate():
                 weight_file.name
             ]
             self.loggy.debug("Final CDO command: %s", command)
-            subprocess.check_output(command, stderr=subprocess.STDOUT, env=env)
+            subprocess.check_output(command, stderr=subprocess.STDOUT, env=env, timeout=300)
 
             weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
             return weights
