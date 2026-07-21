@@ -44,10 +44,11 @@ from .cdogenerate import CdoGenerate
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .gridinspector import GridInspector
-from .util import deprecated_argument, detect_nan_variation_dims, tolist
+from .util import detect_nan_variation_dims, tolist, resolve_na_thres
+from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES
 
-DEFAULT_AREA_MIN = 0.5  # default minimum area for conservative remapping
-DEFAULT_NA_THRES = 1  # default threshold for skipna option: 1 is conserivative but seems to replicate CDO behavior
+# default minimum area for conservative remapping
+
 
 
 class Regridder(object):
@@ -122,16 +123,7 @@ class Regridder(object):
 
         # set up skipna option as ESMF
         self.skipna = skipna
-        # TODO: this might be overridden at regrid level
-        self.na_thres = float(na_thres)
-        if self.na_thres < 0.0 or self.na_thres > 1.0:
-            raise ValueError('The na_thres provided must be between 0.0 and 1.0')
-        
-        if self.skipna:
-            self.loggy.warning(
-                'skipna is enabled with na_thres=%s. This will affect the regridding behavior.',
-                self.na_thres
-            )
+        self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
 
         # Is there already a weights file?
         if weights is not None:
@@ -193,7 +185,7 @@ class Regridder(object):
                 generator = CdoGenerate(source_grid_array_to_cdo, target_grid,
                                         cdo=cdo, cdo_options=cdo_options,
                                         cdo_extra=cdo_extra, loglevel=loglevel,
-                                        skipna=skipna)
+                                        skipna=skipna, na_thres=na_thres)
                 gridtype.weights = generator.weights(method=method,
                                                      mask_dim=gridtype.mask_dim)
 
@@ -581,11 +573,12 @@ class Regridder(object):
             target_dask = dask.array.where(dask.array.isfinite(denominator), numerator / denominator, numpy.nan)
 
             # na_thres logic, safety check in init
-            #total_weights = weights_matrix.sum(axis=0)
+            total_weights = weights_matrix.sum(axis=0)
             #total_weights = 1.
             #self.loggy.error('Total weights shape: %s', total_weights.mean().compute())
-            #missing_fraction = 1.0 - denominator
-            target_dask = dask.array.where(denominator < 1. - na_thres, numpy.nan, target_dask)
+            missing_fraction = 1.0 - denominator / total_weights
+            #target_dask = dask.array.where(denominator < 1. - na_thres, numpy.nan, target_dask)
+            target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
 
             
         # define and compute the new mask
