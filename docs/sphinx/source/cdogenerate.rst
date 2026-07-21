@@ -53,9 +53,6 @@ Constructor Parameters
 * **cdo_download_path** (*str*, optional): Path where CDO should download grid files if needed.
   Sets the ``CDO_DOWNLOAD_PATH`` environment variable.
 
-* **cdo_icon_grids** (*str*, optional): Path to ICON grid files if working with ICON model data.
-  Sets the ``CDO_ICON_GRIDS`` environment variable.
-
 Methods
 -------
 
