@@ -62,9 +62,14 @@ Then you should activate the environment ::
 macOS
 -----
 
-Recent CDO versions (>= 2.6) are not available from conda-forge for macOS. 
+Recent CDO versions (> 2.5.0) are not available from conda-forge for macOS. 
 On macOS, CDO must therefore be installed with `Homebrew <https://brew.sh>`_, while python and the other dependencies 
-are still installed with conda/mamba. Do not install ``cdo`` from conda-forge on macOS, since it would shadow the Homebrew version ::
+are still installed with conda/mamba. The conda-forge package of smmregrid does not include CDO on macOS ::
+
+    > brew install cdo
+    > mamba create -n smmregrid -c conda-forge smmregrid
+
+Or, installing from PyPI ::
 
     > brew install cdo
     > mamba create -n smmregrid "python>=3.8" eccodes numba
@@ -76,8 +81,18 @@ If you are working from the GitHub repository, use the ``environment-macos.yml``
     > brew install cdo
     > mamba env create --name smmregrid -f environment-macos.yml
 
-smmregrid uses the CDO executable defined by the ``CDO`` environment variable (the same used by python-cdo) 
-and otherwise the ``cdo`` found in the ``PATH``. To be explicit ::
+
+Which CDO is used
+-----------------
+
+smmregrid looks for the CDO executable in this order:
+
+1. the ``cdo`` argument of :class:`Regridder` / :class:`CdoGenerate`, if provided;
+2. the ``CDO`` environment variable (the same used by python-cdo);
+3. ``cdo`` in the ``PATH``.
+
+On macOS, make sure that no ``cdo`` from conda-forge is installed in your environment (e.g. pulled in by another package), 
+since it would shadow the Homebrew one in the ``PATH``. If you cannot avoid it, point smmregrid to the Homebrew CDO explicitly ::
 
     > export CDO=$(brew --prefix)/bin/cdo
 
@@ -93,4 +108,4 @@ Requirements
 The required packages are listed in ``environment.yml`` (Linux) and ``environment-macos.yml`` (macOS) and in ``pyproject.toml``.
 
 .. note::
-	Linux and macOS are supported. Python >=3.8 and CDO >= 2.6.4 are required. On macOS, CDO must be installed with Homebrew.
+	Linux and macOS are supported. Python >=3.8 and CDO >= 2.6.1 are required. On macOS, CDO must be installed with Homebrew.

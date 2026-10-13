@@ -16,6 +16,7 @@ def clear_cache():
 
 def fake_cdo(tmp_path, version):
     """Create a fake CDO executable printing the given version"""
+    tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "cdo"
     path.write_text(f"#!/bin/sh\necho 'Climate Data Operators version {version} (https://mpimet.mpg.de/cdo)'\n")
     path.chmod(path.stat().st_mode | stat.S_IEXEC)

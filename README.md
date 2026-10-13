@@ -16,7 +16,7 @@ The regridder uses CDO as a backend for weights computation, and then uses effic
 Please note that this tool is not thought as "another interpolation tool", but rather a method to apply pre-computed weights  within the python environment. 
 The speedup against CDO is estimated to be about ~1.5 to ~5 times, slightly lower if then files are written to the disk. 2D and 3D data are supported on all the grids supported by CDO, and special treatment can be assigned to vertical coordinates with changing mask (e.g. ocean 3D datasets). It works smoothly on both xarray.Dataset and xarray.DataArray. Attributes are kept and target grids can be both file on disk or CDO-compliant grids (e.g. r180x90, F128, etc).  
 
-The tool works for python versions >=3.8 and requires CDO >= 2.6.4. It is safer to run it through conda/mamba.
+The tool works for python versions >=3.8 and requires CDO >= 2.6.1. It is safer to run it through conda/mamba.
 
 ### Linux
 
@@ -43,6 +43,13 @@ Recent CDO versions are not available from conda-forge for macOS, so CDO must be
 
 ```
 brew install cdo
+mamba create -n smmregrid -c conda-forge smmregrid
+```
+
+The conda-forge package of smmregrid does not include CDO on macOS. Similarly, if you install from PyPI:
+
+```
+brew install cdo
 mamba create -n smmregrid "python>=3.8" eccodes numba
 mamba activate smmregrid
 pip install smmregrid
@@ -56,14 +63,21 @@ mamba env create -f environment-macos.yml
 mamba activate smmregrid
 ```
 
-Do not install `cdo` from conda-forge on macOS: it would shadow the Homebrew version in your `PATH`. 
-smmregrid looks for the CDO executable in the `CDO` environment variable (as python-cdo does) and then in the `PATH`, so you can also be explicit with:
+### Which CDO is used
+
+smmregrid looks for the CDO executable in this order:
+
+1. the `cdo` argument of `Regridder` / `CdoGenerate`, if provided;
+2. the `CDO` environment variable (the same used by python-cdo);
+3. `cdo` in the `PATH`.
+
+On macOS, make sure that no `cdo` from conda-forge is installed in your environment (e.g. pulled in by another package), since it would shadow the Homebrew one in the `PATH`. If you cannot avoid it, point smmregrid to the Homebrew CDO explicitly:
 
 ```
 export CDO=$(brew --prefix)/bin/cdo
 ```
 
-You can check which CDO is used with `python -c "import smmregrid; print(smmregrid.cdo_version())"`.
+The CDO version is checked at runtime, and an error is raised if it is older than the minimum supported. You can check which version is used with `python -c "import smmregrid; print(smmregrid.cdo_version())"`.
 
 As a disclaimer, this repository represents a modification of the regridding routines developed in [climtas](https://github.com/ScottWales/climtas) by Scott Wales, which already implements efficiently this idea and has no other significant dependencies.
 
