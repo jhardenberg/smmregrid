@@ -5,7 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
-- Upgrade to support CDO 2.6.5 (#66)
+- Upgrade to support `cdo==2.6.5` (#66)
+## [v0.1.6]
+
+- Pin for `cdo<2.6.1` to avoid bug in the more recent CDO versions (#68)
+- Introduce a `GridDetector` class where grid kind guessing is performed external from `GridInspector` (#68)
+- Add `valid_time` and `forecast_time` as time dimension for `Gridtype` guessing (#68)
+- Provide a new method for `GridInspector`to extract information on the minimum required data variables from a dataset with different gridtype (#68)
 
 ## [v0.1.5]
 

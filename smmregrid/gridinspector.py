@@ -1,16 +1,13 @@
 """GridInspector class module"""
 
+import warnings
+
 import os
 import xarray as xr
-import numpy as np
+
 from smmregrid.log import setup_logger
 from .gridtype import GridType
-from .util import find_coord
-
-# Define coordinate names for latitude and longitude
-LAT_COORDS = ["lat", "latitude", "nav_lat"]
-LON_COORDS = ["lon", "longitude", "nav_lon"]
-
+from .griddetector import GridDetector
 
 class GridInspector():
     """Class to investigate data and detect its GridType() object"""
@@ -203,7 +200,7 @@ class GridInspector():
         """
         Check if a variable is a bounds variable.
         """
-        return var.endswith('_bnds') or var.endswith('_bounds') or var == 'vertices' and 'time' not in var
+        return (var.endswith('_bnds') or var.endswith('_bounds') or var == 'vertices') and 'time' not in var
 
     def _identify_spatial_bounds(self, data):
         """
@@ -237,9 +234,9 @@ class GridInspector():
             variables = list(gridtype.variables.keys())
             if variables:
                 if isinstance(data, xr.Dataset):
-                    gridtype.kind = self.detect_grid(data[variables])
+                    gridtype.kind = GridDetector().detect_grid(data[variables])
                 elif isinstance(data, xr.DataArray):
-                    gridtype.kind = self.detect_grid(data)
+                    gridtype.kind = GridDetector().detect_grid(data)
 
     @staticmethod
     def get_gridtype_attr(gridtypes, attr):
@@ -268,74 +265,20 @@ class GridInspector():
         Returns:
             str: The identified grid type.
         """
-
-        lon = find_coord(data, set(LON_COORDS + [lon]))
-        lat = find_coord(data, set(LAT_COORDS + [lat]))
-
-        if self.is_healpix_from_attribute(data):
-            return "HEALPix"
-
-        if not lat or not lon:
-            return "Unknown"
-
-        # 2D coord-dim dependency
-        if data[lat].ndim == 2 and data[lon].ndim == 2:
-            return "Curvilinear"
-
-        # 1D coord-dim dependency
-        if data[lat].ndim == 1 and data[lon].ndim == 1:
-
-            # Regular: latitude and longitude depend on different coordinates
-            if data[lat].dims != data[lon].dims:
-
-                lat_diff = np.diff(data[lat].values)
-                lon_diff = np.diff(data[lon].values)
-
-                # Regular: latitude and longitude equidistant
-                if np.allclose(lat_diff, lat_diff[0]) and np.allclose(lon_diff, lon_diff[0]):
-                    return "Regular"
-
-                # Gaussian: longitude equidistant, latitude not
-                if not np.allclose(lat_diff, lat_diff[0]) and np.allclose(lon_diff, lon_diff[0]):
-                    return "GaussianRegular"
-
-                return "UndefinedRegular"
-
-            pix = data[lat].size
-            if pix % 12 == 0 and (pix // 12).bit_length() - 1 == np.log2(pix // 12):
-                return "HEALPix"
-
-            # Guess gaussian reduced: increasing number of latitudes from -90 to 0
-            lat_values = data[lat].where(data[lat] < 0).values
-            lat_values = lat_values[~np.isnan(lat_values)]
-            _, counts = np.unique(lat_values, return_counts=True)
-            gaussian_reduced = np.all(np.diff(counts) > 0)
-            if gaussian_reduced:
-                return "GaussianReduced"
-
-            # None of the above cases
-            return "Unstructured"
-
-        return "Unknown"
+        warnings.warn(
+            "GridInspector.detect_grid(data) is deprecated and will be removed in future versions."
+            "Please use GridDetector().detect_grid(data) instead.",
+        )
+        return GridDetector(lon=lon, lat=lat).detect_grid(data)
 
     @staticmethod
-    def is_healpix_from_attribute(data):
+    def get_gridtype_sample_variable(grids):
         """
-        Determine if the given xarray Dataset or DataArray uses a HEALPix grid.
-
-        Returns:
-            bool: True if HEALPix grid detected, False otherwise.
+        Get a representative variable for each grid type in the provided list of GridType objects.
         """
-
-        # Attribute-based checks
-        if isinstance(data, xr.Dataset):
-            if "healpix" in data.variables:
-                return True
-            for var in data.data_vars:
-                if data[var].attrs.get('grid_mapping') == 'healpix':
-                    return True
-        elif isinstance(data, xr.DataArray):
-            if data.attrs.get('grid_mapping') == 'healpix':
-                return True
-
-        return False
+        representative = []
+        for gridtype in grids:
+            variables = list(gridtype.variables.keys())
+            if variables:
+                representative.append(variables[0])
+        return representative
