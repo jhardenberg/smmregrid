@@ -1,6 +1,7 @@
 """Weight calculation utilities"""
 
 import dask
+import numpy
 import sparse
 
 
@@ -27,21 +28,24 @@ def compute_weights_matrix(weights):
     Convert the weights from CDO to a numpy array
     """
 
-    # CDO style weights
-    src_address = weights.src_address - 1
-    dst_address = weights.dst_address - 1
-    remap_matrix = weights.remap_matrix[:, 0]
+    # CDO style weights: load them eagerly, they are read only once here
+    src_address = weights.src_address.values - 1
+    dst_address = weights.dst_address.values - 1
+    remap_matrix = weights.remap_matrix.values[:, 0]
     w_shape = (weights.sizes["src_grid_size"], weights.sizes["dst_grid_size"])
 
-    # Create a sparse array from the weights
-    sparse_weights_delayed = dask.delayed(sparse.COO)(
-        [src_address.data, dst_address.data], remap_matrix.data, shape=w_shape
-    )
-    sparse_weights = dask.array.from_delayed(
-        sparse_weights_delayed, shape=w_shape, dtype=remap_matrix.dtype
+    # Build the sparse matrix once, so that it is not rebuilt (and the weights
+    # are not re-read from disk) at every compute of the regridded data
+    sparse_weights = sparse.COO(
+        [src_address, dst_address], remap_matrix, shape=w_shape
     )
 
-    return sparse_weights
+    # Wrap it as a single-chunk dask array. name=False avoids hashing the whole
+    # matrix, meta keeps the numpy-like behaviour of the previous delayed version
+    return dask.array.from_array(
+        sparse_weights, chunks=-1, asarray=False, name=False,
+        meta=numpy.empty((0, 0), dtype=remap_matrix.dtype)
+    )
 
 
 def mask_tensordot(src_mask, weights_matrix, nan_threshold=0.5):
