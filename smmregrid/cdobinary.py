@@ -8,7 +8,7 @@ import subprocess
 from functools import lru_cache
 
 # Minimum CDO version supported by smmregrid
-CDO_MIN_VERSION = "2.6.4"
+CDO_MIN_VERSION = "2.6.1"
 
 MACOS_HINT = ("On macOS, recent CDO versions are not available from conda-forge: "
               "please install CDO with Homebrew ('brew install cdo') and remove "
