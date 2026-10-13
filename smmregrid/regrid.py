@@ -41,7 +41,7 @@ import numpy
 import dask.array
 from .dimension import remove_degenerate_axes
 from .cdogenerate import CdoGenerate
-from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
+from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask, compute_total_weights
 from .log import setup_logger
 from .gridinspector import GridInspector
 from .util import detect_nan_variation_dims, tolist, resolve_na_thres
@@ -204,6 +204,10 @@ class Regridder(object):
                 # compute the destination mask now
                 gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim, nan_threshold=self.na_thres)
                 gridtype.masked = check_mask(gridtype.weights, gridtype.mask_dim)
+
+            # precompute quantities which depend only on the weights, to avoid repeating them at each call
+            gridtype.total_weights = compute_total_weights(gridtype.weights_matrix)
+            gridtype.target_coords = self._target_coords(gridtype.weights, gridtype.mask_dim)
 
     def _gridtype_from_weights(self, weights):
         """
@@ -409,7 +413,9 @@ class Regridder(object):
             data3d_list.append(self.apply_weights(
                 xa, wa, weights_matrix=wm,
                 masked=mm, horizontal_dims=horizontal_dims,
-                skipna=self.skipna, na_thres=self.na_thres)
+                skipna=self.skipna, na_thres=self.na_thres,
+                total_weights=gridtype.total_weights[widx],
+                target_coords=gridtype.target_coords)
             )
         data3d = xarray.concat(data3d_list, dim=mask_dim, coords='different', compat='equals')
 
@@ -459,10 +465,61 @@ class Regridder(object):
             masked=gridtype.masked,
             horizontal_dims=gridtype.horizontal_dims,
             skipna=self.skipna,
-            na_thres=self.na_thres)
+            na_thres=self.na_thres,
+            total_weights=gridtype.total_weights,
+            target_coords=gridtype.target_coords)
+
+    def _target_coords(self, weights, mask_dim=None):
+        """
+        Compute the target grid shape, dimensions and lat/lon coordinates from the weights.
+        These depend only on the weights, so they can be computed once and reused at each call.
+
+        Args:
+            weights (xarray.Dataset): The CDO weights.
+            mask_dim (str, optional): The vertical dimension, if any. The target grid is the same for all levels.
+
+        Returns:
+            dict: with tgt_shape, tgt_dims, and lat and lon as xarray.DataArray.
+        """
+
+        # target grid is the same for all levels, so select the first one if needed
+        if mask_dim and mask_dim in weights.dst_grid_center_lat.dims:
+            weights = weights.isel({mask_dim: 0})
+
+        dst_grid_shape = weights.dst_grid_dims.values
+        dst_grid_rank = weights.dst_grid_rank
+
+        if len(dst_grid_rank) == 2:
+            tgt_shape = [dst_grid_shape[1], dst_grid_shape[0]]
+            tgt_dims = ["i", "j"]
+        elif len(dst_grid_rank) == 1:
+            tgt_shape = [dst_grid_shape[0]]
+            tgt_dims = ['cell']
+        else:
+            raise ValueError('Unknown dimensional target grid')
+
+        # Weight lat/lon in radians
+        axis_scale = 180.0 / math.pi
+        attrs = {
+            "lat": {"units": "degrees_north", "standard_name": "latitude", "axis": "Y"},
+            "lon": {"units": "degrees_east", "standard_name": "longitude", "axis": "X"},
+        }
+
+        coords = {}
+        for coord in ["lat", "lon"]:
+            values = weights[f"dst_grid_center_{coord}"].values.reshape(dst_grid_shape[::-1])
+            # Clean up coordinates
+            da = remove_degenerate_axes(xarray.DataArray(values, dims=tgt_dims))
+            # Convert to degrees if needed, rounding to avoid numerical errors
+            da = numpy.round(da * axis_scale, 10)
+            da.attrs = attrs[coord]
+            coords[coord] = da
+
+        return {"tgt_shape": tgt_shape, "tgt_dims": tgt_dims, **coords}
 
     def apply_weights(self, source_data, weights, weights_matrix=None,
-                      masked=True, horizontal_dims=None, skipna=False, na_thres=1.0):
+                      masked=True, horizontal_dims=None, skipna=False, na_thres=1.0,
+                      total_weights=None, target_coords=None):
         """
         Apply CDO weights to the source data, performing the regridding operation.
 
@@ -475,6 +532,10 @@ class Regridder(object):
             weights_matrix (xarray.DataArray, optional): Pre-computed weights matrix (default: None).
             masked (bool): Indicates if the DataArray is masked (default: True).
             horizontal_dims (list): List of dimensions for interpolation (e.g., ['lon', 'lat']).
+            skipna (bool): Whether to renormalize the output based on valid source points (default: False).
+            na_thres (float): Maximum fraction of missing weights allowed when skipna is True (default: 1.0).
+            total_weights (numpy.ndarray, optional): Pre-computed sum of weights per target cell (default: None).
+            target_coords (dict, optional): Pre-computed target grid shape, dims and lat/lon (default: None).
 
         Returns:
             xarray.DataArray: The regridded version of the source dataset.
@@ -514,14 +575,12 @@ class Regridder(object):
         dst_grid_shape = weights.dst_grid_dims.values
         dst_frac_area = weights.dst_grid_frac
         dst_grid_mask = weights.dst_grid_imask
-        dst_grid_rank = weights.dst_grid_rank
 
-        # target lon/lat
-        dst_grid_center_lat = weights.dst_grid_center_lat.data.reshape(dst_grid_shape[::-1])
-        dst_grid_center_lon = weights.dst_grid_center_lon.data.reshape(dst_grid_shape[::-1])
-
-        # Weight lat/lon in radians
-        axis_scale = 180.0 / math.pi  
+        # target grid shape, dims and lat/lon: use the precomputed ones if available
+        if target_coords is None:
+            target_coords = self._target_coords(weights)
+        tgt_shape = target_coords["tgt_shape"]
+        tgt_dims = target_coords["tgt_dims"]
 
         if not any(x in source_data.dims for x in horizontal_dims):
             self.loggy.error(
@@ -548,22 +607,14 @@ class Regridder(object):
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
         target_dask = self.tensordot(
-            source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres
+            source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres,
+            total_weights=total_weights
         )
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
             area_min = dask.array.broadcast_to(dst_frac_area, target_dask.shape)
             target_dask = dask.array.where(area_min < self.remap_area_min, numpy.nan, target_dask)
-
-        if len(dst_grid_rank) == 2:
-            tgt_shape = [dst_grid_shape[1], dst_grid_shape[0]]
-            tgt_dims = ["i", "j"]
-        elif len(dst_grid_rank) == 1:
-            tgt_shape = [dst_grid_shape[0]]
-            tgt_dims = ['cell']
-        else:
-            raise ValueError('Unknown dimensional target grid')
 
         # reshape the target DataArray
         target_dask = dask.array.reshape(
@@ -582,29 +633,13 @@ class Regridder(object):
             name=source_data.name,
         )
 
-        # Add the destination grid coordinate
-        target_da.coords["lat"] = xarray.DataArray(dst_grid_center_lat, dims=tgt_dims)
-        target_da.coords["lon"] = xarray.DataArray(dst_grid_center_lon, dims=tgt_dims)
-
-        # Clean up coordinates
-        target_da.coords["lat"] = remove_degenerate_axes(target_da.lat)
-        target_da.coords["lon"] = remove_degenerate_axes(target_da.lon)
-
-        # Convert to degrees if needed, rounding to avoid numerical errors
-        target_da.coords["lat"] = numpy.round(target_da.lat * axis_scale, 10)
-        target_da.coords["lon"] = numpy.round(target_da.lon * axis_scale, 10)
+        # Add the destination grid coordinate: shallow copy to avoid sharing attrs with the cached ones
+        target_da.coords["lat"] = target_coords["lat"].copy(deep=False)
+        target_da.coords["lon"] = target_coords["lon"].copy(deep=False)
 
         # If a regular grid drop the 'i' and 'j' dimensions
         if tgt_dims == ['i', 'j'] and target_da.coords["lat"].ndim == 1 and target_da.coords["lon"].ndim == 1:
             target_da = target_da.swap_dims({"i": "lat", "j": "lon"})
-
-        # Add metadata to the coordinates
-        target_da.coords["lat"].attrs.update(
-            {"units": "degrees_north", "standard_name": "latitude", "axis": "Y"}
-        )
-        target_da.coords["lon"].attrs.update(
-            {"units": "degrees_east", "standard_name": "longitude", "axis": "X"}
-        )
 
         # Copy attributes from the original
         target_da.attrs = source_data.attrs
@@ -614,7 +649,8 @@ class Regridder(object):
 
         return target_da
     
-    def tensordot(self, source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres):
+    def tensordot(self, source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres,
+                  total_weights=None):
 
         # identify valid data points (non-NaN) in the source array and set them to zero for the tensordot operation
         if masked or skipna: 
@@ -649,7 +685,8 @@ class Regridder(object):
         target_dask = dask.array.where(dask.array.isfinite(denominator), numerator / denominator, numpy.nan)
 
         # na_thres logic, safety check in init
-        total_weights = weights_matrix.sum(axis=0)
+        if total_weights is None:
+            total_weights = compute_total_weights(weights_matrix)
         #total_weights = 1.
         #self.loggy.error('Total weights shape: %s', total_weights.mean().compute())
         missing_fraction = 1.0 - denominator / total_weights

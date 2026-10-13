@@ -48,6 +48,22 @@ def compute_weights_matrix(weights):
     )
 
 
+def compute_total_weights(weights_matrix):
+    """
+    Compute the sum of the weights for each target cell, as a dense numpy array.
+    Target cells without any weight are set to NaN to avoid division by zero.
+    Handles the 3D case, where weights_matrix is a list of matrices.
+    """
+
+    if isinstance(weights_matrix, list):
+        return [compute_total_weights(w) for w in weights_matrix]
+
+    total_weights = weights_matrix.sum(axis=0).compute()
+    if hasattr(total_weights, 'todense'):
+        total_weights = total_weights.todense()
+    return numpy.where(total_weights > 0, total_weights, numpy.nan)
+
+
 def mask_tensordot(src_mask, weights_matrix, nan_threshold=0.5):
     """Apply tensor dot product to source mask to return destination mask"""
 
