@@ -13,6 +13,7 @@ Simplest way is to install ``smmregrid`` using conda or mamba getting the code f
     > mamba create -n smmregrid -c conda-forge smmregrid
 
 This will install ``smmregrid`` along with all required binary dependencies, including ``cdo`` and ``eccodes``.
+On macOS, see the dedicated section below.
 
 .. note::
    Make sure to have [mamba](https://mamba.readthedocs.io/en/latest/user_guide/mamba.html) 
@@ -58,15 +59,38 @@ Then you should activate the environment ::
     > mamba activate smmregrid
 
 
+macOS
+-----
+
+Recent CDO versions (>= 2.6) are not available from conda-forge for macOS. 
+On macOS, CDO must therefore be installed with `Homebrew <https://brew.sh>`_, while python and the other dependencies 
+are still installed with conda/mamba. Do not install ``cdo`` from conda-forge on macOS, since it would shadow the Homebrew version ::
+
+    > brew install cdo
+    > mamba create -n smmregrid "python>=3.8" eccodes numba
+    > mamba activate smmregrid
+    > pip install smmregrid
+
+If you are working from the GitHub repository, use the ``environment-macos.yml`` file, which does not include CDO ::
+
+    > brew install cdo
+    > mamba env create --name smmregrid -f environment-macos.yml
+
+smmregrid uses the CDO executable defined by the ``CDO`` environment variable (the same used by python-cdo) 
+and otherwise the ``cdo`` found in the ``PATH``. To be explicit ::
+
+    > export CDO=$(brew --prefix)/bin/cdo
+
+The CDO version is checked at runtime: if it is older than the minimum supported version an error is raised.
+You can check which version is used with ::
+
+    > python -c "import smmregrid; print(smmregrid.cdo_version())"
+
+
 Requirements
 ------------
 
-The required packages are listed in ``environment.yml`` and in ``pyproject.toml``.
-A secondary environment available in  ``dev-environment.yml`` can be used for development, including testing capabilities and jupyter notebooks. 
+The required packages are listed in ``environment.yml`` (Linux) and ``environment-macos.yml`` (macOS) and in ``pyproject.toml``.
 
 .. note::
-	Both Unix and MacOS are supported. Python >=3.8 is requested.
-
-
-
-
+	Linux and macOS are supported. Python >=3.8 and CDO >= 2.6.4 are required. On macOS, CDO must be installed with Homebrew.

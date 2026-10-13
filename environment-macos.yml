@@ -1,0 +1,17 @@
+# Create a suitable environment on macOS:
+# brew install cdo
+# conda env create -f environment-macos.yml
+#
+# CDO is not included here: conda-forge does not provide recent CDO builds
+# for macOS, so CDO must be installed with Homebrew (https://brew.sh).
+
+name : smmregrid
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.8,<3.16
+  - eccodes
+  - numba
+  - pip
+  - pip:
+    - -e .[all]

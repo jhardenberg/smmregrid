@@ -17,21 +17,34 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        #python-version: ["3.8", "3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
-        python-version: ["3.14"]
+        python-version: [ "3.8", "3.14", "3.15"]
+        #python-version: ["3.14"]
+        os: [ubuntu-latest, macos-latest]
+        include:
+          # Linux gets CDO from conda-forge
+          - os: ubuntu-latest
+            environment-file: environment.yml
+          # macOS gets CDO from Homebrew, as conda-forge has no recent builds
+          - os: macos-latest
+            environment-file: environment-macos.yml
     defaults:
       run:
         shell: bash -el {0}
     steps:
     - uses: actions/checkout@v6
+    - name: Install CDO with Homebrew
+      if: runner.os == 'macOS'
+      run: |
+        brew install cdo
+        echo "CDO=$(brew --prefix)/bin/cdo" >> $GITHUB_ENV
     - name: provision-with-micromamba
       uses: mamba-org/setup-micromamba@v3
       with:
-        environment-file: environment.yml
+        environment-file: ${{ matrix.environment-file }}
         environment-name: smmregrid
         cache-downloads: true
         cache-environment: false
@@ -44,6 +57,7 @@ jobs:
       run: |
         # install package
         python -m pip install --editable .
+        ${CDO:-cdo} --version
     - name: Lint with flake8
       run: |
         # install flake8
@@ -61,6 +75,7 @@ jobs:
         coverage run -m pytest
         coverage lcov
     - name: Run coveralls
+      if: runner.os == 'Linux'
       uses: coverallsapp/github-action@v2
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
