@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+- Upgrade to support CDO 2.6.5 (#66)
+
 ## [v0.1.5]
 
 - Fix bug which was breaking smmregrid for python 3.8, 3.9, 3.10
