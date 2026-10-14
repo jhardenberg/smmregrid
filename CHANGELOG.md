@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Optimization of tensordot operation to provide a speedup of 15-20% when `skipna=False` (#70)
 - `skipna` is consistent with CDO for `remap_norm='destarea'`, and fully lazy (#70)
 - Tests on a dask distributed cluster, and benchmark script with a scaling test (`--distributed N`) (#70)
-- With `skipna`, 3D data are regridded as 2D with a single weights matrix (`mask_dim` is ignored): ~20x fewer dask tasks for 3D data, and 3D data can be regridded from 2D weights (#74)
+- With `skipna`, 3D data are regridded as 2D with a single weights matrix (`mask_dim` is ignored): weights generated once instead of once per level (~40x faster init), ~18x fewer dask tasks, and 3D data can be regridded from 2D weights (#74)
 
 ## [v0.1.6]
 
