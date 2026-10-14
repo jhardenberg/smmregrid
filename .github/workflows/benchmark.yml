@@ -2,6 +2,7 @@
 # Compares the PR with its base branch with benchmarks/benchmark.py --quick and fails only on
 # regressions of the deterministic metrics (tasks, graph size, serial memory, correctness, errors):
 # timings on shared runners are too noisy, they are reported for information only.
+# The report is posted as a PR comment, updated at each run, and in the job summary.
 
 name: Benchmark
 
@@ -16,6 +17,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write  # to post the report as a comment
 
 concurrency:
   group: benchmark-${{ github.event.pull_request.number || github.ref }}
@@ -60,6 +62,20 @@ jobs:
       if: always()
       run: |
         if [ -f report.md ]; then cat report.md >> "$GITHUB_STEP_SUMMARY"; fi
+    - name: Comment on the PR
+      if: always() && github.event_name == 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        if [ -f report.md ]; then
+          { cat report.md; echo; echo "_Benchmark of ${GITHUB_SHA::7} vs origin/${AGAINST}: [workflow run](${RUN_URL})_"; } > comment.md
+        else
+          echo "Benchmark failed before producing a report: [workflow run](${RUN_URL})" > comment.md
+        fi
+        # update the previous report of this workflow, or create it
+        gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md --edit-last --create-if-none
     - name: Upload results
       if: always()
       uses: actions/upload-artifact@v4
