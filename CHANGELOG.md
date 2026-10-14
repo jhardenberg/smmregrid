@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Optimization of tensordot operation to provide a speedup of 15-20% when `skipna=False` (#70)
 - `skipna` is consistent with CDO for `remap_norm='destarea'`, and fully lazy (#70)
 - Tests on a dask distributed cluster (#70)
-- Benchmark tool `benchmarks/benchmark.py`: init, build, compute, peak memory and dask graph size of 2D/3D cases (with and without mask and skipna) on the serial scheduler and on dask clusters, optionally comparing two versions, and an on-demand CI job triggered by the `benchmark` label (#70)
+- Benchmark tool `benchmarks/benchmark.py`: init, build, compute, peak memory and dask graph size of 2D/3D cases (with and without mask and skipna) on the serial scheduler and on dask clusters, optionally comparing two versions, and an on-demand CI job triggered by the `benchmark` label (#75)
 
 ## [v0.1.6]
 
