@@ -137,3 +137,30 @@ def test_skipna_destarea_locality():
     far = out.lat < 60
     assert out.where(far).notnull().sum() > 0
     xr.testing.assert_allclose(out.where(far), out_nan.where(far))
+
+
+@pytest.mark.parametrize("init", ['grids', 'grids_mask_dim', 'weights'])
+def test_skipna_3d_as_2d(init):
+    """With skipna the weights do not depend on the level, so 3D data are regridded as 2D:
+    a single weights matrix and no mask dimension, whatever the initialization (also when
+    mask_dim is given, which is ignored, and from 2D weights, which used to fail on 3D data).
+    The output must be the same in all cases, with the vertical dimension before the horizontal ones."""
+
+    filein = 'tests/data/so3d-nemo.nc'
+    data = xr.open_dataset(filein)
+    if init == 'weights':
+        weights = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning').weights(method='con')
+        regridder = Regridder(weights=weights, skipna=True, loglevel='warning')
+    else:
+        mask_dim = 'lev' if init == 'grids_mask_dim' else None
+        regridder = Regridder(source_grid=filein, target_grid='r180x90', mask_dim=mask_dim,
+                              skipna=True, loglevel='warning')
+        assert regridder.grids[0].mask_dim is None
+        assert not isinstance(regridder.grids[0].weights_matrix, list)
+
+    out = regridder.regrid(data)['so']
+    assert out.dims == ('time', 'lev', 'lat', 'lon')
+
+    reference = Regridder(source_grid=filein, target_grid='r180x90', skipna=True,
+                          loglevel='warning').regrid(data)['so']
+    xr.testing.assert_allclose(out.compute(), reference.compute())
