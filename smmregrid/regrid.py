@@ -125,6 +125,18 @@ class Regridder(object):
         self.skipna = skipna
         self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
 
+        # with skipna the NaNs are handled at runtime, and the weights are generated from a source grid
+        # without NaNs, so they are the same on all the levels: a mask dimension is not needed, and
+        # 3D data are regridded as 2D ones, with a single weights matrix (much smaller dask graph)
+        if self.skipna and weights is None:
+            if mask_dim:
+                self.loggy.warning('skipna is True: mask_dim %s is ignored, the same weights apply to all levels',
+                                   mask_dim)
+            if check_nan:
+                self.loggy.info('skipna is True: check_nan is not needed and it is ignored')
+                check_nan = False
+            self.extra_dims['mask'] = False
+
         # Is there already a weights file?
         if weights is not None:
             self.loggy.info('Init from weights selected!')
@@ -225,7 +237,11 @@ class Regridder(object):
 
         # the vertical dimension has to show up into the extra dimensions
         # to cover the case that it is not a standard dimension: possibly better implementation available
-        self.extra_dims['mask'] = [gridtype[0].mask_dim]
+        # with skipna and 2D weights, 3D data are regridded as 2D, the same weights for all the levels
+        if self.skipna and not gridtype[0].mask_dim:
+            self.extra_dims['mask'] = False
+        else:
+            self.extra_dims['mask'] = [gridtype[0].mask_dim]
 
         return gridtype
 
