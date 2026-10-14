@@ -36,7 +36,8 @@ dependencies = [
 tests = [
     "coverage>=7.6.1",
     "coveralls",
-    "pytest"
+    "pytest",
+    "pytest-timeout"
 ]
 
 docs = [
@@ -68,7 +69,7 @@ packages = ["smmregrid"]
 version = {attr = "smmregrid.__version__"}
 
 [tool.pytest.ini_options]
-addopts = "-v --tb=short"
+addopts = ["-v", "--tb=short", "--timeout=180", "--timeout-method=thread"]
 
 [tool.coverage.run]
 source = ["smmregrid"]

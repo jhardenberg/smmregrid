@@ -39,6 +39,8 @@ class GridType:
             masked (any): Placeholder for masked data (to be defined later).
             weights (any): The weights associated with the grid, if provided.
             weights_matrix (any): Placeholder for a weights matrix (to be defined later).
+            total_weights (any): Placeholder for the sum of weights per target cell (to be defined later).
+            target_coords (dict): Placeholder for the target grid shape, dims and lat/lon (to be defined later).
         """
 
         # safety checks
@@ -63,6 +65,8 @@ class GridType:
         self.masked = None
         self.weights = weights
         self.weights_matrix = None
+        self.total_weights = None
+        self.target_coords = None
 
     def _handle_default_dimensions(self, extra_dims, override=False):
         """

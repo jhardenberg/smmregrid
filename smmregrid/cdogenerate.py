@@ -12,14 +12,15 @@ import xarray
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .cdogrid import CdoGrid
-from .util import deprecated_argument, tolist
+from .util import tolist, resolve_na_thres
+from .default import DEFAULT_NA_THRES, SUPPORTED_METHODS, SUPPORTED_NORM
 
 
 class CdoGenerate():
     """CDO-based class to generate weights for smmregrid."""
 
-    def __init__(self, source_grid, target_grid=None, cdo_extra=None,
-                 cdo_options=None, cdo_download_path=None, cdo_icon_grids=None,
+    def __init__(self, source_grid, target_grid=None,  skipna=False, na_thres=DEFAULT_NA_THRES, cdo_extra=None,
+                 cdo_options=None, cdo_download_path=None,
                  cdo="cdo", loglevel='warning'):
         """
         Initialize GenerateWeights class for regridding using Climate Data Operators (CDO),
@@ -34,17 +35,20 @@ class CdoGenerate():
             loglevel (str, optional): The logging level for messages. Default is 'warning'.
                                       Options include 'debug', 'info', 'warning',
                                       'error', and 'critical'.
+            skipna (bool, optional): If True, NaN values in the source grid will 
+                                     be treated as zeros during weight generation. Default is False.
+                    na_thres (float, optional): The threshold for considering a value as missing when masking.
+                                            Defaults to 0.5.
             cdo_extra (list, optional): Additional CDO command-line options.
                                                Defaults to None.
             cdo_options (list, optional): Options for CDO commands. Defaults to None.
             cdo (str, optional): The command to invoke CDO. Default is "cdo".
-            cdo_icon_grids (str, optional): Path to the ICON grid
-                                            if applicable. Defaults to None.
             cdo_download_path (str, optional): Path to the grid download path
                                                 if applicable. Defaults to None.
         """
 
         self.loggy = setup_logger(level=loglevel, name='smmregrid.CdoGenerate')
+        self.loglevel = loglevel
 
         # cdo options and extra, ensure they are lists
         self.cdo_extra = tolist(cdo_extra)
@@ -53,6 +57,10 @@ class CdoGenerate():
         # assign the two grids
         self.source_grid = source_grid
         self.target_grid = target_grid
+
+        # skip na
+        self.skipna = skipna
+        self.na_thres = na_thres
 
         # define grid filenames
         self.source_grid_filename = None
@@ -63,21 +71,30 @@ class CdoGenerate():
         self.env = os.environ.copy()
         if cdo_download_path:
             self.env["CDO_DOWNLOAD_PATH"] = cdo_download_path
-        if cdo_icon_grids:
-            self.env["CDO_ICON_GRIDS"] = cdo_icon_grids
 
-    @staticmethod
-    def _safe_check(method, remap_norm):
+    def _safe_check(self, method, remap_norm):
         """Safety checks for weights generation """
 
-        supported_methods = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
-        if method not in supported_methods:
+        if method not in SUPPORTED_METHODS:
             raise ValueError('The remap method provided is not supported!')
-        if remap_norm not in ["fracarea", "destarea"]:
+        if remap_norm not in SUPPORTED_NORM:
             raise ValueError('The remap normalization provided is not supported!')
 
     def _prepare_grid(self, grid, target=False):
         """Helper function to prepare grid (file or dataset)."""
+
+        # prepare grid: if source_grid is a CDO grid, use it as is, otherwise prepare the file
+        if isinstance(grid, str) and not target and CdoGrid(grid).grid_kind:
+            self.loggy.info('CDO grid as %s to be used for areas/weights generation', grid)
+            return f"-const,1,{grid}"
+
+        # when skipna is True, fill NaNs with zeros for source grid areas/weights generation
+        if self.skipna and not target:
+            self.loggy.info("skipna is True, filling NaNs with zeros for source grid areas/weights generation.")
+            if not isinstance(grid, (xarray.Dataset, xarray.DataArray)):
+                self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
+                grid = xarray.open_dataset(grid)
+            grid = grid.fillna(0)  # Fill NaNs with zeros for area/weights generation
 
         # if grid is a Dataset or DataArray, save it to a temporary file
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
@@ -85,11 +102,6 @@ class CdoGenerate():
             grid.to_netcdf(grid_file.name)
             self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
             return grid_file.name
-
-        # prepare grid: if source_grid is a CDO grid, use it as is, otherwise prepare the file
-        if CdoGrid(grid).grid_kind and not target:
-            self.loggy.info('CDO grid as %s to be used for areas/weights generation', grid)
-            return f"-const,1,{grid}"
 
         # if grid is a string, assume it's a file path
         if isinstance(grid, str):
@@ -100,7 +112,7 @@ class CdoGenerate():
 
     def weights(self, method="con", extrapolate=True,
                 remap_norm="fracarea",
-                mask_dim=None, vertical_dim=None, nproc=1):
+                mask_dim=None, nproc=1):
         """
         Generate weights for regridding using Climate Data Operators (CDO),
         accommodating both 2D and 3D grid cases.
@@ -116,7 +128,6 @@ class CdoGenerate():
             nproc (int, optional): Number of processes to use for parallel processing. Default is 1.
             mask_dim (str, optional): Name of the vertical dimension in the source grid, if applicable.
                                         Defaults to None. Use if the grid is 3D.
-            vertical_dim (str, optional): Deprecated. Use `mask_dim` instead. Defaults to None.
 
         Returns:
             xarray.Dataset: A dataset containing the generated weights
@@ -139,11 +150,10 @@ class CdoGenerate():
 
             The function logs the progress of weight generation, including the length of vertical dimensions
             and each level being processed.
-
-            Deprecation Warning: The `vertical_dim` parameter is deprecated and will be removed in future versions.
-            Users should migrate to using `mask_dim`, respectively.
-
         """
+
+        self.na_thres = resolve_na_thres(self.skipna, self.na_thres, method, self.loglevel)
+
         if self.target_grid is None:
             raise TypeError('Target grid is not specified, cannot provide any regridding')
         if self.source_grid is None:
@@ -151,9 +161,6 @@ class CdoGenerate():
 
         # verify that method and normalization are suitable
         self._safe_check(method, remap_norm)
-
-        # vertical dimension
-        mask_dim = deprecated_argument(vertical_dim, mask_dim, 'vertical_dim', 'mask_dim')
 
         # prepare grid
         self.source_grid_filename = self._prepare_grid(self.source_grid)
@@ -171,7 +178,7 @@ class CdoGenerate():
         weights = self._cdo_generate_weights(method, extrapolate,
                                              remap_norm)
         weights_matrix = compute_weights_matrix(weights)
-        weights = mask_weights(weights, weights_matrix)
+        weights = mask_weights(weights, weights_matrix, nan_threshold=self.na_thres)
         masked = int(check_mask(weights))
         masked_xa = xarray.DataArray(masked, name="dst_grid_masked")
         return xarray.merge([weights, masked_xa])
@@ -219,7 +226,7 @@ class CdoGenerate():
 
         weights = self.weightslist_to_3d(wlist, method, sgrid[mask_dim])
         weights_matrix = compute_weights_matrix3d(weights, mask_dim)
-        weights = mask_weights(weights, weights_matrix, mask_dim)
+        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim, nan_threshold=self.na_thres)
         masked = check_mask(weights, mask_dim)
         masked_xa = xarray.DataArray(masked,
                                      coords={mask_dim: weights[mask_dim]},
@@ -291,7 +298,7 @@ class CdoGenerate():
                 weight_file.name
             ]
             self.loggy.debug("Final CDO command: %s", command)
-            subprocess.check_output(command, stderr=subprocess.STDOUT, env=env)
+            subprocess.check_output(command, stderr=subprocess.STDOUT, env=env, timeout=300)
 
             weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
             return weights
@@ -402,8 +409,8 @@ class CdoGenerate():
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,
                          remap_norm="fracarea", gridpath=None,
-                         icongridpath=None,  cdo_extra=None, cdo_options=None,
-                         mask_dim=None, vertical_dim=None,
+                         cdo_extra=None, cdo_options=None,
+                         mask_dim=None,
                          cdo="cdo", nproc=1, loglevel='warning'):
     """
     Wrapper function for the new cdo class to provide the old access
@@ -412,7 +419,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                   DeprecationWarning)
     generator = CdoGenerate(source_grid=source_grid, target_grid=target_grid, loglevel=loglevel,
                             cdo_extra=cdo_extra, cdo_options=cdo_options, cdo=cdo,
-                            cdo_icon_grids=icongridpath, cdo_download_path=gridpath)
+                            cdo_download_path=gridpath)
     return generator.weights(method=method, extrapolate=extrapolate,
                              remap_norm=remap_norm,
-                             mask_dim=mask_dim, vertical_dim=vertical_dim, nproc=nproc)
+                             mask_dim=mask_dim, nproc=nproc)

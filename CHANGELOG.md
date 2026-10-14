@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## Unreleased
 
 - Omit the CDO executable from the macOS source environment while retaining the Linux version range.
+- Introduction of the `skipna` flag to renormalize weights to support time-varying and space-varying masks without declaring `mask_dim` (#70)
+- Optimization of tensordot operation to provide a speedup of 20-30% when `skipna=False` (#70)
+- `na_thres` introduce to control the behaviour on missing point (#70)
 
 ## [v0.1.6]
 
