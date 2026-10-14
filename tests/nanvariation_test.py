@@ -3,7 +3,7 @@ import numpy as np
 import os
 import pytest
 from smmregrid import Regridder, CdoGenerate
-from smmregrid.checker import check_cdo_regrid
+from smmregrid.checker import check_cdo_regrid, _cdo_remap
 
 def test_time_varying_nan():
     """Test regridding with time-varying NaN values and skipna enabled."""
@@ -69,6 +69,37 @@ def test_time_varying_nan():
 
     # At time 2, everything should be full
     assert out_skipna_1['tas'].isel(time=2).notnull().all().compute()
+
+@pytest.mark.parametrize("method", ['con', 'bil'])
+def test_no_wrong_values_with_varying_nan(method, tmp_path):
+    """Without skipna, NaNs which were not in the source when the weights were generated must
+    propagate to the target cells they contribute to, and never be silently treated as zeros.
+    The weights are generated from the first time step only (as when they are saved and reused),
+    while CDO recomputes them when the mask changes. The mask of the first time step is applied to
+    all of them, so that points can only become NaN over time (points becoming valid would be
+    ignored by the fixed weights, by design): every finite output must then match CDO, and the
+    target cells reached by the newly missing points must be NaN."""
+
+    data = xr.open_dataset('tests/data/berkley.nc')
+    first = data['temperature'].isel(time=0).notnull()
+    data['temperature'] = data['temperature'].where(first)
+    data['temperature'].attrs.pop('missing_value', None)
+    filein = str(tmp_path / 'berkley_nan_growing.nc')
+    data.to_netcdf(filein, encoding={'temperature': {'_FillValue': -9999.}})
+
+    regridder = Regridder(source_grid=data.isel(time=[0]), target_grid='r180x90', method=method,
+                          remap_area_min=0.0, loglevel='warning')
+    out = regridder.regrid(data)['temperature'].values
+    cdo = _cdo_remap(method, 'r180x90', filein)['temperature'].values
+
+    finite = np.isfinite(out)
+    assert finite.sum() > 0.4 * out.size
+    np.testing.assert_allclose(out[finite], cdo[finite], rtol=1e-5, atol=1e-5)
+    # conservative: the newly missing points make some target cells NaN, where CDO renormalizes
+    # (bilinear: CDO also returns missing when any of the neighbours is missing, as smmregrid does)
+    if method == 'con':
+        assert (np.isnan(out) & np.isfinite(cdo)).sum() > 0
+
 
 @pytest.mark.parametrize("method", ['nn', 'con'])
 def test_cdo_regrid_skipna_2d(method):
@@ -164,3 +195,16 @@ def test_skipna_3d_as_2d(init):
     reference = Regridder(source_grid=filein, target_grid='r180x90', skipna=True,
                           loglevel='warning').regrid(data)['so']
     xr.testing.assert_allclose(out.compute(), reference.compute())
+
+
+def test_na_thres_auto_resolved_per_method():
+    """na_thres='auto' depends on the method: a CdoGenerate reused for another method must
+    resolve it again, and give the same weights as a fresh one"""
+
+    filein = 'tests/data/onlytos-ipsl.nc'
+    generator = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning')
+    generator.weights(method='bil')
+    reused = generator.weights(method='con')
+    fresh = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning').weights(method='con')
+    xr.testing.assert_equal(reused['dst_grid_imask'], fresh['dst_grid_imask'])
+    assert generator.na_thres == 'auto'

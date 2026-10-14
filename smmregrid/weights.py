@@ -34,6 +34,12 @@ def compute_weights_matrix(weights):
     remap_matrix = weights.remap_matrix.values[:, 0]
     w_shape = (weights.sizes["src_grid_size"], weights.sizes["dst_grid_size"])
 
+    # drop the links with zero weight: CDO writes some (e.g. bilinear, from masked source points),
+    # and they would turn into NaN the target cells of a NaN source point (NaN * 0 = NaN)
+    nonzero = remap_matrix != 0
+    if not nonzero.all():
+        src_address, dst_address, remap_matrix = src_address[nonzero], dst_address[nonzero], remap_matrix[nonzero]
+
     # Build the sparse matrix once, so that it is not rebuilt (and the weights
     # are not re-read from disk) at every compute of the regridded data
     sparse_weights = sparse.COO(
@@ -64,15 +70,16 @@ def compute_total_weights(weights_matrix):
     return numpy.where(total_weights > 0, total_weights, numpy.nan)
 
 
-def mask_tensordot(src_mask, weights_matrix, nan_threshold=0.5):
-    """Apply tensor dot product to source mask to return destination mask"""
+def mask_tensordot(src_mask, weights_matrix, na_thres=0.5):
+    """Apply the weights to the source mask to return the destination mask (1 valid, 0 masked).
+    As for skipna, na_thres is the maximum fraction of missing weights: a target cell is masked
+    when the fraction of its weights from masked source points exceeds it (valid < 1 - na_thres)"""
 
-    target_mask = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-    target_mask = dask.array.where(target_mask < nan_threshold, 0, 1)
-    return target_mask
+    valid_fraction = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+    return dask.array.where(valid_fraction < 1.0 - na_thres, 0, 1)
 
 
-def mask_weights(weights, weights_matrix, mask_dim=None, nan_threshold=0.5):
+def mask_weights(weights, weights_matrix, mask_dim=None, na_thres=0.5):
     """This functions precompute the mask for the target interpolation
     Takes as input the weights from CDO and the precomputed weights matrix
     Return the target mask: handle the 3d case.
@@ -83,14 +90,14 @@ def mask_weights(weights, weights_matrix, mask_dim=None, nan_threshold=0.5):
         weights: xarray Dataset containing the weights and source mask.
         weights_matrix: Precomputed weights matrix (sparse arrays).
         mask_dim: Name of the mask dimension if 3D regridding is used.
-        nan_threshold: The threshold for considering a value as missing when masking.
+        na_thres: Maximum fraction of missing weights before a target cell is masked.
     """
 
     src_mask = weights.src_grid_imask
     if mask_dim is not None:
         # Create list of masked arrays lazily
         masked_levels = [
-            mask_tensordot(src_mask.isel({mask_dim: i}).data, weights_matrix[i], nan_threshold=nan_threshold)
+            mask_tensordot(src_mask.isel({mask_dim: i}).data, weights_matrix[i], na_thres=na_thres)
             for i in range(weights.sizes[mask_dim])
         ]
         # Stack all levels at once (lazy operation)
@@ -99,7 +106,7 @@ def mask_weights(weights, weights_matrix, mask_dim=None, nan_threshold=0.5):
         weights = weights.assign(dst_grid_imask=([mask_dim] + list(weights['dst_grid_imask'].dims[1:]), dst_mask))
     else:
         mask = src_mask.data
-        dst_mask = mask_tensordot(mask, weights_matrix, nan_threshold=nan_threshold).compute()  # Compute the result to avoid lazy evaluation issues
+        dst_mask = mask_tensordot(mask, weights_matrix, na_thres=na_thres).compute()  # Compute the result to avoid lazy evaluation issues
         weights = weights.assign(dst_grid_imask=(weights['dst_grid_imask'].dims, dst_mask))
 
     return weights

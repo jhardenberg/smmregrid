@@ -35,10 +35,11 @@ class CdoGenerate():
             loglevel (str, optional): The logging level for messages. Default is 'warning'.
                                       Options include 'debug', 'info', 'warning',
                                       'error', and 'critical'.
-            skipna (bool, optional): If True, NaN values in the source grid will 
+            skipna (bool, optional): If True, NaN values in the source grid will
                                      be treated as zeros during weight generation. Default is False.
-                    na_thres (float, optional): The threshold for considering a value as missing when masking.
-                                            Defaults to 0.5.
+            na_thres (float or str, optional): Maximum fraction of missing weights before a target cell
+                                               is masked in the destination mask. 'auto' (default) is
+                                               resolved at each weights() call from skipna and the method.
             cdo_extra (list, optional): Additional CDO command-line options.
                                                Defaults to None.
             cdo_options (list, optional): Options for CDO commands. Defaults to None.
@@ -158,7 +159,8 @@ class CdoGenerate():
             and each level being processed.
         """
 
-        self.na_thres = resolve_na_thres(self.skipna, self.na_thres, method, self.loglevel)
+        # resolved for this call only: 'auto' depends on the method, which may change between calls
+        na_thres = resolve_na_thres(self.skipna, self.na_thres, method, self.loglevel)
 
         if self.target_grid is None:
             raise TypeError('Target grid is not specified, cannot provide any regridding')
@@ -174,23 +176,23 @@ class CdoGenerate():
 
         # Generate weights for 2D or 3D grid based on mask_dim presence
         if not mask_dim:
-            return self._weights_2d(method, extrapolate, remap_norm)
+            return self._weights_2d(method, extrapolate, remap_norm, na_thres)
         return self._weights_3d(method, extrapolate, remap_norm,
-                                nproc, mask_dim)
+                                nproc, mask_dim, na_thres)
 
-    def _weights_2d(self, method, extrapolate, remap_norm):
+    def _weights_2d(self, method, extrapolate, remap_norm, na_thres):
         """Generate 2D weights using CDO."""
 
         weights = self._cdo_generate_weights(method, extrapolate,
                                              remap_norm)
         weights_matrix = compute_weights_matrix(weights)
-        weights = mask_weights(weights, weights_matrix, nan_threshold=self.na_thres)
+        weights = mask_weights(weights, weights_matrix, na_thres=na_thres)
         masked = int(check_mask(weights))
         masked_xa = xarray.DataArray(masked, name="dst_grid_masked")
         return xarray.merge([weights, masked_xa])
 
     def _weights_3d(self, method, extrapolate, remap_norm,
-                    nproc, mask_dim):
+                    nproc, mask_dim, na_thres):
         """Generate 3D weights using multiprocessing."""
 
         if isinstance(self.source_grid, str):
@@ -232,7 +234,7 @@ class CdoGenerate():
 
         weights = self.weightslist_to_3d(wlist, method, sgrid[mask_dim])
         weights_matrix = compute_weights_matrix3d(weights, mask_dim)
-        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim, nan_threshold=self.na_thres)
+        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim, na_thres=na_thres)
         masked = check_mask(weights, mask_dim)
         masked_xa = xarray.DataArray(masked,
                                      coords={mask_dim: weights[mask_dim]},
