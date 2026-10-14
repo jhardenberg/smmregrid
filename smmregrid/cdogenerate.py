@@ -94,7 +94,13 @@ class CdoGenerate():
             if not isinstance(grid, (xarray.Dataset, xarray.DataArray)):
                 self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
                 grid = xarray.open_dataset(grid)
-            grid = grid.fillna(0)  # Fill NaNs with zeros for area/weights generation
+            # Fill NaNs with zeros for area/weights generation. In a Dataset, fill only
+            # floating point variables, since fillna(0) fails on datetime ones (e.g. time_bnds)
+            if isinstance(grid, xarray.Dataset):
+                grid = grid.map(lambda x: x.fillna(0) if numpy.issubdtype(x.dtype, numpy.floating) else x,
+                                keep_attrs=True)
+            else:
+                grid = grid.fillna(0)
 
         # if grid is a Dataset or DataArray, save it to a temporary file
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):

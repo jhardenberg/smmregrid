@@ -2,7 +2,7 @@ import xarray as xr
 import numpy as np
 import os
 import pytest
-from smmregrid import Regridder
+from smmregrid import Regridder, CdoGenerate
 from smmregrid.checker import check_cdo_regrid
 
 def test_time_varying_nan():
@@ -104,3 +104,36 @@ def test_cdo_regrid_skipna_2dmask(method):
     field = xr.open_mfdataset(filein)
     assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "Onlytos-ipsl.nc failed with skipna"
 
+
+@pytest.mark.parametrize("filein", ['tests/data/regional.nc', 'tests/data/onlytos-ipsl.nc'])
+def test_cdo_regrid_skipna_destarea(filein):
+    """Test conservative remapping with remap_norm='destarea' and skipna against CDO.
+    With destarea the weights must not be renormalized by the sum of the valid weights.
+    regional.nc has partially covered target cells at its boundaries,
+    onlytos-ipsl.nc has a land mask which makes coastal target cells partially covered."""
+
+    assert check_cdo_regrid(filein, 'r100x50', init_method='weights', remap_norm='destarea',
+                            skipna=True, loglevel='debug'), f"{filein} failed with skipna and destarea"
+
+
+def test_skipna_destarea_locality():
+    """With skipna and destarea, a single NaN in the source must not change the target cells
+    which do not receive any weight from it (see PR #70): this used to change all the
+    partially covered target cells at the boundaries of the regional grid."""
+
+    src = xr.open_dataset('tests/data/regional.nc')[['pr']].load()
+    weights = CdoGenerate(src, 'r100x50', skipna=True, loglevel='warning').weights(
+        method='con', remap_norm='destarea')
+    regridder = Regridder(weights=weights, skipna=True, remap_area_min=0.0, loglevel='warning')
+
+    # put a single NaN in the north-east corner of the regional grid
+    src_nan = src.copy(deep=True)
+    src_nan['pr'][:, -1, -1] = np.nan
+
+    out = regridder.regrid(src)['pr'].compute()
+    out_nan = regridder.regrid(src_nan)['pr'].compute()
+
+    # target cells far from the NaN must be unchanged, including the partially covered ones
+    far = out.lat < 60
+    assert out.where(far).notnull().sum() > 0
+    xr.testing.assert_allclose(out.where(far), out_nan.where(far))

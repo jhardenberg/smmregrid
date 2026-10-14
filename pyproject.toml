@@ -37,7 +37,8 @@ tests = [
     "coverage>=7.6.1",
     "coveralls",
     "pytest",
-    "pytest-timeout"
+    "pytest-timeout",
+    "distributed"
 ]
 
 docs = [
