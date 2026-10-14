@@ -21,7 +21,8 @@ killed (seen as CommClosedError on the others): reduce --tile or --chunk-size if
 Data are opened as dask arrays with chunks of about --chunk-size (default 64 MiB) along time,
 and whole along the other dimensions: the on-disk chunking of the test files (one time step)
 is far too fine for dask, especially with distributed. With --tile N, every dataset is
-repeated N times along time to emulate longer datasets (default: 1). The test files are small:
+repeated N times along time to emulate longer datasets (default: 1), written once to a file in
+--outdir and read back, so that the repetition adds no tasks to the graph. The test files are small:
 the scaling test needs several chunks per case to be meaningful, i.e. --tile of 60-120.
 
 Usage (from the repository root):
@@ -97,7 +98,7 @@ def setup_logging(loglevel, name):
 # Worker: runs inside the process of a single version
 # --------------------------------------------------------------------------------------
 
-def _load(xr, fname, var=None, tile=1):
+def _load(xr, fname, var=None, tile=1, outdir=None):
     """Open a test file lazily as dask arrays, chunked along time only, with chunks of about
     dask's array.chunk-size (set from --chunk-size). When tile > 1 repeat it along time,
     to emulate longer datasets.
@@ -105,18 +106,36 @@ def _load(xr, fname, var=None, tile=1):
     for some files): far too fine for dask, the scheduling overhead would dominate the timings.
     The data are never loaded in memory: they would be embedded in the dask graph,
     which is then serialized at each compute (very costly with distributed)"""
-    ds = xr.open_dataset(os.path.join(DATA, fname), chunks='auto')
+    path = os.path.join(DATA, fname)
+    if tile > 1:
+        path = _tiled_file(xr, fname, tile, outdir)
+    ds = xr.open_dataset(path, chunks='auto')
     if var:
         ds = ds[[var]]
-    if tile > 1:
-        # only the variables with time are repeated (e.g. not the grid bounds)
-        ds = xr.concat([ds] * tile, dim='time', data_vars='minimal', coords='minimal', compat='override')
     # whole chunks along all the dimensions but time: the horizontal ones must be whole
     # for the regridding (a split would force a rechunk), vertical levels are handled by smmregrid
     chunks = {dim: -1 for dim in ds.dims if dim != 'time'}
     if 'time' in ds.dims:
         chunks['time'] = 'auto'
     return ds.chunk(chunks)
+
+
+def _tiled_file(xr, fname, tile, outdir):
+    """Write once, and reuse, a copy of a test file repeated tile times along time.
+    Repeating it lazily with xr.concat would add tile x (on-disk chunks) tasks to every graph
+    (e.g. 4320 tasks for 3D nemo with --tile 60), whose scheduling overhead would dominate the
+    timings on a distributed cluster: reading a longer file is closer to a real use case.
+    The file is shared by all the versions, as the data do not depend on smmregrid"""
+    path = os.path.join(outdir, f'tiled{tile}__{fname}')
+    if not os.path.exists(path):
+        log.debug('writing %s', path)
+        with xr.open_dataset(os.path.join(DATA, fname), chunks={}) as ds:
+            # only the variables with time are repeated (e.g. not the grid bounds)
+            tiled = xr.concat([ds] * tile, dim='time', data_vars='minimal', coords='minimal', compat='override')
+            tmp = f'{path}.{os.getpid()}.tmp'
+            tiled.to_netcdf(tmp)
+        os.replace(tmp, path)
+    return path
 
 
 def _bench(tag, case, regridder, ds, tinit, repeat, outdir):
@@ -221,7 +240,7 @@ def distributed_check(tag, outdir, nworkers, repeat, tile=1):
             continue
         kwargs = {'skipna': True} if skipna else {}
         try:
-            ds = _load(xr, fname, var, tile)
+            ds = _load(xr, fname, var, tile, outdir)
             if init == 'weights':
                 wfile = os.path.join(outdir, f'{tag}__dist_weights_{fname}')
                 CdoGenerate(os.path.join(DATA, fname), TARGET, loglevel='ERROR',
@@ -302,7 +321,7 @@ def worker(tag, outdir, repeat, cases, tile=1):
             continue
         log.debug('%s: loading %s (tile x%s)', case, fname, tile)
         try:
-            ds = _load(xr, fname, var, tile)
+            ds = _load(xr, fname, var, tile, outdir)
             t0 = time.perf_counter()
             regridder = Regridder(source_grid=os.path.join(DATA, fname),
                                   target_grid=TARGET, loglevel='ERROR')
@@ -316,7 +335,7 @@ def worker(tag, outdir, repeat, cases, tile=1):
             wfile = os.path.join(outdir, f'{tag}__weights.nc')
             CdoGenerate(os.path.join(DATA, 'tos-fesom.nc'), TARGET,
                         loglevel='ERROR').weights(method='con').to_netcdf(wfile)
-            ds = _load(xr, 'tos-fesom.nc', 'tos', tile)
+            ds = _load(xr, 'tos-fesom.nc', 'tos', tile, outdir)
             t0 = time.perf_counter()
             regridder = Regridder(weights=wfile, loglevel='ERROR')
             _bench(tag, WEIGHTS_CASE, regridder, ds, time.perf_counter() - t0, repeat, outdir)
