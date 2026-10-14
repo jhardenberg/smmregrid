@@ -29,10 +29,14 @@ Alternatively, you can clone the repo and use the environment file available
 ```
 git clone https://github.com/jhardenberg/smmregrid.git
 cd smmregrid
-mamba env create -f environment.yml
-mamba activate smmregrid
+micromamba env create -f environment.yml
+micromamba activate smmregrid
 pip install -e .
 ```
+
+The source environment installs CDO >=2.5.0,<2.6.1 on Linux. On macOS it does not
+install the CDO executable; install CDO separately if you need to generate
+regridding weights.
 
 As a disclaimer, this repository represents a modification of the regridding routines developed in [climtas](https://github.com/ScottWales/climtas) by Scott Wales, which already implements efficiently this idea and has no other significant dependencies.
 
@@ -40,4 +44,3 @@ Cautionary notes:
 - It does not work correctly if the Xarray.Dataset includes fields with time-varying missing points
 - It works only with interpolation methods/grids supported by CDO
 - It does not support ESMF weigths.
-

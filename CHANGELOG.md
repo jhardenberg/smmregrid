@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+- Omit the CDO executable from the macOS source environment while retaining the Linux version range.
+
 ## [v0.1.6]
 
 - Pin for `cdo<2.6.1` to avoid bug in the more recent CDO versions (#68)

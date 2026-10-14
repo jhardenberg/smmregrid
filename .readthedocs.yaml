@@ -13,7 +13,7 @@ build:
     
 # set up the environment
 conda:
-  environment: environment.yml
+  environment: docs-environment.yml
 
 # install the local package
 python:

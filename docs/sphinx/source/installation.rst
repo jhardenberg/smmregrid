@@ -49,24 +49,26 @@ Then you can through the smmregrid folder ::
 
     > cd smmregrid
 
-and then you can set up the conda/mamba environment ::
+and then you can set up the micromamba environment ::
 
-    > mamba env create --name smmregrid -f environment.yml
+    > micromamba env create --name smmregrid -f environment.yml
 
 Then you should activate the environment ::
 
-    > mamba activate smmregrid
+    > micromamba activate smmregrid
+
+The environment installs CDO >=2.5.0,<2.6.1 on Linux. On macOS, install the CDO
+executable separately if you need to generate regridding weights.
 
 
 Requirements
 ------------
 
 The required packages are listed in ``environment.yml`` and in ``pyproject.toml``.
+The platform selector in ``environment.yml`` requires micromamba.
 A secondary environment available in  ``dev-environment.yml`` can be used for development, including testing capabilities and jupyter notebooks. 
 
 .. note::
 	Both Unix and MacOS are supported. Python >=3.8 is requested.
-
-
 
 

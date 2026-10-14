@@ -1,0 +1,12 @@
+# Read the Docs uses conda, which does not support environment.yml selectors.
+# The documentation build does not need the CDO executable.
+name: smmregrid-docs
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.8,<3.15
+  - ecCodes
+  - numba
+  - pip
+  - pip:
+    - -e .[all]
