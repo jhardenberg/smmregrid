@@ -113,13 +113,11 @@ def test_weights_mask_dim():
 
 
 def test_cdogenerate_positional_arguments():
-    """skipna and na_thres are keyword-only: positional arguments keep their meaning"""
+    """skipna and na_thres are at the end of the signature: positional arguments keep their meaning"""
     generator = CdoGenerate('source.nc', 'r180x90', ['-setmisstoc,0'], ['-P', '2'])
     assert generator.cdo_extra == ['-setmisstoc,0']
     assert generator.cdo_options == ['-P', '2']
     assert generator.skipna is False
-    with pytest.raises(TypeError):
-        CdoGenerate('source.nc', 'r180x90', None, None, None, 'cdo', 'warning', True)
 
 
 def test_apply_weights_without_matrix():

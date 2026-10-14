@@ -22,7 +22,7 @@ class CdoGenerate():
 
     def __init__(self, source_grid, target_grid=None, cdo_extra=None,
                  cdo_options=None, cdo_download_path=None,
-                 cdo="cdo", loglevel='warning', *, skipna=False, na_thres=DEFAULT_NA_THRES):
+                 cdo="cdo", loglevel='warning', skipna=False, na_thres=DEFAULT_NA_THRES):
         """
         Initialize GenerateWeights class for regridding using Climate Data Operators (CDO),
         accommodating both 2D and 3D grid cases.
