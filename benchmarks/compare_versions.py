@@ -10,13 +10,19 @@ so that versions never mix. For each test case it measures:
 
 and finally checks that the outputs of all versions match the first one.
 
-With --distributed N, each version also runs 2D and 3D cases (from grids and from
-weights on disk) on a dask LocalCluster
-with N worker processes, timing the compute and checking that the output matches
-the serial (synchronous scheduler) one.
+With --distributed N, each version also runs a scaling test on 2D and 3D cases (from grids
+and from weights on disk, with and without skipna): the regridded output is persisted serially
+(synchronous scheduler) and on dask LocalClusters with 1, 2, ..., N worker processes, reporting
+the speedup. The output of the N-worker cluster is checked against the serial one (on the
+untiled data, to keep memory low). The scaling test runs once per version (first run only),
+as it is slow. Memory: each worker gets 1/N of the machine memory, and a worker exceeding it is
+killed (seen as CommClosedError on the others): reduce --tile or --chunk-size if it happens.
 
-With --tile N, every dataset is repeated N times along time (default: 1, no repetition),
-to emulate longer datasets.
+Data are opened as dask arrays with chunks of about --chunk-size (default 64 MiB) along time,
+and whole along the other dimensions: the on-disk chunking of the test files (one time step)
+is far too fine for dask, especially with distributed. With --tile N, every dataset is
+repeated N times along time to emulate longer datasets (default: 1). The test files are small:
+the scaling test needs several chunks per case to be meaningful, i.e. --tile of 60-120.
 
 Usage (from the repository root):
     python benchmarks/compare_versions.py                         # main vs working tree
@@ -24,7 +30,7 @@ Usage (from the repository root):
     python benchmarks/compare_versions.py --uncommitted               # last commit vs uncommitted changes
     python benchmarks/compare_versions.py --cases "3D nemo" "unstructured fesom" --tile 60
     python benchmarks/compare_versions.py --list-cases
-    python benchmarks/compare_versions.py --distributed 4 --cases "lonlat era5"  # add the cluster check
+    python benchmarks/compare_versions.py --distributed 4 --tile 120 --cases "lonlat era5"  # scaling test
 
 WORKTREE is a special ref standing for the current (possibly uncommitted) code.
 Requires CDO to be available, as for the test suite.
@@ -61,9 +67,9 @@ CASES = [
 # extra case: same as 'unstructured fesom', but initializing from a weights file on disk
 WEIGHTS_CASE = 'fesom from weights'
 ALL_CASES = [c[0] for c in CASES] + [WEIGHTS_CASE]
-# cases run on a dask LocalCluster with --distributed: 2D and 3D,
-# initialized from grids or from a weights file on disk, with or without skipna
-# (name, file, variable, mask_dim, init, skipna). All are repeated --tile times along time
+# cases of the scaling test with --distributed: 2D and 3D, initialized from grids or from
+# a weights file on disk, with or without skipna. (name, file, variable, mask_dim, init, skipna)
+# All are repeated --tile times along time, as the other cases
 DISTRIBUTED_CASES = [
     ('fesom', 'tos-fesom.nc', 'tos', None, 'grids', False),
     ('3D nemo', 'so3d-nemo.nc', 'so', None, 'grids', False),
@@ -92,17 +98,25 @@ def setup_logging(loglevel, name):
 # --------------------------------------------------------------------------------------
 
 def _load(xr, fname, var=None, tile=1):
-    """Open a test file lazily as dask arrays, with the chunking chosen by dask/the backend.
-    When tile > 1 repeat it along time, to emulate longer datasets (one chunk per copy, at least).
+    """Open a test file lazily as dask arrays, chunked along time only, with chunks of about
+    dask's array.chunk-size (set from --chunk-size). When tile > 1 repeat it along time,
+    to emulate longer datasets.
+    chunks={} would take the on-disk chunking (one time step, < 1 MB, even split horizontally
+    for some files): far too fine for dask, the scheduling overhead would dominate the timings.
     The data are never loaded in memory: they would be embedded in the dask graph,
     which is then serialized at each compute (very costly with distributed)"""
-    ds = xr.open_dataset(os.path.join(DATA, fname), chunks={})
+    ds = xr.open_dataset(os.path.join(DATA, fname), chunks='auto')
     if var:
         ds = ds[[var]]
     if tile > 1:
         # only the variables with time are repeated (e.g. not the grid bounds)
         ds = xr.concat([ds] * tile, dim='time', data_vars='minimal', coords='minimal', compat='override')
-    return ds
+    # whole chunks along all the dimensions but time: the horizontal ones must be whole
+    # for the regridding (a split would force a rechunk), vertical levels are handled by smmregrid
+    chunks = {dim: -1 for dim in ds.dims if dim != 'time'}
+    if 'time' in ds.dims:
+        chunks['time'] = 'auto'
+    return ds.chunk(chunks)
 
 
 def _bench(tag, case, regridder, ds, tinit, repeat, outdir):
@@ -127,63 +141,154 @@ def _bench(tag, case, regridder, ds, tinit, repeat, outdir):
     out.to_netcdf(os.path.join(outdir, f"{tag}__{case.replace(' ', '_')}.nc"))
 
 
+def _worker_counts(nworkers):
+    """1, 2, 4, ... up to nworkers, plus nworkers itself"""
+    counts = {1, nworkers}
+    counts.update(2 ** k for k in range(1, nworkers.bit_length()) if 2 ** k < nworkers)
+    return sorted(counts)
+
+
+def _trace_start():
+    """Run in a process (the workers via client.run): start tracing memory allocations.
+    tracemalloc tracks numpy arrays too, and starts with a fresh peak: unlike the RSS of the
+    process, which never shrinks back, it isolates the peak memory of a single computation"""
+    import gc
+    import tracemalloc
+    gc.collect()
+    tracemalloc.start()
+
+
+def _trace_peak():
+    """Peak traced memory (MB) since _trace_start, and stop tracing"""
+    import tracemalloc
+    peak = tracemalloc.get_traced_memory()[1] / 2**20
+    tracemalloc.stop()
+    return peak
+
+
+def _peak_memory(persist, start=_trace_start, peak=_trace_peak):
+    """Peak memory (MB) of one persist call, traced with tracemalloc.
+    Done in a call of its own, after the timed ones, as tracing slows the computation down"""
+    start()
+    result = persist()
+    mem = peak()
+    del result
+    return mem
+
+
+def _time_persist(persist, repeat):
+    """Median time in ms of persisting the output `repeat` times (plus a warmup).
+    The result is dropped before the next iteration, which releases its futures/memory
+    (client.cancel() must not be used: it would also cancel the next submission of the same keys)"""
+    import gc
+    result = persist()  # warmup
+    times = []
+    for _ in range(repeat):
+        del result
+        gc.collect()
+        t0 = time.perf_counter()
+        result = persist()
+        times.append(time.perf_counter() - t0)
+    del result
+    gc.collect()
+    return 1000 * statistics.median(times)
+
+
 def distributed_check(tag, outdir, nworkers, repeat, tile=1):
-    """Run DISTRIBUTED_CASES on a LocalCluster with nworkers processes: time the compute
-    and check that the output matches the serial one"""
+    """Scaling test of DISTRIBUTED_CASES: persist the regridded output serially (synchronous
+    scheduler, in process) and on LocalClusters with 1, 2, ... nworkers processes (one thread each).
+    Persisting leaves the result on the workers, as writing to disk would: gathering it to the client
+    would add a cost proportional to the output size. The output of the nworkers cluster is checked
+    against the serial one on the untiled data, so that no large result is ever kept in the client"""
     import inspect
     import dask
+    import psutil
     import xarray as xr
-    from distributed import Client, LocalCluster
+    from distributed import Client, LocalCluster, wait
     from smmregrid import Regridder, CdoGenerate
 
     # older versions (e.g. main before #70) have no skipna: pass it only when used,
     # and skip the skipna cases on versions which do not support it
     has_skipna = 'skipna' in inspect.signature(Regridder.__init__).parameters
 
-    log.info('Starting a LocalCluster with %d workers', nworkers)
-    with LocalCluster(n_workers=nworkers, threads_per_worker=1, processes=True,
-                      dashboard_address=None) as cluster, Client(cluster) as client:
-        for case, fname, var, mask_dim, init, skipna in DISTRIBUTED_CASES:
-            name = f'{case} [{nworkers} workers]'
-            if skipna and not has_skipna:
-                log.warning('%s skipped: skipna not supported by this version', name)
-                print(json.dumps({'tag': tag, 'case': name, 'error': 'skipna not supported by this version'}),
-                      flush=True)
-                continue
-            kwargs = {'skipna': True} if skipna else {}
-            try:
-                ds = _load(xr, fname, var, tile)
-                if init == 'weights':
-                    wfile = os.path.join(outdir, f'{tag}__dist_weights_{fname}')
-                    CdoGenerate(os.path.join(DATA, fname), TARGET, loglevel='ERROR',
-                                **kwargs).weights(method='con', mask_dim=mask_dim).to_netcdf(wfile)
-                    regridder = Regridder(weights=wfile, loglevel='ERROR', **kwargs)
-                else:
-                    regridder = Regridder(source_grid=os.path.join(DATA, fname),
-                                          target_grid=TARGET, loglevel='ERROR', **kwargs)
-                out = regridder.regrid(ds)
-                with dask.config.set(scheduler='synchronous'):
-                    t0 = time.perf_counter()
-                    serial = out.compute()
-                    tserial = time.perf_counter() - t0
-                client.compute(out).result()  # warmup, also ships the weights to the workers
-                tdist = 0.
-                for _ in range(repeat):
-                    t0 = time.perf_counter()
-                    dist = client.compute(out).result()
-                    tdist += time.perf_counter() - t0
+    # build all the regridders and graphs first, then time them on each scheduler
+    outputs = {}
+    for case, fname, var, mask_dim, init, skipna in DISTRIBUTED_CASES:
+        if skipna and not has_skipna:
+            log.warning('%s skipped: skipna not supported by this version', case)
+            print(json.dumps({'tag': tag, 'case': case, 'kind': 'dist',
+                              'error': 'skipna not supported by this version'}), flush=True)
+            continue
+        kwargs = {'skipna': True} if skipna else {}
+        try:
+            ds = _load(xr, fname, var, tile)
+            if init == 'weights':
+                wfile = os.path.join(outdir, f'{tag}__dist_weights_{fname}')
+                CdoGenerate(os.path.join(DATA, fname), TARGET, loglevel='ERROR',
+                            **kwargs).weights(method='con', mask_dim=mask_dim).to_netcdf(wfile)
+                regridder = Regridder(weights=wfile, loglevel='ERROR', **kwargs)
+            else:
+                regridder = Regridder(source_grid=os.path.join(DATA, fname),
+                                      target_grid=TARGET, loglevel='ERROR', **kwargs)
+            out = regridder.regrid(ds)
+            # small graph on the untiled data, for the correctness check of the cluster
+            small = regridder.regrid(_load(xr, fname, var, 1))
+            outputs[case] = (var, out, small)
+            if ds[var].data.npartitions < nworkers:
+                log.warning('%s: only %d chunk(s) for %d workers, increase --tile for a meaningful scaling',
+                            case, ds[var].data.npartitions, nworkers)
+            print(json.dumps({'tag': tag, 'case': case, 'kind': 'dist',
+                              'in_mb': ds[var].nbytes / 2**20, 'out_mb': out[var].nbytes / 2**20,
+                              'chunks': ds[var].data.npartitions,
+                              'tasks': len(out[var].data.__dask_graph__())}), flush=True)
+        except Exception as err:
+            log.error('%s failed: %r', case, err)
+            print(json.dumps({'tag': tag, 'case': case, 'kind': 'dist', 'error': repr(err)[:300]}), flush=True)
+
+    def report(case, scheduler, count, ms, mem_total):
+        print(json.dumps({'tag': tag, 'case': case, 'kind': 'dist', 'scheduler': scheduler,
+                          'nworkers': count, 'time': ms, 'mem_total': mem_total}), flush=True)
+        log.info('%-24s %-8s x%-2d %8.1f ms  peak memory %6.0f MB', case, scheduler, count, ms, mem_total)
+
+    # serial reference: synchronous scheduler in this process, result dropped right away
+    for case, (var, out, small) in outputs.items():
+        serial = lambda: dask.compute(out, scheduler='synchronous')  # noqa: E731
+        ms = _time_persist(serial, repeat)
+        mem = _peak_memory(serial)
+        report(case, 'serial', 1, ms, mem)
+
+    for count in _worker_counts(nworkers):
+        log.info('Starting a LocalCluster with %d workers, memory limit %.1f GB each',
+                 count, psutil.virtual_memory().total / count / 2**30)
+        with LocalCluster(n_workers=count, threads_per_worker=1, processes=True,
+                          dashboard_address=None) as cluster, Client(cluster) as client:
+
+            def persist(out):
+                persisted = client.persist(out)
+                wait(persisted)
+                return persisted
+
+            for case, (var, out, small) in outputs.items():
                 try:
-                    xr.testing.assert_allclose(dist, serial)
-                    check = 'ok'
-                except AssertionError as err:
-                    check = 'DIFFERENT: ' + ' '.join(str(err).split())[:200]
-                print(json.dumps({'tag': tag, 'case': name, 'serial': 1000 * tserial,
-                                  'distributed': 1000 * tdist / repeat, 'check': check}), flush=True)
-                log.info('%-36s serial %8.1f ms  distributed %8.1f ms  check %s',
-                         name, 1000 * tserial, 1000 * tdist / repeat, check)
-            except Exception as err:
-                log.error('%s failed: %r', name, err)
-                print(json.dumps({'tag': tag, 'case': name, 'error': repr(err)[:300]}), flush=True)
+                    ms = _time_persist(lambda: persist(out), repeat)
+                    peaks = _peak_memory(lambda: persist(out),
+                                         start=lambda: client.run(_trace_start),
+                                         peak=lambda: list(client.run(_trace_peak).values()))
+                    report(case, 'cluster', count, ms, sum(peaks))
+                    if count == nworkers:
+                        # correctness: the output of the full cluster must match the serial one
+                        try:
+                            xr.testing.assert_allclose(client.compute(small).result(),
+                                                       dask.compute(small, scheduler='synchronous')[0])
+                            check = 'ok'
+                        except AssertionError as err:
+                            check = 'DIFFERENT: ' + ' '.join(str(err).split())[:200]
+                        print(json.dumps({'tag': tag, 'case': case, 'kind': 'dist', 'check': check}), flush=True)
+                        log.info('%-24s check on %d workers: %s', case, count, check)
+                except Exception as err:
+                    log.error('%s failed on %d workers: %r', case, count, err)
+                    print(json.dumps({'tag': tag, 'case': case, 'kind': 'dist',
+                                      'error': f'{count} workers: {repr(err)[:300]}'}), flush=True)
 
 
 def worker(tag, outdir, repeat, cases, tile=1):
@@ -237,13 +342,14 @@ def export_version(ref, dest):
     subprocess.run(['tar', '-x', '-C', dest], input=archive, check=True)
 
 
-def run_worker(ref, srcdir, outdir, workdir, repeat, cases, loglevel, nworkers=0, tile=1):
+def run_worker(ref, srcdir, outdir, workdir, args, cases, nworkers=0):
     """Run the worker for one version in a separate process, return parsed results"""
     # PYTHONPATH is inherited also by the processes of the dask cluster
     env = dict(os.environ, PYTHONPATH=srcdir)
     cmd = [sys.executable, os.path.abspath(__file__), '--worker', ref,
-           '--outdir', outdir, '--repeat', str(repeat), '--loglevel', loglevel,
-           '--distributed', str(nworkers), '--tile', str(tile), '--cases', *cases]
+           '--outdir', outdir, '--repeat', str(args.repeat), '--loglevel', args.loglevel,
+           '--distributed', str(nworkers), '--dist-repeat', str(args.dist_repeat),
+           '--tile', str(args.tile), '--chunk-size', args.chunk_size, '--cases', *cases]
     log.debug('Running %s', ' '.join(cmd))
     # cwd outside the repository, so that the installed/editable smmregrid is not picked up.
     # stdout carries the results, stderr (worker logs) goes straight to the terminal
@@ -304,33 +410,63 @@ def summarize(rows, refs, cases, outdir):
         lines.append([case] + [_fmt(i, '.2f') for i in init] + [_delta(i, init[0]) for i in init[1:]])
     _table(['case'] + refs + [f'{o} vs {base}' for o in others], lines)
 
-    # distributed cases are stored as "<case> [N workers]"
-    dist_cases = sorted({r['case'] for r in rows if r['case'].endswith('workers]')})
+    dist = [r for r in rows if r.get('kind') == 'dist']
+    dist_cases = [c[0] for c in DISTRIBUTED_CASES if any(r['case'] == c[0] for r in dist)]
     if dist_cases:
-        nworkers = dist_cases[0].rsplit('[', 1)[1].split()[0]
-        print(f'\n### Distributed check, {nworkers} workers (median, ms)\n\n'
-              'serial = synchronous scheduler (single call), distributed = LocalCluster, '
-              'slowdown = distributed / serial, check = distributed output equal to the serial one\n')
+        counts = sorted({r['nworkers'] for r in dist if r.get('scheduler') == 'cluster'})
+        nworkers = max(counts) if counts else 'N'
+
+        print('\n### Scaling test: data\n\nsizes of the input and of the regridded output, '
+              'input dask chunks and tasks of the graph\n')
         lines = []
         for case in dist_cases:
-            serial = [_median(rows, r, case, 'serial') for r in refs]
-            dist = [_median(rows, r, case, 'distributed') for r in refs]
-            slow = [_fmt(d / s, '.1f') + 'x' if s == s and d == d else '–' for s, d in zip(serial, dist)]
-            checks = []
-            for r in refs:
-                values = {row.get('check', 'error') for row in rows if row['tag'] == r and row['case'] == case}
-                if not values:
-                    checks.append('–')
-                elif values == {'ok'}:
-                    checks.append('ok')
-                else:  # a crash, or an output different from the serial one
-                    checks.append('error' if values == {'error'} else 'DIFFERENT')
-            check = 'ok' if set(checks) == {'ok'} else ', '.join(f'{r}: {c}' for r, c in zip(refs, checks))
-            lines.append([case.rsplit(' [', 1)[0]] + [_fmt(x) for x in serial] + [_fmt(x) for x in dist] +
-                         slow + [_delta(d, dist[0]) for d in dist[1:]] + [check])
-        _table(['case'] + [f'serial {r}' for r in refs] + [f'distributed {r}' for r in refs] +
-               [f'slowdown {r}' for r in refs] + [f'distributed {o} vs {base}' for o in others] + ['check'],
-               lines)
+            info = next((r for r in dist if r['case'] == case and 'in_mb' in r), {})
+            lines.append([case] + [_fmt(info.get(k, float('nan')), f)
+                                   for k, f in (('in_mb', '.0f'), ('out_mb', '.0f'), ('chunks', 'd'), ('tasks', 'd'))])
+        _table(['case', 'input MB', 'output MB', 'chunks', 'tasks'], lines)
+
+        print(f'\n### Scaling test: persist time (median, ms)\n\n'
+              'serial = synchronous scheduler (no cluster), cluster k = LocalCluster with k worker '
+              'processes of one thread each. speedup k = serial / cluster k (above 1x the cluster is '
+              f'faster than serial), scaling = cluster 1 / cluster {nworkers} (gain of the extra workers), '
+              f'check = output of the {nworkers} workers cluster equal to the serial one\n')
+        lines = []
+        for case in dist_cases:
+            for ref in refs:
+                def t(scheduler, count):
+                    values = [r['time'] for r in dist if r['tag'] == ref and r['case'] == case
+                              and r.get('scheduler') == scheduler and r.get('nworkers') == count]
+                    return statistics.median(values) if values else float('nan')
+                serial = t('serial', 1)
+                clu = [t('cluster', c) for c in counts]
+
+                def ratio(num, den):
+                    return _fmt(num / den, '.2f') + 'x' if num == num and den == den and den else '–'
+                speedups = [ratio(serial, c) for c in clu]
+                scaling = ratio(clu[0], clu[-1]) if clu else '–'
+                checks = {r['check'] for r in dist if r['tag'] == ref and r['case'] == case and 'check' in r}
+                errors_ = [r for r in dist if r['tag'] == ref and r['case'] == case and 'error' in r]
+                check = 'ok' if checks == {'ok'} else ('DIFFERENT' if checks else ('error' if errors_ else '–'))
+                lines.append([f'{case} ({ref})', _fmt(serial, '.0f')] + [_fmt(x, '.0f') for x in clu] +
+                             speedups + [scaling, check])
+        _table(['case (ref)', 'serial'] + [f'cluster {c}' for c in counts] +
+               [f'speedup {c}' for c in counts] + ['scaling', 'check'], lines)
+
+        print('\n### Scaling test: peak memory (median, MB)\n\n'
+              'peak of the memory allocated by one persist call (tracemalloc, numpy arrays included, '
+              'in an extra untimed call), i.e. the intermediate results plus the persisted output: '
+              'the memory of the processes at rest is not included. cluster k = sum of the peaks '
+              'of the k workers\n')
+        lines = []
+        for case in dist_cases:
+            for ref in refs:
+                def m(scheduler, count, key):
+                    values = [r[key] for r in dist if r['tag'] == ref and r['case'] == case
+                              and r.get('scheduler') == scheduler and r.get('nworkers') == count and key in r]
+                    return statistics.median(values) if values else float('nan')
+                lines.append([f'{case} ({ref})', _fmt(m('serial', 1, 'mem_total'), '.0f')] +
+                             [_fmt(m('cluster', c, 'mem_total'), '.0f') for c in counts])
+        _table(['case (ref)', 'serial'] + [f'cluster {c}' for c in counts], lines)
 
     errors = {(r['tag'], r['case']): r['error'] for r in rows if 'error' in r}
     print('\n### Errors\n')
@@ -339,6 +475,8 @@ def summarize(rows, refs, cases, outdir):
     for (tag, case), err in sorted(errors.items()):
         print(f'- **{tag}**, {case}: `{err[:150]}`')
 
+    if not others:  # nothing to compare the outputs with
+        return
     import xarray as xr
     warnings.filterwarnings('ignore')
     print(f'\n### Output check against {base}\n')
@@ -388,12 +526,17 @@ def main():
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'], type=str.upper,
                         help='logging level, logs go to stderr (default: INFO)')
     parser.add_argument('--distributed', type=int, default=0, metavar='N',
-                        help='also run %s on a dask LocalCluster with N workers, checking '
-                             'the output against the serial one (default: 0, disabled)'
-                             % ', '.join(f'"{c[0]}"' for c in DISTRIBUTED_CASES))
+                        help='also run the scaling test (%s) with the threaded scheduler and on '
+                             'dask LocalClusters with 1, 2, ... N workers, once per version '
+                             '(default: 0, disabled)' % ', '.join(f'"{c[0]}"' for c in DISTRIBUTED_CASES))
+    parser.add_argument('--dist-repeat', type=int, default=3,
+                        help='timed persist calls per case and scheduler in the scaling test (default: 3)')
     parser.add_argument('--tile', type=int, default=1, metavar='N',
-                        help='repeat every dataset N times along time, to emulate longer datasets '
-                             '(default: 1, no repetition)')
+                        help='repeat every dataset N times along time, to emulate longer datasets, '
+                             'in all the cases including the scaling test (default: 1, no repetition)')
+    parser.add_argument('--chunk-size', default='64MiB',
+                        help='target size of the dask chunks along time, as dask array.chunk-size '
+                             '(default: 64MiB)')
     parser.add_argument('--list-cases', action='store_true', help='list the cases and exit')
     parser.add_argument('--worker', default=None, help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -405,9 +548,12 @@ def main():
     setup_logging(args.loglevel, args.worker or 'driver')
 
     if args.worker:
+        import dask
+        dask.config.set({'array.chunk-size': args.chunk_size})
         worker(args.worker, args.outdir, args.repeat, args.cases, tile=args.tile)
         if args.distributed > 0:
-            distributed_check(args.worker, args.outdir, args.distributed, args.repeat, tile=args.tile)
+            distributed_check(args.worker, args.outdir, args.distributed, args.dist_repeat,
+                              tile=args.tile)
         return
 
     if args.uncommitted:
@@ -422,8 +568,9 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     # refs as safe tags, usable in file names (e.g. origin/main -> origin_main)
     tags = [ref.replace('/', '_') for ref in args.refs]
-    log.info('Comparing %s on %d cases, %d runs x %d calls each, data repeated x%d along time',
-             ' vs '.join(args.refs), len(args.cases), args.reps, args.repeat, args.tile)
+    log.info('Comparing %s on %d cases, %d runs x %d calls each, data repeated x%d along time, '
+             'chunks of %s', ' vs '.join(args.refs), len(args.cases), args.reps, args.repeat,
+             args.tile, args.chunk_size)
     tstart = time.perf_counter()
     try:
         srcdirs = {}
@@ -435,8 +582,9 @@ def main():
         for rep in range(args.reps):
             for tag in tags:  # alternate versions to spread out machine noise
                 log.info('Run %d/%d: %s', rep + 1, args.reps, tag)
-                rows += run_worker(tag, srcdirs[tag], outdir, tmp, args.repeat, args.cases, args.loglevel,
-                                   nworkers=args.distributed, tile=args.tile)
+                # the scaling test is slow: only in the first run
+                rows += run_worker(tag, srcdirs[tag], outdir, tmp, args, args.cases,
+                                   nworkers=args.distributed if rep == 0 else 0)
         log.info('All runs done in %.0fs', time.perf_counter() - tstart)
 
         with open(os.path.join(outdir, 'results.jsonl'), 'w', encoding='utf-8') as f:

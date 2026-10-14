@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - `na_thres` introduce to control the behaviour on missing point (#70)
 - Optimization of tensordot operation to provide a speedup of 15-20% when `skipna=False` (#70)
 - `skipna` is consistent with CDO for `remap_norm='destarea'`, and fully lazy (#70)
-- Tests and benchmark option (`--distributed N`) to validate regridding on a dask distributed cluster (#70)
+- Tests on a dask distributed cluster, and benchmark script with a scaling test (`--distributed N`) (#70)
 
 ## [v0.1.6]
 
