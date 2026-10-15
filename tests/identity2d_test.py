@@ -20,6 +20,8 @@ def test_healpix(method):
 # test for gaussian reduced grid (only nn)
 
 
+# with pytest-xdist, GRIB tests share a worker: cfgrib writes its .idx file next to the data
+@pytest.mark.xdist_group("grib")
 @pytest.mark.parametrize("method", ['nn'])
 def test_gaussian_reduced(method):
     fff = check_cdo_regrid(os.path.join(INDIR, 'lsm-ifs.grb'), tfile,

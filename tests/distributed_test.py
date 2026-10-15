@@ -15,6 +15,9 @@ from smmregrid import Regridder, CdoGenerate
 
 distributed = pytest.importorskip("distributed")
 
+# with pytest-xdist, keep all tests on one worker: a single cluster, created once
+pytestmark = pytest.mark.xdist_group("distributed")
+
 INDIR = 'tests/data'
 TARGET = 'r180x90'
 NWORKERS = 4
