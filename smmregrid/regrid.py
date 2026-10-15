@@ -131,6 +131,7 @@ class Regridder(object):
 
         # set up skipna option as ESMF
         self.skipna = skipna
+        self.method = method
         self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
 
         # with skipna the NaNs are handled at runtime, and the weights are generated from a source grid
@@ -542,7 +543,7 @@ class Regridder(object):
         return {"tgt_shape": tgt_shape, "tgt_dims": tgt_dims, **coords}
 
     def apply_weights(self, source_data, weights, weights_matrix=None,
-                      masked=True, horizontal_dims=None, skipna=False, na_thres=1.0,
+                      masked=True, horizontal_dims=None, skipna=False, na_thres=DEFAULT_NA_THRES,
                       total_weights=None, target_coords=None):
         """
         Apply CDO weights to the source data, performing the regridding operation.
@@ -557,7 +558,8 @@ class Regridder(object):
             masked (bool): Indicates if the DataArray is masked (default: True).
             horizontal_dims (list): List of dimensions for interpolation (e.g., ['lon', 'lat']).
             skipna (bool): Whether to renormalize the output based on valid source points (default: False).
-            na_thres (float): Maximum fraction of missing weights allowed when skipna is True (default: 1.0).
+            na_thres (float or str): Maximum fraction of missing weights of a target cell (default: 'auto',
+                                     resolved from skipna and the method of the Regridder).
             total_weights (numpy.ndarray, optional): Pre-computed sum of weights per target cell (default: None).
             target_coords (dict, optional): Pre-computed target grid shape, dims and lat/lon (default: None).
 
@@ -621,6 +623,8 @@ class Regridder(object):
         self.loggy.debug('Dimension to be ignored: %s', kept_dims)
         if weights_matrix is None:
             weights_matrix = compute_weights_matrix(weights)
+        if na_thres == 'auto':
+            na_thres = resolve_na_thres(skipna, na_thres, self.method, self.loglevel)
 
         # Remove the spatial axes, apply the weights, add the spatial axes back
         source_array = source_data.data

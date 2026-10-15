@@ -141,3 +141,15 @@ def test_skipna_grid_file(tmp_path, monkeypatch):
     first = xarray.open_dataset(filein).isel(time=[0])
     reference = CdoGenerate(first, 'r180x90', skipna=True, loglevel='warning').weights()
     xarray.testing.assert_equal(weights['remap_matrix'], reference['remap_matrix'])
+
+
+def test_apply_weights_na_thres_auto():
+    """na_thres='auto' in apply_weights is resolved as in the Regridder (bil with skipna: 1e-6)"""
+    filein = os.path.join(INDIR, 'onlytos-ipsl.nc')
+    data = xarray.open_dataset(filein)
+    regridder = Regridder(source_grid=filein, target_grid='r180x90', method='bil', skipna=True, loglevel='warning')
+    gridtype = regridder.grids[0]
+    out = regridder.apply_weights(data['tos'], gridtype.weights, masked=gridtype.masked,
+                                  horizontal_dims=gridtype.horizontal_dims, skipna=True)
+    assert regridder.na_thres == 1e-6
+    xarray.testing.assert_allclose(out.compute(), regridder.regrid(data)['tos'].compute())
