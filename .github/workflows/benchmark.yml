@@ -1,0 +1,87 @@
+# On-demand benchmark: add the 'benchmark' label to a PR (or run it manually once on main).
+# Compares the PR with its base branch with benchmarks/benchmark.py --quick and fails only on
+# regressions of the deterministic metrics (tasks, graph size, serial memory, correctness, errors):
+# timings on shared runners are too noisy, they are reported for information only.
+# The report is posted as a PR comment, updated at each run, and in the job summary.
+
+name: Benchmark
+
+on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      against:
+        description: 'Reference branch or ref to compare with'
+        default: 'main'
+
+permissions:
+  contents: read
+  pull-requests: write  # to post the report as a comment
+
+concurrency:
+  group: benchmark-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.pull_request.labels.*.name, 'benchmark') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'benchmark'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      AGAINST: ${{ github.base_ref || inputs.against }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0  # the reference is exported with git archive
+    - name: provision-with-micromamba
+      uses: mamba-org/setup-micromamba@v3
+      with:
+        environment-file: environment.yml
+        environment-name: smmregrid
+        cache-downloads: true
+        cache-environment: false
+        condarc: |
+          channels:
+            - conda-forge
+        create-args: >-
+              python=3.14
+    - name: Install smmregrid
+      run: python -m pip install --editable .
+    - name: Run benchmark
+      run: |
+        python benchmarks/benchmark.py --against "origin/${AGAINST}" --quick \
+          --output report.md --keep bench-results --fail-on-regression
+    - name: Report
+      if: always()
+      run: |
+        if [ -f report.md ]; then cat report.md >> "$GITHUB_STEP_SUMMARY"; fi
+    - name: Comment on the PR
+      if: always() && github.event_name == 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR: ${{ github.event.pull_request.number }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        if [ -f report.md ]; then
+          { cat report.md; echo; echo "_Benchmark of ${GITHUB_SHA::7} vs origin/${AGAINST}: [workflow run](${RUN_URL})_"; } > comment.md
+        else
+          echo "Benchmark failed before producing a report: [workflow run](${RUN_URL})" > comment.md
+        fi
+        # update the previous report of this workflow, or create it
+        gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file comment.md --edit-last --create-if-none
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: |
+          report.md
+          bench-results/results.jsonl
+        if-no-files-found: ignore

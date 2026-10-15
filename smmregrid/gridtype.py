@@ -82,6 +82,7 @@ class GridType:
 
         Notes:
             If extra_dims is None, the default dimensions remain unchanged.
+            An axis set to False is disabled, e.g. {'mask': False} never identifies a mask dimension.
         """
 
         if extra_dims is None:
@@ -95,7 +96,9 @@ class GridType:
         # update_dims = DEFAULT_DIMS
 
         for dim in extra_dims.keys():
-            if extra_dims[dim]:
+            if extra_dims[dim] is False:
+                update_dims[dim] = []
+            elif extra_dims[dim]:
                 update_dims[dim] = list(set(update_dims[dim] + extra_dims[dim]))
         return update_dims
 

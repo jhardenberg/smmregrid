@@ -2,7 +2,7 @@ import xarray as xr
 import numpy as np
 import os
 import pytest
-from smmregrid import Regridder
+from smmregrid import Regridder, CdoGenerate
 from smmregrid.checker import check_cdo_regrid
 
 def test_time_varying_nan():
@@ -70,6 +70,33 @@ def test_time_varying_nan():
     # At time 2, everything should be full
     assert out_skipna_1['tas'].isel(time=2).notnull().all().compute()
 
+@pytest.mark.parametrize("method", ['con', 'bil'])
+def test_cdo_regrid_growing_nan(method, tmp_path):
+    """Without skipna, NaNs which were not in the source when the weights were generated (from the
+    first time step) must propagate to the target cells they contribute to, and never be treated as
+    zeros. CDO recomputes the weights when the mask changes: the mask of the first time step is applied
+    to all of them, so that points can only become NaN (points becoming valid would be ignored by the
+    fixed weights, by design). Bilinear: CDO is NaN as soon as a neighbour is missing, as smmregrid.
+    Conservative: CDO renormalizes over the valid points, so both are required to be NaN as soon as
+    a contribution is missing (remap_area_min=1), and the comparison includes the NaNs."""
+
+    data = xr.open_dataset('tests/data/berkley.nc')
+    data['temperature'] = data['temperature'].where(data['temperature'].isel(time=0).notnull())
+    data['temperature'].attrs.pop('missing_value', None)
+    filein = str(tmp_path / 'berkley_nan_growing.nc')
+    data.to_netcdf(filein, encoding={'temperature': {'_FillValue': -9999.}})
+    remap_area_min = 1.0 if method == 'con' else 0.0
+    assert check_cdo_regrid(filein, 'r180x90', remap_method=method, remap_area_min=remap_area_min)
+
+
+@pytest.mark.parametrize("init_method", ['grids', 'weights'])
+def test_cdo_regrid_skipna_bil(init_method):
+    """Bilinear with skipna: na_thres='auto' must follow the method (1e-6, NaN as soon as a neighbour
+    is missing, as CDO) also when the Regridder is initialized from weights, via their map_method"""
+    assert check_cdo_regrid('tests/data/berkley.nc', 'r180x90', remap_method='bil',
+                            init_method=init_method, skipna=True)
+
+
 @pytest.mark.parametrize("method", ['nn', 'con'])
 def test_cdo_regrid_skipna_2d(method):
     """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
@@ -104,3 +131,75 @@ def test_cdo_regrid_skipna_2dmask(method):
     field = xr.open_mfdataset(filein)
     assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "Onlytos-ipsl.nc failed with skipna"
 
+
+@pytest.mark.parametrize("filein", ['tests/data/regional.nc', 'tests/data/onlytos-ipsl.nc'])
+def test_cdo_regrid_skipna_destarea(filein):
+    """Test conservative remapping with remap_norm='destarea' and skipna against CDO.
+    With destarea the weights must not be renormalized by the sum of the valid weights.
+    regional.nc has partially covered target cells at its boundaries,
+    onlytos-ipsl.nc has a land mask which makes coastal target cells partially covered."""
+
+    assert check_cdo_regrid(filein, 'r100x50', init_method='weights', remap_norm='destarea',
+                            skipna=True, loglevel='debug'), f"{filein} failed with skipna and destarea"
+
+
+def test_skipna_destarea_locality():
+    """With skipna and destarea, a single NaN in the source must not change the target cells
+    which do not receive any weight from it (see PR #70): this used to change all the
+    partially covered target cells at the boundaries of the regional grid."""
+
+    src = xr.open_dataset('tests/data/regional.nc')[['pr']].load()
+    weights = CdoGenerate(src, 'r100x50', skipna=True, loglevel='warning').weights(
+        method='con', remap_norm='destarea')
+    regridder = Regridder(weights=weights, skipna=True, remap_area_min=0.0, loglevel='warning')
+
+    # put a single NaN in the north-east corner of the regional grid
+    src_nan = src.copy(deep=True)
+    src_nan['pr'][:, -1, -1] = np.nan
+
+    out = regridder.regrid(src)['pr'].compute()
+    out_nan = regridder.regrid(src_nan)['pr'].compute()
+
+    # target cells far from the NaN must be unchanged, including the partially covered ones
+    far = out.lat < 60
+    assert out.where(far).notnull().sum() > 0
+    xr.testing.assert_allclose(out.where(far), out_nan.where(far))
+
+
+@pytest.mark.parametrize("init", ['grids', 'grids_mask_dim', 'weights'])
+def test_skipna_3d_as_2d(init):
+    """With skipna the weights do not depend on the level, so 3D data are regridded as 2D:
+    a single weights matrix and no mask dimension, whatever the initialization (also when
+    mask_dim is given, which is ignored, and from 2D weights, which used to fail on 3D data).
+    The output must be the same in all cases, with the vertical dimension before the horizontal ones."""
+
+    filein = 'tests/data/so3d-nemo.nc'
+    data = xr.open_dataset(filein)
+    if init == 'weights':
+        weights = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning').weights(method='con')
+        regridder = Regridder(weights=weights, skipna=True, loglevel='warning')
+    else:
+        mask_dim = 'lev' if init == 'grids_mask_dim' else None
+        regridder = Regridder(source_grid=filein, target_grid='r180x90', mask_dim=mask_dim,
+                              skipna=True, loglevel='warning')
+        assert regridder.grids[0].mask_dim is None
+        assert not isinstance(regridder.grids[0].weights_matrix, list)
+
+    out = regridder.regrid(data)['so']
+    assert out.dims == ('time', 'lev', 'lat', 'lon')
+
+    reference = Regridder(source_grid=filein, target_grid='r180x90', skipna=True,
+                          loglevel='warning').regrid(data)['so']
+    xr.testing.assert_allclose(out.compute(), reference.compute())
+
+
+def test_na_thres_auto_resolved_per_method():
+    """na_thres='auto' depends on the method: a CdoGenerate reused for another method must
+    resolve it again, and give the same weights as a fresh one"""
+
+    filein = 'tests/data/onlytos-ipsl.nc'
+    generator = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning')
+    generator.weights(method='bil')
+    reused = generator.weights(method='con')
+    fresh = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning').weights(method='con')
+    xr.testing.assert_equal(reused['dst_grid_imask'], fresh['dst_grid_imask'])

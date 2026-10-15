@@ -12,17 +12,18 @@ import xarray
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .cdogrid import CdoGrid
+from .gridinspector import GridInspector
 from .util import tolist, resolve_na_thres
 from .cdobinary import resolve_cdo, check_cdo_version
-from .default import DEFAULT_NA_THRES, SUPPORTED_METHODS, SUPPORTED_NORM
+from .default import DEFAULT_NA_THRES, SUPPORTED_METHODS, SUPPORTED_NORM, CDO_TIMEOUT
 
 
 class CdoGenerate():
     """CDO-based class to generate weights for smmregrid."""
 
-    def __init__(self, source_grid, target_grid=None,  skipna=False, na_thres=DEFAULT_NA_THRES, cdo_extra=None,
+    def __init__(self, source_grid, target_grid=None, cdo_extra=None,
                  cdo_options=None, cdo_download_path=None,
-                 cdo=None, loglevel='warning'):
+                 cdo=None, loglevel='warning', skipna=False, na_thres=DEFAULT_NA_THRES):
         """
         Initialize GenerateWeights class for regridding using Climate Data Operators (CDO),
         accommodating both 2D and 3D grid cases.
@@ -36,10 +37,11 @@ class CdoGenerate():
             loglevel (str, optional): The logging level for messages. Default is 'warning'.
                                       Options include 'debug', 'info', 'warning',
                                       'error', and 'critical'.
-            skipna (bool, optional): If True, NaN values in the source grid will 
+            skipna (bool, optional): If True, NaN values in the source grid will
                                      be treated as zeros during weight generation. Default is False.
-                    na_thres (float, optional): The threshold for considering a value as missing when masking.
-                                            Defaults to 0.5.
+            na_thres (float or str, optional): Maximum fraction of missing weights before a target cell
+                                               is masked in the destination mask. 'auto' (default) is
+                                               resolved at each weights() call from skipna and the method.
             cdo_extra (list, optional): Additional CDO command-line options.
                                                Defaults to None.
             cdo_options (list, optional): Options for CDO commands. Defaults to None.
@@ -63,6 +65,8 @@ class CdoGenerate():
         # skip na
         self.skipna = skipna
         self.na_thres = na_thres
+        # the requested value: 'auto' is resolved at each weights() call, as it depends on the method
+        self.na_thres_option = na_thres
 
         # define grid filenames
         self.source_grid_filename = None
@@ -84,6 +88,11 @@ class CdoGenerate():
         if remap_norm not in SUPPORTED_NORM:
             raise ValueError('The remap normalization provided is not supported!')
 
+    def _first_time_step(self, grid):
+        """Select the first time step of a Dataset/DataArray, keeping the time dimension(s)."""
+        time_dims = GridInspector(grid, loglevel=self.loglevel).get_gridtype()[0].time_dims or []
+        return grid.isel({dim: slice(0, 1) for dim in time_dims})
+
     def _prepare_grid(self, grid, target=False):
         """Helper function to prepare grid (file or dataset)."""
 
@@ -98,10 +107,21 @@ class CdoGenerate():
             if not isinstance(grid, (xarray.Dataset, xarray.DataArray)):
                 self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
                 grid = xarray.open_dataset(grid)
-            grid = grid.fillna(0)  # Fill NaNs with zeros for area/weights generation
+            # the grid needs one time step only: do not copy (and fill) the whole dataset
+            grid = self._first_time_step(grid)
+            # Fill NaNs with zeros for area/weights generation. In a Dataset, fill only
+            # floating point variables, since fillna(0) fails on datetime ones (e.g. time_bnds)
+            if isinstance(grid, xarray.Dataset):
+                grid = grid.map(lambda x: x.fillna(0) if numpy.issubdtype(x.dtype, numpy.floating) else x,
+                                keep_attrs=True)
+            else:
+                grid = grid.fillna(0)
 
         # if grid is a Dataset or DataArray, save it to a temporary file
+        # Only one time step is needed, loaded in memory before writing: this avoids a
+        # threaded dask write of the whole dataset under the netCDF/HDF5 lock
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
+            grid = self._first_time_step(grid).load()
             grid_file = tempfile.NamedTemporaryFile(delete=False)
             grid.to_netcdf(grid_file.name)
             self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
@@ -156,7 +176,7 @@ class CdoGenerate():
             and each level being processed.
         """
 
-        self.na_thres = resolve_na_thres(self.skipna, self.na_thres, method, self.loglevel)
+        self.na_thres = resolve_na_thres(self.skipna, self.na_thres_option, method, self.loglevel)
 
         if self.target_grid is None:
             raise TypeError('Target grid is not specified, cannot provide any regridding')
@@ -182,7 +202,7 @@ class CdoGenerate():
         weights = self._cdo_generate_weights(method, extrapolate,
                                              remap_norm)
         weights_matrix = compute_weights_matrix(weights)
-        weights = mask_weights(weights, weights_matrix, nan_threshold=self.na_thres)
+        weights = mask_weights(weights, weights_matrix, na_thres=self.na_thres)
         masked = int(check_mask(weights))
         masked_xa = xarray.DataArray(masked, name="dst_grid_masked")
         return xarray.merge([weights, masked_xa])
@@ -230,7 +250,7 @@ class CdoGenerate():
 
         weights = self.weightslist_to_3d(wlist, method, sgrid[mask_dim])
         weights_matrix = compute_weights_matrix3d(weights, mask_dim)
-        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim, nan_threshold=self.na_thres)
+        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim, na_thres=self.na_thres)
         masked = check_mask(weights, mask_dim)
         masked_xa = xarray.DataArray(masked,
                                      coords={mask_dim: weights[mask_dim]},
@@ -302,7 +322,7 @@ class CdoGenerate():
                 weight_file.name
             ]
             self.loggy.debug("Final CDO command: %s", command)
-            subprocess.check_output(command, stderr=subprocess.STDOUT, env=env, timeout=300)
+            subprocess.check_output(command, stderr=subprocess.STDOUT, env=env, timeout=CDO_TIMEOUT)
 
             weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
             return weights

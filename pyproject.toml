@@ -37,7 +37,10 @@ tests = [
     "coverage>=7.6.1",
     "coveralls",
     "pytest",
-    "pytest-timeout"
+    "pytest-timeout",
+    "pytest-xdist",
+    "pytest-cov",
+    "distributed"
 ]
 
 docs = [
@@ -69,7 +72,8 @@ packages = ["smmregrid"]
 version = {attr = "smmregrid.__version__"}
 
 [tool.pytest.ini_options]
-addopts = ["-v", "--tb=short", "--timeout=180", "--timeout-method=thread"]
+# two workers by default; loadgroup keeps the distributed and GRIB tests on a single worker each
+addopts = ["-v", "--tb=short", "--timeout=300", "--timeout-method=thread", "-n", "2", "--dist", "loadgroup"]
 
 [tool.coverage.run]
 source = ["smmregrid"]
