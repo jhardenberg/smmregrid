@@ -99,8 +99,7 @@ class CdoGenerate():
                 self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
                 grid = xarray.open_dataset(grid)
             # the grid needs one time step only: do not copy (and fill) the whole dataset
-            time_dims = {dim for gridtype in GridInspector(grid, loglevel=self.loglevel).get_gridtype()
-                         for dim in gridtype.time_dims or []}
+            time_dims = GridInspector(grid, loglevel=self.loglevel).get_gridtype()[0].time_dims or []
             grid = grid.isel({dim: slice(0, 1) for dim in time_dims})
             # Fill NaNs with zeros for area/weights generation. In a Dataset, fill only
             # floating point variables, since fillna(0) fails on datetime ones (e.g. time_bnds)
