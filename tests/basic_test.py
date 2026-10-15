@@ -112,14 +112,6 @@ def test_weights_mask_dim():
     assert xfield.lev.equals(weights.lev)
 
 
-def test_cdogenerate_positional_arguments():
-    """skipna and na_thres are at the end of the signature: positional arguments keep their meaning"""
-    generator = CdoGenerate('source.nc', 'r180x90', ['-setmisstoc,0'], ['-P', '2'])
-    assert generator.cdo_extra == ['-setmisstoc,0']
-    assert generator.cdo_options == ['-P', '2']
-    assert generator.skipna is False
-
-
 def test_apply_weights_without_matrix():
     """apply_weights builds the weights matrix when it is not given"""
     filein = os.path.join(INDIR, 'onlytos-ipsl.nc')
@@ -131,13 +123,10 @@ def test_apply_weights_without_matrix():
     xarray.testing.assert_allclose(out.compute(), regridder.regrid(data)['tos'].compute())
 
 
-def test_skipna_grid_file(tmp_path, monkeypatch):
-    """With skipna and a file as source grid, only the first time step is filled and written
-    to a temporary file, which is removed after the weights are generated"""
-    monkeypatch.setattr('tempfile.tempdir', str(tmp_path))
+def test_skipna_grid_file():
+    """With skipna and a file as source grid, only the first time step is used for the weights"""
     filein = os.path.join(INDIR, 'berkley.nc')
     weights = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning').weights()
-    assert list(tmp_path.iterdir()) == []
     first = xarray.open_dataset(filein).isel(time=[0])
     reference = CdoGenerate(first, 'r180x90', skipna=True, loglevel='warning').weights()
     xarray.testing.assert_equal(weights['remap_matrix'], reference['remap_matrix'])

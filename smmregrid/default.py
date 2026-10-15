@@ -6,3 +6,6 @@ DEFAULT_NA_THRES = "auto"
 # Cdo generate supported methods and norms
 SUPPORTED_METHODS = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
 SUPPORTED_NORM = ["fracarea", "destarea"]
+
+# maximum time (s) for a CDO weights generation, to avoid hanging forever
+CDO_TIMEOUT = 600

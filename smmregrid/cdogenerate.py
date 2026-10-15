@@ -12,9 +12,9 @@ import xarray
 from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask
 from .log import setup_logger
 from .cdogrid import CdoGrid
-from .gridtype import DEFAULT_DIMS
+from .gridinspector import GridInspector
 from .util import tolist, resolve_na_thres
-from .default import DEFAULT_NA_THRES, SUPPORTED_METHODS, SUPPORTED_NORM
+from .default import DEFAULT_NA_THRES, SUPPORTED_METHODS, SUPPORTED_NORM, CDO_TIMEOUT
 
 
 class CdoGenerate():
@@ -63,11 +63,12 @@ class CdoGenerate():
         # skip na
         self.skipna = skipna
         self.na_thres = na_thres
+        # the requested value: 'auto' is resolved at each weights() call, as it depends on the method
+        self.na_thres_option = na_thres
 
-        # define grid filenames, and the temporary files written for CDO (removed after use)
+        # define grid filenames
         self.source_grid_filename = None
         self.target_grid_filename = None
-        self._tmp_files = []
 
         # assign cdo bin file and get envrinment file
         self.cdo = cdo
@@ -98,7 +99,9 @@ class CdoGenerate():
                 self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
                 grid = xarray.open_dataset(grid)
             # the grid needs one time step only: do not copy (and fill) the whole dataset
-            grid = grid.isel({dim: slice(0, 1) for dim in DEFAULT_DIMS['time'] if dim in grid.dims})
+            time_dims = {dim for gridtype in GridInspector(grid, loglevel=self.loglevel).get_gridtype()
+                         for dim in gridtype.time_dims or []}
+            grid = grid.isel({dim: slice(0, 1) for dim in time_dims})
             # Fill NaNs with zeros for area/weights generation. In a Dataset, fill only
             # floating point variables, since fillna(0) fails on datetime ones (e.g. time_bnds)
             if isinstance(grid, xarray.Dataset):
@@ -109,9 +112,7 @@ class CdoGenerate():
 
         # if grid is a Dataset or DataArray, save it to a temporary file
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
-            grid_file = tempfile.NamedTemporaryFile(delete=False, suffix='.nc')
-            grid_file.close()
-            self._tmp_files.append(grid_file.name)
+            grid_file = tempfile.NamedTemporaryFile(delete=False)
             grid.to_netcdf(grid_file.name)
             self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
             return grid_file.name
@@ -165,8 +166,7 @@ class CdoGenerate():
             and each level being processed.
         """
 
-        # resolved for this call only: 'auto' depends on the method, which may change between calls
-        na_thres = resolve_na_thres(self.skipna, self.na_thres, method, self.loglevel)
+        self.na_thres = resolve_na_thres(self.skipna, self.na_thres_option, method, self.loglevel)
 
         if self.target_grid is None:
             raise TypeError('Target grid is not specified, cannot provide any regridding')
@@ -176,32 +176,29 @@ class CdoGenerate():
         # verify that method and normalization are suitable
         self._safe_check(method, remap_norm)
 
-        try:
-            # prepare grid
-            self.source_grid_filename = self._prepare_grid(self.source_grid)
-            self.target_grid_filename = self._prepare_grid(self.target_grid, target=True)
+        # prepare grid
+        self.source_grid_filename = self._prepare_grid(self.source_grid)
+        self.target_grid_filename = self._prepare_grid(self.target_grid, target=True)
 
-            # Generate weights for 2D or 3D grid based on mask_dim presence
-            if not mask_dim:
-                return self._weights_2d(method, extrapolate, remap_norm, na_thres)
-            return self._weights_3d(method, extrapolate, remap_norm,
-                                    nproc, mask_dim, na_thres)
-        finally:
-            self._remove_tmp_files()
+        # Generate weights for 2D or 3D grid based on mask_dim presence
+        if not mask_dim:
+            return self._weights_2d(method, extrapolate, remap_norm)
+        return self._weights_3d(method, extrapolate, remap_norm,
+                                nproc, mask_dim)
 
-    def _weights_2d(self, method, extrapolate, remap_norm, na_thres):
+    def _weights_2d(self, method, extrapolate, remap_norm):
         """Generate 2D weights using CDO."""
 
         weights = self._cdo_generate_weights(method, extrapolate,
                                              remap_norm)
         weights_matrix = compute_weights_matrix(weights)
-        weights = mask_weights(weights, weights_matrix, na_thres=na_thres)
+        weights = mask_weights(weights, weights_matrix, na_thres=self.na_thres)
         masked = int(check_mask(weights))
         masked_xa = xarray.DataArray(masked, name="dst_grid_masked")
         return xarray.merge([weights, masked_xa])
 
     def _weights_3d(self, method, extrapolate, remap_norm,
-                    nproc, mask_dim, na_thres):
+                    nproc, mask_dim):
         """Generate 3D weights using multiprocessing."""
 
         if isinstance(self.source_grid, str):
@@ -243,7 +240,7 @@ class CdoGenerate():
 
         weights = self.weightslist_to_3d(wlist, method, sgrid[mask_dim])
         weights_matrix = compute_weights_matrix3d(weights, mask_dim)
-        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim, na_thres=na_thres)
+        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim, na_thres=self.na_thres)
         masked = check_mask(weights, mask_dim)
         masked_xa = xarray.DataArray(masked,
                                      coords={mask_dim: weights[mask_dim]},
@@ -315,7 +312,7 @@ class CdoGenerate():
                 weight_file.name
             ]
             self.loggy.debug("Final CDO command: %s", command)
-            subprocess.check_output(command, stderr=subprocess.STDOUT, env=env)
+            subprocess.check_output(command, stderr=subprocess.STDOUT, env=env, timeout=CDO_TIMEOUT)
 
             weights = xarray.open_dataset(weight_file.name, engine="netcdf4")
             return weights
@@ -326,12 +323,10 @@ class CdoGenerate():
         finally:
             weight_file.close()
 
-    def _remove_tmp_files(self):
-        """Remove the temporary grid files written for CDO"""
-        while self._tmp_files:
-            tmp_file = self._tmp_files.pop()
-            if os.path.exists(tmp_file):
-                os.remove(tmp_file)
+    # def _remove_tmpfile(self, tmpfile):
+    #     """Helper function to clean the tempfile grid (file or dataset)."""
+    #     if not isinstance(tmpfile, str):
+    #         os.remove(tmpfile.name)
 
     def weightslist_to_3d(self, weights_list, method='ycon', mask_coord=xarray.DataArray):
         """Combine a list of 2D CDO weights into a 3D one.
@@ -395,10 +390,10 @@ class CdoGenerate():
         # Make some temporary files that we'll feed to CDO
         areas_file = tempfile.NamedTemporaryFile()
 
-        try:
-            # prepare grid
-            sgrid = self._prepare_grid(filename)
+        # prepare grid
+        sgrid = self._prepare_grid(filename)
 
+        try:
             self.loggy.info("Additional CDO commands: %s", cdo_extra)
             self.loggy.info("Additional CDO options: %s", cdo_options)
 
@@ -424,7 +419,6 @@ class CdoGenerate():
             raise
         finally:
             areas_file.close()
-            self._remove_tmp_files()
 
 
 def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=True,

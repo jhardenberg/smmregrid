@@ -77,9 +77,10 @@ def _report_diagnostics(cdofield, rfield):
     print('NaN count in regrid', rfield.isnull().sum().values)
 
 
-def _compare(xfield, cdofield, interpolator, access='Dataset'):
+def _compare(xfield, cdofield, interpolator, access='Dataset', extra_nan=False):
     """Regrid xfield with the given interpolator, compare against cdofield,
-    print diagnostics and return whether the two fields match."""
+    print diagnostics and return whether the two fields match.
+    With extra_nan, smmregrid may have more NaNs than CDO: only its valid points are compared."""
 
     smmvar = find_var(xfield)
     cdovar = find_var(cdofield)
@@ -90,6 +91,8 @@ def _compare(xfield, cdofield, interpolator, access='Dataset'):
         rfield = rfield[smmvar].to_array()
         cdofield = cdofield[cdovar].to_array()
 
+    if extra_nan:
+        cdofield = cdofield.copy(data=np.where(np.isnan(rfield), np.nan, cdofield))
     checker = np.allclose(cdofield, rfield, equal_nan=True)
 
     cdofield = cdofield.squeeze(drop=True)
@@ -102,11 +105,12 @@ def _compare(xfield, cdofield, interpolator, access='Dataset'):
 def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
                      init_method='grids', mask_dim=None, extrapolate=True,
                      remap_area_min=0.0, # this is set to 0 since tests were developed like this
-                     loglevel='INFO', skipna=False, na_thres="auto", remap_norm='fracarea'):
+                     loglevel='INFO', skipna=False, na_thres="auto", remap_norm='fracarea', extra_nan=False):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
-    remap_norm ('fracarea' or 'destarea') requires init_method='weights' if not default."""
+    remap_norm ('fracarea' or 'destarea') requires init_method='weights' if not default.
+    extra_nan allows NaNs in smmregrid where CDO has values, comparing the other points."""
 
     # define files and open input file
     xfield = xr.open_mfdataset(finput) if isinstance(finput, str) else finput
@@ -121,7 +125,7 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
                                        mask_dim, remap_area_min, skipna, loglevel, na_thres,
                                        remap_norm=remap_norm)
 
-    return _compare(xfield, cdofield, interpolator, access=access)
+    return _compare(xfield, cdofield, interpolator, access=access, extra_nan=extra_nan)
 
 
 def check_cdo_regrid_levels(finput, ftarget, mask_dim, levels, remap_method='con',
