@@ -75,7 +75,8 @@ jobs:
         coverage run -m pytest
         coverage lcov
     - name: Run coveralls
-      if: runner.os == 'Linux'
+      # a single upload: coveralls closes the build after the first job
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
       uses: coverallsapp/github-action@v2
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}

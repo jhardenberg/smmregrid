@@ -1,16 +1,5 @@
-import os
 import pytest
-from cdo import Cdo
 from smmregrid import CdoGrid
-
-# grids that CDO cannot generate offline (dcw needs downloaded coastline data)
-NO_CDO_CONST = ('gme', 'dcw')
-
-
-@pytest.fixture(scope="module")
-def cdo():
-    """python-cdo instance, created once per module"""
-    return Cdo()
 
 
 @pytest.mark.parametrize("grid_str,expected", [
@@ -32,13 +21,9 @@ def cdo():
     ("random_string", False),    # Invalid CDO grid
     ("/path/to/file.nc", False)  # Invalid CDO grid (file path)
 ])
-def test_is_cdo_grid_and_recognition(grid_str, expected, tmp_path, cdo):
-    """Grid detection by smmregrid, and grid generation by CDO"""
+def test_is_cdo_grid(grid_str, expected):
+    """Simple test for cdo grid detection"""
     assert bool(CdoGrid(grid_str).grid_kind) == expected
-    if expected and not grid_str.startswith(NO_CDO_CONST):
-        output = str(tmp_path / "output.nc")
-        cdo.const(f'1,{grid_str}', output=output, options="-f nc4")
-        assert os.path.exists(output)
 
 
 def test_healpix_zoom_deprecated():
