@@ -3,7 +3,7 @@ import numpy as np
 import os
 import pytest
 from smmregrid import Regridder, CdoGenerate
-from smmregrid.checker import check_cdo_regrid
+from checker import check_cdo_regrid
 
 def test_time_varying_nan():
     """Test regridding with time-varying NaN values and skipna enabled."""
