@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Tests on a dask distributed cluster (#70)
 - With `skipna`, 3D data are regridded as 2D with a single weights matrix (`mask_dim` is ignored): weights generated once instead of once per level (~40x faster init), ~18x fewer dask tasks, and 3D data can be regridded from 2D weights (#74)
 - Benchmark tool `benchmarks/benchmark.py`: init, build, compute, peak memory and dask graph size of 2D/3D cases (with and without mask and skipna) on the serial scheduler and on dask clusters, optionally comparing two versions, and an on-demand CI job triggered by the `benchmark` label (#74)
+- Without `skipna`, NaNs which were not in the source when the weights were generated propagate to the target cells again, instead of being treated as zeros; zero-weight links are dropped from the weights matrix (#76)
+- `na_thres` has the same meaning with and without `skipna`, as in xESMF: the maximum fraction of missing weights of a target cell. Breaking for explicit values without `skipna` (previously the minimum valid fraction), unchanged for the default (#76)
+- `na_thres='auto'` follows the method of the weights (`map_method`) when the `Regridder` is initialized from weights (#76)
 
 ## [v0.1.6]
 

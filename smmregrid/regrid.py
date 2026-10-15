@@ -45,7 +45,7 @@ from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weig
 from .log import setup_logger
 from .gridinspector import GridInspector
 from .util import detect_nan_variation_dims, tolist, resolve_na_thres
-from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES
+from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES, CDO_MAP_METHODS
 
 # default minimum area for conservative remapping
 
@@ -87,6 +87,14 @@ class Regridder(object):
                               other spatial coordinates (default: True).
             check_nan (bool): If True, check for NaN variation in the source grid
                               to define the masked dimension.
+            skipna (bool): If True, NaNs are handled at each call: missing source points do not
+                           contribute and the result is renormalized by the valid weights, so that
+                           masks varying in time (or along any dimension) are supported. The weights
+                           are then the same for all levels, and mask_dim is ignored (default: False).
+            na_thres (float or str): Maximum fraction of missing weights before a target cell is set
+                                     to NaN (with skipna) or masked (without skipna, in the destination
+                                     mask computed from the weights). 'auto' (default) gives 0.5
+                                     without skipna, and with skipna 1e-6 for bil/bic and 1.0 otherwise.
             cdo (str): Path to the CDO executable (default: 'cdo').
             cdo_extra (str): Extra command to be passed to CDO
             cdo_options(str): Extra options to be passed to CDO
@@ -123,7 +131,7 @@ class Regridder(object):
 
         # set up skipna option as ESMF
         self.skipna = skipna
-        self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
+        self.method = method
 
         # with skipna the NaNs are handled at runtime, and the weights are generated from a source grid
         # without NaNs, so they are the same on all the levels: a mask dimension is not needed, and
@@ -142,8 +150,12 @@ class Regridder(object):
             self.loggy.info('Init from weights selected!')
             self.init_mode = 'weights'
             self.grids = self._gridtype_from_weights(weights)
+            # the method the weights were generated with, not the default one, sets na_thres 'auto'
+            self.method = CDO_MAP_METHODS.get(self.grids[0].weights.attrs.get('map_method'), method)
+            self.na_thres = resolve_na_thres(self.skipna, na_thres, self.method, loglevel)
         else:
             self.loggy.info('Init from grids selected!')
+            self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
             self.init_mode = 'grids'
             if isinstance(source_grid, str):
                 if os.path.isfile(source_grid):
@@ -214,7 +226,7 @@ class Regridder(object):
                 gridtype.masked = gridtype.weights.dst_grid_masked.data
             else:
                 # compute the destination mask now
-                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim, nan_threshold=self.na_thres)
+                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim, na_thres=self.na_thres)
                 gridtype.masked = check_mask(gridtype.weights, gridtype.mask_dim)
 
             # precompute quantities which depend only on the weights, to avoid repeating them at each call
@@ -534,7 +546,7 @@ class Regridder(object):
         return {"tgt_shape": tgt_shape, "tgt_dims": tgt_dims, **coords}
 
     def apply_weights(self, source_data, weights, weights_matrix=None,
-                      masked=True, horizontal_dims=None, skipna=False, na_thres=1.0,
+                      masked=True, horizontal_dims=None, skipna=False, na_thres=DEFAULT_NA_THRES,
                       total_weights=None, target_coords=None):
         """
         Apply CDO weights to the source data, performing the regridding operation.
@@ -549,7 +561,8 @@ class Regridder(object):
             masked (bool): Indicates if the DataArray is masked (default: True).
             horizontal_dims (list): List of dimensions for interpolation (e.g., ['lon', 'lat']).
             skipna (bool): Whether to renormalize the output based on valid source points (default: False).
-            na_thres (float): Maximum fraction of missing weights allowed when skipna is True (default: 1.0).
+            na_thres (float or str): Maximum fraction of missing weights of a target cell (default: 'auto',
+                                     resolved from skipna and the method of the Regridder).
             total_weights (numpy.ndarray, optional): Pre-computed sum of weights per target cell (default: None).
             target_coords (dict, optional): Pre-computed target grid shape, dims and lat/lon (default: None).
 
@@ -611,8 +624,10 @@ class Regridder(object):
         kept_dims = [dim for dim in source_data.dims if dim not in horizontal_dims]
         kept_shape = [source_data.sizes[dim] for dim in kept_dims]
         self.loggy.debug('Dimension to be ignored: %s', kept_dims)
-        #if weights_matrix is None:
-        #    weights_matrix = compute_weights_matrix(weights)
+        if weights_matrix is None:
+            weights_matrix = compute_weights_matrix(weights)
+        if na_thres == 'auto':
+            na_thres = resolve_na_thres(skipna, na_thres, self.method, self.loglevel)
 
         # Remove the spatial axes, apply the weights, add the spatial axes back
         source_array = source_data.data
@@ -673,8 +688,9 @@ class Regridder(object):
         Three cases are possible:
 
         - ``skipna=False`` and ``masked=False``: plain ``source @ weights``.
-        - ``skipna=False`` and ``masked=True``: NaNs in the source are set to zero, and the
-          target cells outside the precomputed destination mask are set to NaN.
+        - ``skipna=False`` and ``masked=True``: the target cells outside the precomputed destination
+          mask are set to NaN. NaNs in the source which are not in the mask of the weights propagate
+          to the target cells they contribute to.
         - ``skipna=True``: NaNs in the source are set to zero and, unless the weights use the
           ``destarea`` normalization, the result is renormalized by the sum of the valid weights
           (see Notes). Target cells with no valid source point, or whose fraction of missing
@@ -739,8 +755,12 @@ class Regridder(object):
             breaking laziness.
         """
 
-        # identify valid data points (non-NaN) in the source array and set them to zero for the tensordot operation
-        if masked or skipna:
+        # with skipna, identify the valid (non-NaN) source points and set the others to zero, so that they
+        # do not contribute: the result is then renormalized below. Without skipna NaNs are left as they are,
+        # so that a NaN which was not in the source when the weights were generated propagates to the target
+        # cells it contributes to, instead of being silently treated as a zero. The points masked in the weights
+        # have no links, so their NaNs do not contribute anyway
+        if skipna:
             valid_data = dask.array.isfinite(source_array)
             source_array = dask.array.where(valid_data, source_array, 0.0)
 

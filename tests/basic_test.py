@@ -110,3 +110,33 @@ def test_weights_mask_dim():
     assert 'lev' in weights.dims, "Vertical coordinate 'lev' not found in weights dimensions"
     assert weights.sizes['lev'] == xfield.sizes['lev'], "Mismatch in vertical levels size"
     assert xfield.lev.equals(weights.lev)
+
+
+def test_apply_weights_without_matrix():
+    """apply_weights builds the weights matrix when it is not given"""
+    filein = os.path.join(INDIR, 'onlytos-ipsl.nc')
+    data = xarray.open_dataset(filein)
+    regridder = Regridder(source_grid=filein, target_grid='r180x90', loglevel='warning')
+    gridtype = regridder.grids[0]
+    out = regridder.apply_weights(data['tos'], gridtype.weights, masked=gridtype.masked,
+                                  horizontal_dims=gridtype.horizontal_dims)
+    xarray.testing.assert_allclose(out.compute(), regridder.regrid(data)['tos'].compute())
+
+
+def test_skipna_grid_file():
+    """With skipna and a file as source grid, only the first time step is filled and written for CDO"""
+    filein = os.path.join(INDIR, 'berkley.nc')
+    generator = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning')
+    with xarray.open_dataset(generator._prepare_grid(filein)) as grid:
+        assert grid.sizes['time'] == 1
+
+
+def test_apply_weights_na_thres_auto():
+    """na_thres='auto' in apply_weights is resolved as in the Regridder (bil with skipna: 1e-6)"""
+    filein = os.path.join(INDIR, 'onlytos-ipsl.nc')
+    data = xarray.open_dataset(filein)
+    regridder = Regridder(source_grid=filein, target_grid='r180x90', method='bil', skipna=True, loglevel='warning')
+    gridtype = regridder.grids[0]
+    out = regridder.apply_weights(data['tos'], gridtype.weights, masked=gridtype.masked,
+                                  horizontal_dims=gridtype.horizontal_dims, skipna=True)
+    xarray.testing.assert_allclose(out.compute(), regridder.regrid(data)['tos'].compute())

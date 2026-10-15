@@ -70,6 +70,33 @@ def test_time_varying_nan():
     # At time 2, everything should be full
     assert out_skipna_1['tas'].isel(time=2).notnull().all().compute()
 
+@pytest.mark.parametrize("method", ['con', 'bil'])
+def test_cdo_regrid_growing_nan(method, tmp_path):
+    """Without skipna, NaNs which were not in the source when the weights were generated (from the
+    first time step) must propagate to the target cells they contribute to, and never be treated as
+    zeros. CDO recomputes the weights when the mask changes: the mask of the first time step is applied
+    to all of them, so that points can only become NaN (points becoming valid would be ignored by the
+    fixed weights, by design). Bilinear: CDO is NaN as soon as a neighbour is missing, as smmregrid.
+    Conservative: CDO renormalizes over the valid points, so both are required to be NaN as soon as
+    a contribution is missing (remap_area_min=1), and the comparison includes the NaNs."""
+
+    data = xr.open_dataset('tests/data/berkley.nc')
+    data['temperature'] = data['temperature'].where(data['temperature'].isel(time=0).notnull())
+    data['temperature'].attrs.pop('missing_value', None)
+    filein = str(tmp_path / 'berkley_nan_growing.nc')
+    data.to_netcdf(filein, encoding={'temperature': {'_FillValue': -9999.}})
+    remap_area_min = 1.0 if method == 'con' else 0.0
+    assert check_cdo_regrid(filein, 'r180x90', remap_method=method, remap_area_min=remap_area_min)
+
+
+@pytest.mark.parametrize("init_method", ['grids', 'weights'])
+def test_cdo_regrid_skipna_bil(init_method):
+    """Bilinear with skipna: na_thres='auto' must follow the method (1e-6, NaN as soon as a neighbour
+    is missing, as CDO) also when the Regridder is initialized from weights, via their map_method"""
+    assert check_cdo_regrid('tests/data/berkley.nc', 'r180x90', remap_method='bil',
+                            init_method=init_method, skipna=True)
+
+
 @pytest.mark.parametrize("method", ['nn', 'con'])
 def test_cdo_regrid_skipna_2d(method):
     """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
@@ -164,3 +191,15 @@ def test_skipna_3d_as_2d(init):
     reference = Regridder(source_grid=filein, target_grid='r180x90', skipna=True,
                           loglevel='warning').regrid(data)['so']
     xr.testing.assert_allclose(out.compute(), reference.compute())
+
+
+def test_na_thres_auto_resolved_per_method():
+    """na_thres='auto' depends on the method: a CdoGenerate reused for another method must
+    resolve it again, and give the same weights as a fresh one"""
+
+    filein = 'tests/data/onlytos-ipsl.nc'
+    generator = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning')
+    generator.weights(method='bil')
+    reused = generator.weights(method='con')
+    fresh = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning').weights(method='con')
+    xr.testing.assert_equal(reused['dst_grid_imask'], fresh['dst_grid_imask'])

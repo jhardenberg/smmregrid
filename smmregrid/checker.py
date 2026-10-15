@@ -111,10 +111,9 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
     # define files and open input file
     xfield = xr.open_mfdataset(finput) if isinstance(finput, str) else finput
 
-    # interpolation with pure CDO
-    # NB: REMAP_AREA_MIN is not passed here, as it does not work with cdo 2.4.4
+    # interpolation with pure CDO, with the same minimum area fraction as smmregrid
     cdofield = _cdo_remap(remap_method, ftarget, finput, extrapolate=extrapolate,
-                          remap_norm=remap_norm)
+                          remap_area_min=remap_area_min, remap_norm=remap_norm)
 
     # method with automatic creation of weights (or pre-computed weights)
     interpolator = _build_interpolator(finput, ftarget, remap_method, init_method,
