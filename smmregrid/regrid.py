@@ -45,7 +45,7 @@ from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weig
 from .log import setup_logger
 from .gridinspector import GridInspector
 from .util import detect_nan_variation_dims, tolist, resolve_na_thres
-from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES
+from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES, CDO_MAP_METHODS
 
 # default minimum area for conservative remapping
 
@@ -132,7 +132,6 @@ class Regridder(object):
         # set up skipna option as ESMF
         self.skipna = skipna
         self.method = method
-        self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
 
         # with skipna the NaNs are handled at runtime, and the weights are generated from a source grid
         # without NaNs, so they are the same on all the levels: a mask dimension is not needed, and
@@ -151,8 +150,12 @@ class Regridder(object):
             self.loggy.info('Init from weights selected!')
             self.init_mode = 'weights'
             self.grids = self._gridtype_from_weights(weights)
+            # the method the weights were generated with, not the default one, sets na_thres 'auto'
+            self.method = CDO_MAP_METHODS.get(self.grids[0].weights.attrs.get('map_method'), method)
+            self.na_thres = resolve_na_thres(self.skipna, na_thres, self.method, loglevel)
         else:
             self.loggy.info('Init from grids selected!')
+            self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
             self.init_mode = 'grids'
             if isinstance(source_grid, str):
                 if os.path.isfile(source_grid):

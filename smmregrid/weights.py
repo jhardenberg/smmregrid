@@ -72,8 +72,8 @@ def compute_total_weights(weights_matrix):
 
 def mask_tensordot(src_mask, weights_matrix, na_thres=0.5):
     """Apply the weights to the source mask to return the destination mask (1 valid, 0 masked).
-    As for skipna, na_thres is the maximum fraction of missing weights: a target cell is masked
-    when the fraction of its weights from masked source points exceeds it (valid < 1 - na_thres)"""
+    As for skipna, and as in xESMF, na_thres is the maximum fraction of missing weights: a target cell
+    is masked when the fraction of its weights from masked source points exceeds it (valid < 1 - na_thres)"""
 
     valid_fraction = dask.array.tensordot(src_mask, weights_matrix, axes=1)
     return dask.array.where(valid_fraction < 1.0 - na_thres, 0, 1)

@@ -89,6 +89,14 @@ def test_cdo_regrid_growing_nan(method, tmp_path):
     assert check_cdo_regrid(filein, 'r180x90', remap_method=method, remap_area_min=remap_area_min)
 
 
+@pytest.mark.parametrize("init_method", ['grids', 'weights'])
+def test_cdo_regrid_skipna_bil(init_method):
+    """Bilinear with skipna: na_thres='auto' must follow the method (1e-6, NaN as soon as a neighbour
+    is missing, as CDO) also when the Regridder is initialized from weights, via their map_method"""
+    assert check_cdo_regrid('tests/data/berkley.nc', 'r180x90', remap_method='bil',
+                            init_method=init_method, skipna=True)
+
+
 @pytest.mark.parametrize("method", ['nn', 'con'])
 def test_cdo_regrid_skipna_2d(method):
     """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""

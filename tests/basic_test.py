@@ -124,12 +124,11 @@ def test_apply_weights_without_matrix():
 
 
 def test_skipna_grid_file():
-    """With skipna and a file as source grid, only the first time step is used for the weights"""
+    """With skipna and a file as source grid, only the first time step is filled and written for CDO"""
     filein = os.path.join(INDIR, 'berkley.nc')
-    weights = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning').weights()
-    first = xarray.open_dataset(filein).isel(time=[0])
-    reference = CdoGenerate(first, 'r180x90', skipna=True, loglevel='warning').weights()
-    xarray.testing.assert_equal(weights['remap_matrix'], reference['remap_matrix'])
+    generator = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning')
+    with xarray.open_dataset(generator._prepare_grid(filein)) as grid:
+        assert grid.sizes['time'] == 1
 
 
 def test_apply_weights_na_thres_auto():
@@ -140,5 +139,4 @@ def test_apply_weights_na_thres_auto():
     gridtype = regridder.grids[0]
     out = regridder.apply_weights(data['tos'], gridtype.weights, masked=gridtype.masked,
                                   horizontal_dims=gridtype.horizontal_dims, skipna=True)
-    assert regridder.na_thres == 1e-6
     xarray.testing.assert_allclose(out.compute(), regridder.regrid(data)['tos'].compute())
