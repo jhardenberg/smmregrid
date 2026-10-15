@@ -76,15 +76,17 @@ def test_cdo_regrid_growing_nan(method, tmp_path):
     first time step) must propagate to the target cells they contribute to, and never be treated as
     zeros. CDO recomputes the weights when the mask changes: the mask of the first time step is applied
     to all of them, so that points can only become NaN (points becoming valid would be ignored by the
-    fixed weights, by design). Conservative: smmregrid is NaN where the newly missing points contribute,
-    while CDO renormalizes, so only its valid points are compared. Bilinear: CDO is NaN there too."""
+    fixed weights, by design). Bilinear: CDO is NaN as soon as a neighbour is missing, as smmregrid.
+    Conservative: CDO renormalizes over the valid points, so both are required to be NaN as soon as
+    a contribution is missing (remap_area_min=1), and the comparison includes the NaNs."""
 
     data = xr.open_dataset('tests/data/berkley.nc')
     data['temperature'] = data['temperature'].where(data['temperature'].isel(time=0).notnull())
     data['temperature'].attrs.pop('missing_value', None)
     filein = str(tmp_path / 'berkley_nan_growing.nc')
     data.to_netcdf(filein, encoding={'temperature': {'_FillValue': -9999.}})
-    assert check_cdo_regrid(filein, 'r180x90', remap_method=method, extra_nan=(method == 'con'))
+    remap_area_min = 1.0 if method == 'con' else 0.0
+    assert check_cdo_regrid(filein, 'r180x90', remap_method=method, remap_area_min=remap_area_min)
 
 
 @pytest.mark.parametrize("method", ['nn', 'con'])
