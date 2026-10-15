@@ -15,6 +15,12 @@ on:
 permissions:
   contents: read
 
+# one test run per PR (or branch): a new push cancels the run still in progress.
+# The event name keeps scheduled and manual runs in their own group, so a push never cancels them
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
