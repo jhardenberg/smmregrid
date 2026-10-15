@@ -26,7 +26,7 @@ Using PyPi
 It will bring you the last version available on PyPi.
 You can create a conda/mamba environment which incudes the python, `eccodes <https://github.com/ecmwf/eccodes-python>`_ and `cdo <https://code.mpimet.mpg.de/projects/cdo/>`_ dependencies, and then install smmregrid.
 
-    > mamba create -n smmregrid "python>=3.8" cdo eccodes
+    > mamba create -n smmregrid "python>=3.8" cdo eccodes numba
     > mamba activate smmregrid
     > pip install smmregrid
 

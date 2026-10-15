@@ -20,7 +20,14 @@ The tool works for python versions >=3.8 and requires CDO >= 2.6.2. It is safer 
 
 ### Linux
 
-Install with:
+The simplest way is to install smmregrid from conda-forge, which brings in all the binary dependencies (including CDO and eccodes):
+
+```
+mamba create -n smmregrid -c conda-forge smmregrid
+mamba activate smmregrid
+```
+
+Or, installing from PyPI:
 
 ```
 mamba create -n smmregrid "python>=3.8" cdo eccodes numba
