@@ -121,7 +121,7 @@ class GridDetector:
         # Common names used for the HEALPix cell-index dimension
         candidate_names = {"cell", "cells", "pix", "pixel", "healpix", "ncells"}
 
-        dimsdict = data.dims if isinstance(data, xr.Dataset) else dict(zip(data.dims, data.shape))
+        dimsdict = data.sizes
 
         for dim_name, size in dimsdict.items():
             n = size // 12

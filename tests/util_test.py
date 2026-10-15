@@ -54,7 +54,8 @@ TEST_FILES = [
     ("tas-ecearth.nc", "GaussianRegular"),
     ("temp3d-fesom.nc", "Unstructured"),
     ("ua-ecearth.nc", "GaussianRegular"),
-    ("lsm-ifs.grb", "GaussianReduced"),
+    # with pytest-xdist, GRIB tests share a worker: cfgrib writes its .idx file next to the data
+    pytest.param("lsm-ifs.grb", "GaussianReduced", marks=pytest.mark.xdist_group("grib")),
     ("ua-ipsl.nc", "Regular"),
 
 ]

@@ -102,12 +102,42 @@ def test_check_nan_auto():
     assert count[-1] == 0, f"NaN values found in the regridded data: {count}"
     assert count[1] == 589, f"NaN values found in the regridded data: {count}"
 
-def test_weights_vertical_dim():
-    """Test to verify that weights are created with vertical_dim coordinate"""
+def test_weights_mask_dim():
+    """Test to verify that weights are created with mask_dim coordinate"""
     xfield = xarray.open_dataset(os.path.join(INDIR, 'so3d-nemo.nc'))
     xfield = xfield.isel(lev=slice(0, 5))
     generator = CdoGenerate(source_grid=xfield, target_grid='r90x45', loglevel='debug')
-    weights = generator.weights(method="nn", vertical_dim='lev')
+    weights = generator.weights(method="nn", mask_dim='lev')
     assert 'lev' in weights.dims, "Vertical coordinate 'lev' not found in weights dimensions"
     assert weights.sizes['lev'] == xfield.sizes['lev'], "Mismatch in vertical levels size"
     assert xfield.lev.equals(weights.lev)
+
+
+def test_apply_weights_without_matrix():
+    """apply_weights builds the weights matrix when it is not given"""
+    filein = os.path.join(INDIR, 'onlytos-ipsl.nc')
+    data = xarray.open_dataset(filein)
+    regridder = Regridder(source_grid=filein, target_grid='r180x90', loglevel='warning')
+    gridtype = regridder.grids[0]
+    out = regridder.apply_weights(data['tos'], gridtype.weights, masked=gridtype.masked,
+                                  horizontal_dims=gridtype.horizontal_dims)
+    xarray.testing.assert_allclose(out.compute(), regridder.regrid(data)['tos'].compute())
+
+
+def test_skipna_grid_file():
+    """With skipna and a file as source grid, only the first time step is filled and written for CDO"""
+    filein = os.path.join(INDIR, 'berkley.nc')
+    generator = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning')
+    with xarray.open_dataset(generator._prepare_grid(filein)) as grid:
+        assert grid.sizes['time'] == 1
+
+
+def test_apply_weights_na_thres_auto():
+    """na_thres='auto' in apply_weights is resolved as in the Regridder (bil with skipna: 1e-6)"""
+    filein = os.path.join(INDIR, 'onlytos-ipsl.nc')
+    data = xarray.open_dataset(filein)
+    regridder = Regridder(source_grid=filein, target_grid='r180x90', method='bil', skipna=True, loglevel='warning')
+    gridtype = regridder.grids[0]
+    out = regridder.apply_weights(data['tos'], gridtype.weights, masked=gridtype.masked,
+                                  horizontal_dims=gridtype.horizontal_dims, skipna=True)
+    xarray.testing.assert_allclose(out.compute(), regridder.regrid(data)['tos'].compute())

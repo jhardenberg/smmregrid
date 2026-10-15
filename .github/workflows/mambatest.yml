@@ -15,6 +15,12 @@ on:
 permissions:
   contents: read
 
+# one test run per PR (or branch): a new push cancels the run still in progress.
+# The event name keeps scheduled and manual runs in their own group, so a push never cancels them
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ${{ matrix.os }}
@@ -39,7 +45,7 @@ jobs:
       run:
         shell: bash -el {0}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
     - name: Install CDO with Homebrew
       if: runner.os == 'macOS'
       run: |
@@ -70,6 +76,7 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    # xdist options (two workers) are set in pyproject.toml
     - name: Run tests
       if: ${{ !matrix.coverage }}
       run: |
@@ -77,9 +84,7 @@ jobs:
     - name: Run tests with coverage
       if: ${{ matrix.coverage }}
       run: |
-        python -m pip install coverage
-        coverage run -m pytest
-        coverage lcov
+        python -m pytest --cov --cov-report=lcov
     - name: Run coveralls
       if: ${{ matrix.coverage }}
       uses: coverallsapp/github-action@v2
