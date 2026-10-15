@@ -84,6 +84,11 @@ class CdoGenerate():
         if remap_norm not in SUPPORTED_NORM:
             raise ValueError('The remap normalization provided is not supported!')
 
+    def _first_time_step(self, grid):
+        """Select the first time step of a Dataset/DataArray, keeping the time dimension(s)."""
+        time_dims = GridInspector(grid, loglevel=self.loglevel).get_gridtype()[0].time_dims or []
+        return grid.isel({dim: slice(0, 1) for dim in time_dims})
+
     def _prepare_grid(self, grid, target=False):
         """Helper function to prepare grid (file or dataset)."""
 
@@ -99,8 +104,7 @@ class CdoGenerate():
                 self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
                 grid = xarray.open_dataset(grid)
             # the grid needs one time step only: do not copy (and fill) the whole dataset
-            time_dims = GridInspector(grid, loglevel=self.loglevel).get_gridtype()[0].time_dims or []
-            grid = grid.isel({dim: slice(0, 1) for dim in time_dims})
+            grid = self._first_time_step(grid)
             # Fill NaNs with zeros for area/weights generation. In a Dataset, fill only
             # floating point variables, since fillna(0) fails on datetime ones (e.g. time_bnds)
             if isinstance(grid, xarray.Dataset):
@@ -110,7 +114,10 @@ class CdoGenerate():
                 grid = grid.fillna(0)
 
         # if grid is a Dataset or DataArray, save it to a temporary file
+        # Only one time step is needed, loaded in memory before writing: this avoids a
+        # threaded dask write of the whole dataset under the netCDF/HDF5 lock
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
+            grid = self._first_time_step(grid).load()
             grid_file = tempfile.NamedTemporaryFile(delete=False)
             grid.to_netcdf(grid_file.name)
             self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
