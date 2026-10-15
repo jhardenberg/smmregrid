@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Introduction of the `skipna` flag to renormalize weights to support time-varying and space-varying masks without declaring `mask_dim` (#70)
 - Optimization of tensordot operation to provide a speedup of 20-30% when `skipna=False` (#70)
 - `na_thres` introduce to control the behaviour on missing point (#70)
+- Upgrade to support `cdo>=2.6.2` (#66)
+- Require CDO >= 2.6.2 (2.6.1 has a known bug), checked at runtime with a clear error message (#66)
+- macOS users must install CDO with Homebrew: new `environment-macos.yml` without CDO and macOS CI job (#66)
+- The CDO executable is taken from the `CDO` environment variable when the `cdo` argument is not provided (#66)
+- `python-cdo` is no longer a runtime dependency, only required for tests (#66)
+- `smmregrid.checker` moved to `tests/checker.py`, as it is only used for testing (#66)
 
 ## [v0.1.6]
 

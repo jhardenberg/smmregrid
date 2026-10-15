@@ -27,13 +27,13 @@ dependencies = [
     'netcdf4',
     'cfgrib',
     'sparse',
-    'cdo',
     'numba',
     'cfunits'
 ]
 
 [project.optional-dependencies]
 tests = [
+    "cdo",
     "coverage>=7.6.1",
     "coveralls",
     "pytest",

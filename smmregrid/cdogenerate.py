@@ -13,6 +13,7 @@ from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weig
 from .log import setup_logger
 from .cdogrid import CdoGrid
 from .util import tolist, resolve_na_thres
+from .cdobinary import resolve_cdo, check_cdo_version
 from .default import DEFAULT_NA_THRES, SUPPORTED_METHODS, SUPPORTED_NORM
 
 
@@ -21,7 +22,7 @@ class CdoGenerate():
 
     def __init__(self, source_grid, target_grid=None,  skipna=False, na_thres=DEFAULT_NA_THRES, cdo_extra=None,
                  cdo_options=None, cdo_download_path=None,
-                 cdo="cdo", loglevel='warning'):
+                 cdo=None, loglevel='warning'):
         """
         Initialize GenerateWeights class for regridding using Climate Data Operators (CDO),
         accommodating both 2D and 3D grid cases.
@@ -42,7 +43,8 @@ class CdoGenerate():
             cdo_extra (list, optional): Additional CDO command-line options.
                                                Defaults to None.
             cdo_options (list, optional): Options for CDO commands. Defaults to None.
-            cdo (str, optional): The command to invoke CDO. Default is "cdo".
+            cdo (str, optional): The command to invoke CDO. If not provided, the CDO
+                                 environment variable is used, otherwise "cdo" from the PATH.
             cdo_download_path (str, optional): Path to the grid download path
                                                 if applicable. Defaults to None.
         """
@@ -67,7 +69,9 @@ class CdoGenerate():
         self.target_grid_filename = None
 
         # assign cdo bin file and get envrinment file
-        self.cdo = cdo
+        self.cdo = resolve_cdo(cdo)
+        cdo_version = check_cdo_version(self.cdo)
+        self.loggy.debug("Using CDO %s from %s", cdo_version, self.cdo)
         self.env = os.environ.copy()
         if cdo_download_path:
             self.env["CDO_DOWNLOAD_PATH"] = cdo_download_path
@@ -411,7 +415,7 @@ def cdo_generate_weights(source_grid, target_grid, method="con", extrapolate=Tru
                          remap_norm="fracarea", gridpath=None,
                          cdo_extra=None, cdo_options=None,
                          mask_dim=None,
-                         cdo="cdo", nproc=1, loglevel='warning'):
+                         cdo=None, nproc=1, loglevel='warning'):
     """
     Wrapper function for the new cdo class to provide the old access
     """

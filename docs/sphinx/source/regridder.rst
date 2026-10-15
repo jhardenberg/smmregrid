@@ -52,7 +52,7 @@ Constructor Parameters
   
   - File path to NetCDF file  
   - xarray Dataset or DataArray
-  - CDO grid description (e.g., 'r360x180', 'n128')
+  - CDO grid description (e.g., 'r360x180', 'F128')
 
 **Weights-based Initialization:**
 

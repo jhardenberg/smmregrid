@@ -3,7 +3,8 @@
 import os
 import pytest
 import xarray as xr
-from smmregrid.checker import check_cdo_regrid, Regridder
+from smmregrid import Regridder
+from checker import check_cdo_regrid
 
 INDIR = 'tests/data'
 ifile = os.path.join(INDIR, 'ua-so_mix_ecearth.nc')
