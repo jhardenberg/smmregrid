@@ -49,9 +49,9 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
 
     # method with automatic creation of weights
     if init_method == 'grids':
-        interpolator = Regridder(source_grid=finput, target_grid=ftarget, 
+        interpolator = Regridder(source_grid=finput, target_grid=ftarget,
                                  remap_area_min=remap_area_min,
-                                 method=remap_method, mask_dim=mask_dim, 
+                                 method=remap_method, mask_dim=mask_dim,
                                  vertical_dim=vertical_dim, loglevel=loglevel)
     elif init_method == 'weights':
         wfield = CdoGenerate(finput, ftarget, loglevel=loglevel).weights(

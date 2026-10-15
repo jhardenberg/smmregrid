@@ -3,7 +3,7 @@
 import os
 import pytest
 import xarray as xr
-from smmregrid.checker import check_cdo_regrid
+from checker import check_cdo_regrid
 
 INDIR = 'tests/data'
 tfile = os.path.join(INDIR, 'r360x180.nc')

@@ -108,4 +108,4 @@ Requirements
 The required packages are listed in ``environment.yml`` (Linux) and ``environment-macos.yml`` (macOS) and in ``pyproject.toml``.
 
 .. note::
-	Linux and macOS are supported. Python >=3.8 and CDO >= 2.6.1 are required. On macOS, CDO must be installed with Homebrew.
+	Linux and macOS are supported. Python >=3.8 and CDO >= 2.6.2 are required. On macOS, CDO must be installed with Homebrew.

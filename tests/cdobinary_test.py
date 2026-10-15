@@ -47,8 +47,9 @@ def test_fake_cdo_version(tmp_path):
     assert check_cdo_version(cdo) == "9.9.9"
 
 
-def test_old_cdo_raises(tmp_path):
-    cdo = fake_cdo(tmp_path, "2.5.0")
+@pytest.mark.parametrize("version", ["2.5.0", "2.6.1"])
+def test_old_cdo_raises(tmp_path, version):
+    cdo = fake_cdo(tmp_path, version)
     with pytest.raises(RuntimeError, match=f"requires CDO >= {CDO_MIN_VERSION}"):
         check_cdo_version(cdo)
 
