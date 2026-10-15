@@ -4,7 +4,7 @@ import os
 import pytest
 import numpy as np
 import xarray as xr
-from smmregrid.checker import Regridder
+from smmregrid import Regridder
 
 INDIR = 'tests/data'
 ifile = os.path.join(INDIR, 'onlytos-ipsl.nc')

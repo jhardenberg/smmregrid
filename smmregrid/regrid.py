@@ -56,7 +56,7 @@ class Regridder(object):
                  method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None, vertical_dim=None,
                  horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  check_nan=False,
-                 cdo='cdo', loglevel='WARNING'):
+                 cdo=None, loglevel='WARNING'):
         """
         Initialize the Regridder for performing regridding operations.
 
@@ -85,7 +85,7 @@ class Regridder(object):
                               other spatial coordinates (default: True).
             check_nan (bool): If True, check for NaN variation in the source grid
                               to define the masked dimension.
-            cdo (str): Path to the CDO executable (default: 'cdo').
+            cdo (str): Path to the CDO executable (default: CDO env variable, or 'cdo').
             cdo_extra (str): Extra command to be passed to CDO
             cdo_options(str): Extra options to be passed to CDO
             loglevel (str): Logging level for the operation (default: 'WARNING').
@@ -653,7 +653,7 @@ class Regridder(object):
                              loglevel=self.loglevel, clean=True).get_gridtype()[0]
 
 
-def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo'):
+def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo=None):
     """
     A simple regrid. Inefficient if you are regridding more than one dataset
     to the target grid because it re-generates the weights each time you call
@@ -668,7 +668,7 @@ def regrid(source_data, target_grid=None, weights=None, transpose=True, cdo='cdo
         transpose (bool): If True, transpose the output so that the masked
                           coordinate is just before the other spatial coordinates (default: True)
 
-        cdo (path): path of cdo executable ["cdo"]
+        cdo (path): path of cdo executable [CDO env variable, or "cdo"]
     Returns:
         :class:`xarray.DataArray` with a regridded version of the source variable
     """

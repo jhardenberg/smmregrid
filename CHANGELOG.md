@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
+- Upgrade to support `cdo>=2.6.2` (#66)
+- Require CDO >= 2.6.2 (2.6.1 has a known bug), checked at runtime with a clear error message (#66)
+- macOS users must install CDO with Homebrew: new `environment-macos.yml` without CDO and macOS CI job (#66)
+- The CDO executable is taken from the `CDO` environment variable when the `cdo` argument is not provided (#66)
+- `python-cdo` is no longer a runtime dependency, only required for tests (#66)
+- `smmregrid.checker` moved to `tests/checker.py`, as it is only used for testing (#66)
+
 ## [v0.1.6]
 
 - Pin for `cdo<2.6.1` to avoid bug in the more recent CDO versions (#68)

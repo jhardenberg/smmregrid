@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from smmregrid.checker import check_cdo_regrid_levels
+from checker import check_cdo_regrid_levels
 
 INDIR = 'tests/data'
 tfile = os.path.join(INDIR, 'r360x180.nc')
