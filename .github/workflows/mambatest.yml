@@ -31,6 +31,10 @@ jobs:
           # macOS gets CDO from Homebrew, as conda-forge has no recent builds
           - os: macos-latest
             environment-file: environment-macos.yml
+          # coverage is measured and uploaded only once, on Linux with the newest Python
+          - os: ubuntu-latest
+            python-version: "3.15"
+            coverage: true
     defaults:
       run:
         shell: bash -el {0}
@@ -66,17 +70,18 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Install coverage tools
+    - name: Run tests
+      if: ${{ !matrix.coverage }}
+      run: |
+        python -m pytest
+    - name: Run tests with coverage
+      if: ${{ matrix.coverage }}
       run: |
         python -m pip install coverage
-        python -m pip install coveralls
-    - name: Run coverage
-      run: |
         coverage run -m pytest
         coverage lcov
     - name: Run coveralls
-      # a single upload: coveralls closes the build after the first job
-      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
+      if: ${{ matrix.coverage }}
       uses: coverallsapp/github-action@v2
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
