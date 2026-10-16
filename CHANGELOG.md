@@ -3,24 +3,15 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## Unreleased
+## [v0.2.0]
 
-- Introduction of the `skipna` flag to renormalize weights to support time-varying and space-varying masks without declaring `mask_dim` (#70)
-- `na_thres` to control when target cells with missing source points are set to NaN (#70)
-- Optimization of tensordot operation to provide a speedup of 15-20% when `skipna=False` (#70)
-- The sparse weights matrix is built once at init instead of at each compute, and the total weights and target coordinates are precomputed: ~35% faster graph construction for 3D data (#70)
-- `skipna` is consistent with CDO for `remap_norm='destarea'`, and fully lazy (#70)
-- Tests on a dask distributed cluster (#70)
-- With `skipna`, 3D data are regridded as 2D with a single weights matrix (`mask_dim` is ignored): weights generated once instead of once per level (~40x faster init), ~18x fewer dask tasks, and 3D data can be regridded from 2D weights (#74)
-- Benchmark tool `benchmarks/benchmark.py`: init, build, compute, peak memory and dask graph size of 2D/3D cases (with and without mask and skipna) on the serial scheduler and on dask clusters, optionally comparing two versions, and an on-demand CI job triggered by the `benchmark` label (#74)
-- Without `skipna`, NaNs which were not in the source when the weights were generated propagate to the target cells again, instead of being treated as zeros; zero-weight links are dropped from the weights matrix (#76)
-- `na_thres` has the same meaning with and without `skipna`, as in xESMF: the maximum fraction of missing weights of a target cell. Breaking for explicit values without `skipna` (previously the minimum valid fraction), unchanged for the default (#76)
-- `na_thres='auto'` follows the method of the weights (`map_method`) when the `Regridder` is initialized from weights (#76)
-- Support and require CDO >= 2.6.2 (2.6.1 has a known bug), checked at runtime with a clear error message (#66)
-- macOS users must install CDO with Homebrew: new `environment-macos.yml` without CDO and macOS CI job (#66)
-- The CDO executable is taken from the `CDO` environment variable when the `cdo` argument is not provided (#66)
-- `python-cdo` is no longer a runtime dependency, only required for tests (#66)
-- `smmregrid.checker` moved to `tests/checker.py`, as it is only used for testing (#66)
+- `skipna` option: missing source points are skipped and the weights renormalized at each call, supporting masks varying in time or along any dimension without `mask_dim`. Consistent with CDO for conservative and nearest neighbour, and with `remap_norm='destarea'`. 3D data use a single 2D weights matrix (~40x faster init, ~18x fewer dask tasks) (#70, #74)
+- `na_thres`: maximum fraction of missing weights of a target cell, with the same meaning with and without `skipna` (as in xESMF); `'auto'` follows the method, also of precomputed weights. Breaking change: for explicit values without `skipna`, previously it was the minimum valid fraction (#70, #76)
+- Faster regridding following several optimization: weights matrix and derived quantities built once at init (~35% faster graph construction for 3D data), 15-20% faster tensordot without `skipna` (#70)
+- CDO >= 2.6.2 is required and checked at runtime; the executable is taken from the `cdo` argument, the `CDO` environment variable or the PATH. On macOS, CDO has to be installed with Homebrew (`environment-macos.yml`) (#66)
+- `python-cdo` is only a test dependency, and `smmregrid.checker` moved to `tests/checker.py` (#66)
+- Tests on a dask distributed cluster and on two `pytest-xdist` workers; benchmark tool `benchmarks/benchmark.py` with an on-demand CI job (`benchmark` label) (#70, #74)
+- Documentation: conda-forge installation, corrected `Regridder` parameters and examples (#77)
 
 ## [v0.1.6]
 
