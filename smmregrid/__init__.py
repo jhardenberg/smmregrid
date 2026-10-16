@@ -9,7 +9,7 @@ from .griddetector import GridDetector
 from .cdobinary import cdo_version, check_cdo_version, CDO_MIN_VERSION
 
 
-__version__ = '0.1.6'
+__version__ = '0.2.0'
 
 __all__ = ['Regridder', 'regrid', 'cdo_generate_weights',
            'GridType', 'GridInspector', 'GridDetector', 'CdoGenerate',

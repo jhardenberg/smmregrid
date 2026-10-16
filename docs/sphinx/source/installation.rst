@@ -2,18 +2,17 @@ Installation
 ============
 
 
-smmregrid is a lightweight python package, but it depends on ``cdo`` for weights installation, thus both installation options requires conda/mamba. 
-We recommend to use `mamba <https://mamba.readthedocs.io/en/latest/user_guide/mamba.html>`_ since it provides a lighter and deal in a better way with dependencies.
+smmregrid is a lightweight python package, but it depends on ``cdo`` for weights installation, thus both installation options requires conda/mamba (e.g. miniforge). 
 
-Using conda/mamba
---------------------
+Using conda
+-----------
 
 Simplest way is to install ``smmregrid`` using conda or mamba getting the code from conda-forge channel.
 
     > mamba create -n smmregrid -c conda-forge smmregrid
 
 This will install ``smmregrid`` along with all required binary dependencies, including ``cdo`` and ``eccodes``.
-On macOS, see the dedicated section below.
+On macOS, see the dedicated section below since ``cdo`` is not available from conda-forge for macOS.
 
 .. note::
    Make sure to have [mamba](https://mamba.readthedocs.io/en/latest/user_guide/mamba.html) 

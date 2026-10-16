@@ -90,10 +90,9 @@ Generate interpolation weights for regridding.
 
 * **nproc** (*int*, default: 1): Number of processes for parallel 3D weight generation.
 
-* **na_thres** (*float*, default: "auto"): Threshold for skipping NaN values during regridding. 
-  If the fraction of valid data in a source cell is below this threshold, the target cell will be set to NaN.
-  Default is "auto", which sets the threshold to 1.0 for conservative methods and 0.0 for others
-  when `skipna` is True and 0.5 when `skipna` is False.
+* **na_thres** (*float* or *str*, default: "auto"): Maximum fraction of missing weights before a target cell
+  is masked. Range: 0.0-1.0. "auto" gives 0.5 without ``skipna`` (and set only at weights generation phase); with ``skipna`` it gives 1e-6 for 'bil'
+  and 'bic' and 1.0 for the other methods. 
 
 **Returns:** *xarray.Dataset* containing the regridding weights and mask information.
 
