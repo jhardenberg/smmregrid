@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-- Preserve Dask chunking along extra dimensions (e.g. time) in `remap_area_min` masking by broadcasting lazily instead of using `dask.array.broadcast_to`, preventing large memory allocations (#79, #80)
+- Preserve Dask chunking along extra dimensions (e.g. time) in `remap_area_min` masking by broadcasting lazily instead of using `dask.array.broadcast_to`, preventing large memory allocations (#80)
 
 ## [v0.2.0]
 
