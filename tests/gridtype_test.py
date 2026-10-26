@@ -9,8 +9,13 @@ from smmregrid import GridType
     (['lon', 'lat', 'lev', 'time'], ['lon', 'lat', 'lev'], []),
     (['i', 'k'], ['i'], ['k']),
     (['pix', 'time', 'papera'], ['pix'], ['papera']),
-    (['time', 'papera'], [], ['papera'])
-
+    (['time', 'papera'], [], ['papera']),
+    (['time', 'lat'], ['lat'], []),  # partial family, e.g. zonal mean
+    (['time', 'lat', 'lon', 'x'], ['lat', 'lon'], ['x']),  # only the first family
+    (['lat', 'lon', 'nlat', 'nlon'], ['lat', 'lon'], ['nlat', 'nlon']),
+    (['nlat', 'nlon', 'lat'], ['nlat', 'nlon'], ['lat']),  # complete family wins over partial
+    (['time', 'yq', 'xh'], ['yq', 'xh'], []),  # MOM6 staggering
+    (['ncells', 'values'], ['ncells'], ['values']),  # unstructured: one dimension only
 ])
 def test_gridtype(definition, dims, other):
     """Basic gridtype investigation"""
@@ -44,6 +49,13 @@ def test_gridtype_extradims():
     grid = GridType(dims=["lon", "lat", "ciccio"],
                     extra_dims={'mask': ["ciccio"]})
     assert grid.mask_dim == "ciccio"
+
+
+def test_gridtype_extradims_priority():
+    """Declared horizontal dimensions come before the default families"""
+    grid = GridType(dims=["lat", "lon", "foo", "bar"], extra_dims={'horizontal': ["foo", "bar"]})
+    assert grid.horizontal_dims == ["foo", "bar"]
+    assert set(grid.other_dims) == {"lat", "lon"}
 
 
 def test_gridtype_extradims_override():

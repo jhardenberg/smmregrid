@@ -2,12 +2,19 @@
 
 import copy
 
+# horizontal dimensions grouped by grid, from the most to the least reliable: if a variable
+# matches more than one family, the first complete one is used (the first partial one otherwise)
+HORIZONTAL_FAMILIES = (
+    ('lon', 'lat'), ('longitude', 'latitude'), ('nav_lon', 'nav_lat'),  # regular, gaussian, NEMO
+    ('nlon', 'nlat'), ('ni', 'nj'), ('xh', 'yh', 'xq', 'yq'),  # CESM/POP, CICE, GFDL/MOM6
+    ('i', 'j'), ('x', 'y'),  # generic curvilinear
+    ('ncells',), ('cell',), ('cells',), ('nod2',), ('elem',), ('pix',),  # unstructured, one dimension
+    ('rgrid',), ('values',), ('value',),
+)
+
 # default spatial dimensions and vertical coordinates
 DEFAULT_DIMS = {
-    'horizontal': ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
-                   'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
-                   'nav_lon', 'nav_lat', 'rgrid',
-                   'nlat', 'nlon', 'xh', 'yh', 'xq', 'yq', 'ni', 'nj'],
+    'horizontal': [dim for family in HORIZONTAL_FAMILIES for dim in family],
     'mask': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
     'time': ['time', 'time_counter', 'valid_time', 'forecast_time'],
 }
@@ -51,7 +58,8 @@ class GridType:
             raise TypeError("extra_dims must be a dictionary or None.")
 
         default_dims = self._handle_default_dimensions(extra_dims, override=override)
-        self.horizontal_dims = self._identify_dims('horizontal', dims, default_dims)
+        self.horizontal_dims = self._select_horizontal_family(
+            self._identify_dims('horizontal', dims, default_dims), extra_dims, override=override)
         self.mask_dim = self._identify_dims('mask', dims, default_dims)
         self.dims = (self.horizontal_dims or []) + ([self.mask_dim] if self.mask_dim else [])
         self.time_dims = self._identify_dims('time', dims, default_dims)
@@ -159,14 +167,41 @@ class GridType:
         if axis not in default_dims:
             return None
 
-        # Identify dimensions based on the provided axis
-        identified_dims = list(set(dims).intersection(default_dims[axis]))
+        # Identify dimensions based on the provided axis, in the order of the data
+        identified_dims = [dim for dim in dims if dim in default_dims[axis]]
         if axis == 'mask':
             if len(identified_dims) > 1:
                 raise ValueError(f'Only one masked dimension can be processed at the time: check {identified_dims}')
             if len(identified_dims) == 1:
                 identified_dims = identified_dims[0]  # unlist the single masked dimension
         return identified_dims if identified_dims else None
+
+    def _select_horizontal_family(self, horizontal_dims, extra_dims, override=False):
+        """
+        Keep only the horizontal dimensions of a single grid, following HORIZONTAL_FAMILIES.
+
+        Dimensions declared in extra_dims come first, as a family of their own. With override,
+        the declared dimensions are the only family. A family is complete when at least two of
+        its dimensions are found (one for single-dimension families).
+
+        Args:
+            horizontal_dims (list): The horizontal dimensions identified in the data.
+            extra_dims (dict): The extra dimensions provided by the user.
+            override (bool): If the extra dimensions override the default ones.
+
+        Returns:
+            list: The horizontal dimensions of the selected family, None if there are none.
+        """
+        if not horizontal_dims:
+            return None
+
+        declared = tuple((extra_dims or {}).get('horizontal') or ())
+        families = (declared,) if override else ((declared,) if declared else ()) + HORIZONTAL_FAMILIES
+
+        matches = [[dim for dim in horizontal_dims if dim in family] for family in families]
+        complete = [match for match, family in zip(matches, families) if match and len(match) >= min(2, len(family))]
+        partial = [match for match in matches if match]
+        return (complete or partial or [horizontal_dims])[0]
 
     def _identify_other_dims(self, dims):
         """

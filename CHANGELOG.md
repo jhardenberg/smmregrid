@@ -5,7 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-- `nlat`/`nlon` (CESM/POP), `ni`/`nj` (CICE) and `xh`/`yh`/`xq`/`yq` (GFDL/MOM6) added to the default horizontal dimensions, so CMIP6 CESM2 and GFDL-CM4 ocean and sea-ice grids are detected; `CdoGenerate` and `Regridder` raise a clear `ValueError` naming the dimensions found when no horizontal dimension is detected, instead of an `IndexError` or `TypeError`
+- `nlat`/`nlon` (CESM/POP), `ni`/`nj` (CICE) and `xh`/`yh`/`xq`/`yq` (GFDL/MOM6) added to the default horizontal dimensions, so CMIP6 CESM2 and GFDL-CM4 ocean and sea-ice grids are detected; `CdoGenerate` and `Regridder` raise a clear `ValueError` naming the dimensions found when no horizontal dimension is detected, instead of an `IndexError` or `TypeError` (#81)
+- Horizontal dimensions are grouped by grid in `HORIZONTAL_FAMILIES`, in order of priority: when a variable matches more than one family, only the first complete one is used and the other dimensions are left in `other_dims` (e.g. `x` in `(lat, lon, x)`); dimensions declared with `extra_dims`/`horizontal_dims` come first. Horizontal dimensions now follow the order of the data (#81)
 
 ## [v0.2.0]
 
