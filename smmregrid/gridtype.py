@@ -2,15 +2,16 @@
 
 import copy
 
-# horizontal dimensions grouped by grid, from the most to the least reliable: if a variable
-# matches more than one family, the first complete one is used (the first partial one otherwise)
+# horizontal dimensions grouped by grid, from the most to the least reliable: a variable is on
+# the first family whose dimensions it has all; a partial match (e.g. a zonal mean) is not a grid
 HORIZONTAL_FAMILIES = (
     ('lon', 'lat'), ('longitude', 'latitude'), ('nav_lon', 'nav_lat'),  # regular, gaussian, NEMO
     ('nlon', 'nlat'), ('ni', 'nj'),  # CESM/POP, CICE
     ('xh', 'yh'), ('xq', 'yh'), ('xh', 'yq'), ('xq', 'yq'),  # GFDL/MOM6 C-grid: tracer, u, v and corner points
     ('i', 'j'), ('x', 'y'),  # generic curvilinear
-    ('ncells',), ('cell',), ('cells',), ('nod2',), ('elem',), ('pix',),  # unstructured, one dimension
+    ('ncells',), ('cell',), ('cells',), ('ncol',), ('nod2',), ('elem',), ('pix',),  # unstructured, one dimension
     ('rgrid',), ('values',), ('value',),
+    ('i',), ('x',),  # a lone i or x is an unstructured index (e.g. ICON in CMIP6, HEALPix)
 )
 
 # default spatial dimensions and vertical coordinates
@@ -181,9 +182,9 @@ class GridType:
         """
         Keep only the horizontal dimensions of a single grid, following HORIZONTAL_FAMILIES.
 
-        Dimensions declared in extra_dims come first, as a family of their own. With override,
-        the declared dimensions are the only family. A family is complete when at least two of
-        its dimensions are found (one for single-dimension families).
+        Dimensions declared in extra_dims come first and are used as found. Otherwise, the first
+        family of HORIZONTAL_FAMILIES whose dimensions are all in the data is used. With override,
+        only the declared dimensions are used.
 
         Args:
             horizontal_dims (list): The horizontal dimensions identified in the data.
@@ -196,13 +197,14 @@ class GridType:
         if not horizontal_dims:
             return None
 
-        declared = tuple((extra_dims or {}).get('horizontal') or ())
-        families = (declared,) if override else ((declared,) if declared else ()) + HORIZONTAL_FAMILIES
+        declared = [dim for dim in horizontal_dims if dim in ((extra_dims or {}).get('horizontal') or [])]
+        if declared or override:
+            return declared or None
 
-        matches = [[dim for dim in horizontal_dims if dim in family] for family in families]
-        complete = [match for match, family in zip(matches, families) if match and len(match) >= min(2, len(family))]
-        partial = [match for match in matches if match]
-        return (complete or partial or [horizontal_dims])[0]
+        for family in HORIZONTAL_FAMILIES:
+            if all(dim in horizontal_dims for dim in family):
+                return [dim for dim in horizontal_dims if dim in family]
+        return None
 
     def _identify_other_dims(self, dims):
         """

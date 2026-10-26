@@ -7,13 +7,15 @@ from smmregrid import GridType
 @pytest.mark.parametrize("definition,dims,other", [
     (['lon', 'lat'], ['lon', 'lat'], []),
     (['lon', 'lat', 'lev', 'time'], ['lon', 'lat', 'lev'], []),
-    (['i', 'k'], ['i'], ['k']),
+    (['i', 'k'], ['i'], ['k']),  # lone i, e.g. ICON in CMIP6
+    (['time', 'ncol'], ['ncol'], []),  # CESM spectral element
     (['pix', 'time', 'papera'], ['pix'], ['papera']),
     (['time', 'papera'], [], ['papera']),
-    (['time', 'lat'], ['lat'], []),  # partial family, e.g. zonal mean
+    (['time', 'lat'], [], ['lat']),  # zonal mean
     (['time', 'lat', 'lon', 'x'], ['lat', 'lon'], ['x']),  # only the first family
     (['lat', 'lon', 'nlat', 'nlon'], ['lat', 'lon'], ['nlat', 'nlon']),
-    (['nlat', 'nlon', 'lat'], ['nlat', 'nlon'], ['lat']),  # complete family wins over partial
+    (['nlat', 'nlon', 'lat'], ['nlat', 'nlon'], ['lat']),
+    (['time', 'x'], ['x'], []),  # lone x, e.g. HEALPix
     (['time', 'yq', 'xh'], ['yq', 'xh'], []),  # MOM6 v points
     (['yq', 'xq'], ['yq', 'xq'], []),  # MOM6 corner points
     (['ncells', 'values'], ['ncells'], ['values']),  # unstructured: one dimension only
