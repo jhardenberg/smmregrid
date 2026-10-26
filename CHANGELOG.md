@@ -3,10 +3,6 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
-
-- `nlat`/`nlon` (CESM/POP), `ni`/`nj` (CICE) and `xh`/`yh`/`xq`/`yq` (GFDL/MOM6) added to the default horizontal dimensions, so CMIP6 CESM2 and GFDL-CM4 ocean and sea-ice grids are detected; `CdoGenerate` and `Regridder` raise a clear `ValueError` naming the dimensions found when no horizontal dimension is detected, instead of an `IndexError` or `TypeError`
-
 ## [v0.2.0]
 
 - `skipna` option: missing source points are skipped and the weights renormalized at each call, supporting masks varying in time or along any dimension without `mask_dim`. Consistent with CDO for conservative and nearest neighbour, and with `remap_norm='destarea'`. 3D data use a single 2D weights matrix (~40x faster init, ~18x fewer dask tasks) (#70, #74)
