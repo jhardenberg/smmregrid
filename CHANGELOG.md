@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## Unreleased
 
 - `GridCoordinates` class identifying latitude, longitude and the horizontal dimensions from coordinates only (CF `standard_name`, `units`, `_CoordinateAxisType`, then names), without loading values. `GridDetector` uses it, so coordinates with non-standard names such as ICON `clat`/`clon` are now classified (#83)
+- More robust `GridDetector`: equidistance tested relative to the grid spacing (HadGEM3-GC31-MM/MH, INM-CM5-H, float32 and dateline-crossing grids are `Regular`), Gaussian latitudes checked against the zeros of the Legendre polynomial (irregular latitudes such as BCC-CSM2-MR or FGOALS-g3 ocean grids are `UndefinedRegular`, not `GaussianRegular`), `GaussianReduced` requires Gaussian latitudes, HEALPix requires 12 * nside**2 cells with nside a power of two and never a time dimension, and a single latitude or longitude no longer raises an `IndexError` (#83)
 
 ## [v0.2.0]
 

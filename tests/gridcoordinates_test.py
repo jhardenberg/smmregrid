@@ -62,3 +62,21 @@ def test_griddetector_coordinates():
     assert GridDetector().detect_grid(ds) == 'Unstructured'
     assert GridDetector().detect_grid(make_coords()) == 'Unknown'
     assert GridDetector(lat='clat', lon='clon').detect_grid(make_coords()) == 'Unstructured'
+
+
+ERA5 = xarray.open_dataset('tests/data/2t-era5.nc')['2t']
+LAT01 = np.arange(300, 400, dtype='float32') / 10
+
+
+@pytest.mark.parametrize("data,kind", [
+    (ERA5.isel(lat=[10]), 'Regular'),  # single latitude
+    (ERA5.roll(lon=10, roll_coords=True).isel(lon=slice(0, 20)), 'Regular'),  # across the dateline
+    (xarray.DataArray(np.zeros((100, 100)), dims=('lat', 'lon'), coords={'lat': LAT01, 'lon': LAT01}), 'Regular'),
+    (ERA5.assign_coords(lat=ERA5.lat ** 3 / 8100), 'UndefinedRegular'),  # irregular, not Gaussian
+    (xarray.DataArray(np.zeros(12), dims='time'), 'Unknown'),  # 12 is a HEALPix size, but time is not
+    (xarray.DataArray(np.zeros(24), dims='ncells'), 'Unknown'),  # 24 is not a HEALPix size
+    (xarray.DataArray(np.zeros(48), dims='ncells'), 'HEALPix'),
+])
+def test_griddetector_kind(data, kind):
+    """Grid kind on edge cases of regular, Gaussian and HEALPix detection"""
+    assert GridDetector().detect_grid(data) == kind
