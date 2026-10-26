@@ -6,6 +6,7 @@ import copy
 # the first family whose dimensions it has all; a partial match (e.g. a zonal mean) is not a grid
 HORIZONTAL_FAMILIES = (
     ('lon', 'lat'), ('longitude', 'latitude'), ('nav_lon', 'nav_lat'),  # regular, gaussian, NEMO
+    ('rlon', 'rlat'),  # rotated pole (e.g. CORDEX)
     ('nlon', 'nlat'), ('ni', 'nj'),  # CESM/POP, CICE
     ('xh', 'yh'), ('xq', 'yh'), ('xh', 'yq'), ('xq', 'yq'),  # GFDL/MOM6 C-grid: tracer, u, v and corner points
     ('i', 'j'), ('x', 'y'),  # generic curvilinear

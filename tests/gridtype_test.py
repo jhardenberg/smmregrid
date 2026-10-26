@@ -14,6 +14,7 @@ from smmregrid import GridType
     (['time', 'lat'], [], ['lat']),  # zonal mean
     (['time', 'lat', 'lon', 'x'], ['lat', 'lon'], ['x']),  # only the first family
     (['lat', 'lon', 'nlat', 'nlon'], ['lat', 'lon'], ['nlat', 'nlon']),
+    (['time', 'rlat', 'rlon'], ['rlat', 'rlon'], []),  # rotated pole
     (['nlat', 'nlon', 'lat'], ['nlat', 'nlon'], ['lat']),
     (['time', 'x'], ['x'], []),  # lone x, e.g. HEALPix
     (['time', 'yq', 'xh'], ['yq', 'xh'], []),  # MOM6 v points
