@@ -169,7 +169,8 @@ class Regridder(object):
 
             len_grids = len(self.grids)
             if len_grids == 0:
-                raise ValueError('Cannot find any gridtype in your data, aborting!')
+                raise ValueError(f'Cannot find any gridtype in your data with dimensions {list(source_grid_array.dims)}: '
+                                 'no known horizontal dimension found, use extra_dims to declare them')
             if len_grids == 1:
                 self.loggy.info('One gridtype found! Standard procedure')
             else:
@@ -362,6 +363,9 @@ class Regridder(object):
         # we derived this from the regridded data and we use it as it is
         if self.init_mode == 'weights':
             self.loggy.info('Assuming gridtype from data to be the same from weights')
+            if not datagridtype.horizontal_dims:
+                raise ValueError(f'Cannot find any horizontal dimension in the data with dimensions {datagridtype.dims}: '
+                                 'use extra_dims or horizontal_dims to declare them')
             self.grids[0].dims = datagridtype.dims
             self.grids[0].horizontal_dims = datagridtype.horizontal_dims
             self.grids[0].other_dims = datagridtype.other_dims

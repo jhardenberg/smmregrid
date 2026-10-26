@@ -6,7 +6,8 @@ import copy
 DEFAULT_DIMS = {
     'horizontal': ['i', 'j', 'x', 'y', 'lon', 'lat', 'longitude', 'latitude',
                    'cell', 'cells', 'ncells', 'values', 'value', 'nod2', 'pix', 'elem',
-                   'nav_lon', 'nav_lat', 'rgrid'],
+                   'nav_lon', 'nav_lat', 'rgrid',
+                   'nlat', 'nlon', 'xh', 'yh', 'xq', 'yq', 'ni', 'nj'],
     'mask': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
     'time': ['time', 'time_counter', 'valid_time', 'forecast_time'],
 }
