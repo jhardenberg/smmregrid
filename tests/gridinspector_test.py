@@ -1,9 +1,10 @@
 """Set of basic tests for smmregrid gridinspector"""
 
 import os
+import numpy
 import pytest
 import xarray
-from smmregrid import GridInspector
+from smmregrid import GridInspector, CdoGenerate, Regridder
 
 
 INDIR = 'tests/data'
@@ -15,6 +16,9 @@ INDIR = 'tests/data'
     ("so3d-nemo.nc", 1, ["i", "j", "lev"], ['so'], "Curvilinear"),
     ("ua-so_mix_ecearth.nc", 2, ["lon", "lat"], ['ua'], "GaussianRegular"),
     ("temp3d-fesom.nc", 1, ['nod2', 'nz1'], ['temp'], "Unstructured"),
+    ("sftof-cesm2.nc", 1, ["nlat", "nlon"], ['sftof'], "Curvilinear"),
+    ("areacello-gfdl.nc", 1, ["yh", "xh"], ['areacello'], "Curvilinear"),
+    ("siconc-cesm2.nc", 1, ["nj", "ni"], ['siconc'], "Curvilinear"),
 ])
 def test_basic_gridinspector(file, ngrids, firstdims, variables, kind):
     """test for GridInspector which includes also GridDetector and GridType"""
@@ -67,3 +71,41 @@ def test_get_gridtype_sample(file, variables):
     grids = gridinspect.get_gridtype()
     sample = gridinspect.get_gridtype_sample_variable(grids)
     assert sample == variables
+
+
+def test_no_gridtype_raise():
+    """GridInspector finds no grid on unknown horizontal dimensions, and CdoGenerate explains it"""
+    xfield = xarray.open_dataset(os.path.join(INDIR, '2t-era5.nc')).rename({'lon': 'foo', 'lat': 'bar'})
+    assert GridInspector(xfield).get_gridtype() == []
+    with pytest.raises(ValueError, match="no known horizontal dimension"):
+        CdoGenerate(xfield, 'r180x90').weights(method='bil')
+    weights = CdoGenerate(os.path.join(INDIR, '2t-era5.nc'), 'r180x90').weights(method='bil')
+    with pytest.raises(ValueError, match="Cannot find any horizontal dimension"):
+        Regridder(weights=weights).regrid(xfield['2t'])
+
+
+def test_unnamed_dataarray():
+    """A DataArray without a name is inspected"""
+    grids = GridInspector(xarray.DataArray(numpy.zeros((2, 3)), dims=('lat', 'lon'))).get_gridtype()
+    assert [grid.dims for grid in grids] == [['lat', 'lon']]
+
+
+@pytest.mark.parametrize("bounds", ['vertices_latitude', 'lat_vertices'])
+def test_bounds_are_not_grids(bounds):
+    """Vertices are bounds, as in CMIP6 curvilinear grids, and not a separate grid"""
+    xfield = xarray.Dataset(
+        {'so': (('time', 'j', 'i'), numpy.zeros((1, 3, 4))),
+         bounds: (('j', 'i', 'vertices'), numpy.zeros((3, 4, 4)))})
+    grids = GridInspector(xfield).get_gridtype()
+    assert len(grids) == 1
+    assert list(grids[0].variables) == ['so']
+    assert grids[0].bounds == [bounds]
+
+
+def test_zonal_mean_with_mask_dim():
+    """A zonal mean with a mask dimension is not a grid, and Regridder explains it"""
+    xfield = xarray.open_dataset(os.path.join(INDIR, 'so3d-nemo.nc'))['so'].mean('i')
+    assert GridInspector(xfield).get_gridtype() == []
+    weights = CdoGenerate(os.path.join(INDIR, '2t-era5.nc'), 'r180x90').weights(method='bil')
+    with pytest.raises(ValueError, match="Cannot find any horizontal dimension"):
+        Regridder(weights=weights).regrid(xfield)

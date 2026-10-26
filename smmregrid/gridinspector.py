@@ -133,10 +133,10 @@ class GridInspector():
 
         # Iterate through grids
         for gridtype in self.grids:
-            # Check if any variable in the grid contains 'bnds'
-            if not gridtype.dims:
+            # a mask dimension alone (e.g. a zonal mean with lev) is not a grid
+            if not gridtype.horizontal_dims:
                 removed.append(gridtype)
-                self.loggy.info('Removing the grid defined by %s with with no spatial dimensions',
+                self.loggy.info('Removing the grid defined by %s with no horizontal dimensions',
                                 gridtype.dims)
             # elif all('bnds' in variable for variable in gridtype.variables):
             #    removed.append(gridtype)  # Add to removed list
@@ -198,9 +198,13 @@ class GridInspector():
 
     def _is_bounds(self, var):
         """
-        Check if a variable is a bounds variable.
+        Check if a variable is a bounds variable, e.g. lat_bnds, lon_bounds,
+        or vertices_latitude and lat_vertices as in CMIP6 curvilinear grids.
         """
-        return (var.endswith('_bnds') or var.endswith('_bounds') or var == 'vertices') and 'time' not in var
+        if var is None or 'time' in var:
+            return False
+        return (var.endswith(('_bnds', '_bounds', '_vertices'))
+                or var == 'vertices' or var.startswith('vertices_'))
 
     def _identify_spatial_bounds(self, data):
         """

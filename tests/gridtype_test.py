@@ -7,10 +7,19 @@ from smmregrid import GridType
 @pytest.mark.parametrize("definition,dims,other", [
     (['lon', 'lat'], ['lon', 'lat'], []),
     (['lon', 'lat', 'lev', 'time'], ['lon', 'lat', 'lev'], []),
-    (['i', 'k'], ['i'], ['k']),
+    (['i', 'k'], ['i'], ['k']),  # lone i, e.g. ICON in CMIP6
+    (['time', 'ncol'], ['ncol'], []),  # CESM spectral element
     (['pix', 'time', 'papera'], ['pix'], ['papera']),
-    (['time', 'papera'], [], ['papera'])
-
+    (['time', 'papera'], [], ['papera']),
+    (['time', 'lat'], [], ['lat']),  # zonal mean
+    (['time', 'lat', 'lon', 'x'], ['lat', 'lon'], ['x']),  # only the first family
+    (['lat', 'lon', 'nlat', 'nlon'], ['lat', 'lon'], ['nlat', 'nlon']),
+    (['time', 'rlat', 'rlon'], ['rlat', 'rlon'], []),  # rotated pole
+    (['nlat', 'nlon', 'lat'], ['nlat', 'nlon'], ['lat']),
+    (['time', 'x'], ['x'], []),  # lone x, e.g. HEALPix
+    (['time', 'yq', 'xh'], ['yq', 'xh'], []),  # MOM6 v points
+    (['yq', 'xq'], ['yq', 'xq'], []),  # MOM6 corner points
+    (['ncells', 'values'], ['ncells'], ['values']),  # unstructured: one dimension only
 ])
 def test_gridtype(definition, dims, other):
     """Basic gridtype investigation"""
@@ -29,6 +38,13 @@ def test_difference():
     assert grid1 == grid3
 
 
+def test_gridtype_hash():
+    """Equal grids have the same hash, whatever the order of the dimensions"""
+    grid = GridType(dims=['lat', 'lon'])
+    assert grid == GridType(dims=['lon', 'lat'])
+    assert GridType(dims=['lon', 'lat']) in {grid}
+
+
 def test_multiple_vertical():
     """Test multiple vertical"""
     with pytest.raises(ValueError):
@@ -44,6 +60,13 @@ def test_gridtype_extradims():
     grid = GridType(dims=["lon", "lat", "ciccio"],
                     extra_dims={'mask': ["ciccio"]})
     assert grid.mask_dim == "ciccio"
+
+
+def test_gridtype_extradims_priority():
+    """Declared horizontal dimensions come before the default families"""
+    grid = GridType(dims=["lat", "lon", "foo", "bar"], extra_dims={'horizontal': ["foo", "bar"]})
+    assert grid.horizontal_dims == ["foo", "bar"]
+    assert set(grid.other_dims) == {"lat", "lon"}
 
 
 def test_gridtype_extradims_override():
