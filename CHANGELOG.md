@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## Unreleased
+
+- Python >= 3.10 is required: support for Python 3.8 and 3.9 is dropped (#PR)
+
 ## [v0.2.0]
 
 - `skipna` option: missing source points are skipped and the weights renormalized at each call, supporting masks varying in time or along any dimension without `mask_dim`. Consistent with CDO for conservative and nearest neighbour, and with `remap_norm='destarea'`. 3D data use a single 2D weights matrix (~40x faster init, ~18x fewer dask tasks) (#70, #74)
