@@ -134,9 +134,10 @@ class GridInspector():
         # Iterate through grids
         for gridtype in self.grids:
             # Check if any variable in the grid contains 'bnds'
-            if not gridtype.dims:
+            # a mask dimension alone (e.g. a zonal mean with lev) is not a grid
+            if not gridtype.horizontal_dims:
                 removed.append(gridtype)
-                self.loggy.info('Removing the grid defined by %s with with no spatial dimensions',
+                self.loggy.info('Removing the grid defined by %s with no horizontal dimensions',
                                 gridtype.dims)
             # elif all('bnds' in variable for variable in gridtype.variables):
             #    removed.append(gridtype)  # Add to removed list

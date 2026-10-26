@@ -37,6 +37,13 @@ def test_difference():
     assert grid1 == grid3
 
 
+def test_gridtype_hash():
+    """Equal grids have the same hash, whatever the order of the dimensions"""
+    grid = GridType(dims=['lat', 'lon'])
+    assert grid == GridType(dims=['lon', 'lat'])
+    assert GridType(dims=['lon', 'lat']) in {grid}
+
+
 def test_multiple_vertical():
     """Test multiple vertical"""
     with pytest.raises(ValueError):

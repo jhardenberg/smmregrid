@@ -143,7 +143,7 @@ class GridType:
         Returns:
             int: A hash value representing the dimensions of the GridType instance.
         """
-        return hash(tuple(self.dims))
+        return hash(frozenset(self.dims))
 
     def _identify_dims(self, axis, dims, default_dims):
         """

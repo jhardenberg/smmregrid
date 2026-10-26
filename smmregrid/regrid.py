@@ -635,8 +635,9 @@ class Regridder(object):
         if na_thres == 'auto':
             na_thres = resolve_na_thres(skipna, na_thres, self.method, self.loglevel)
 
-        # Remove the spatial axes, apply the weights, add the spatial axes back
-        source_array = source_data.data
+        # Remove the spatial axes, apply the weights, add the spatial axes back:
+        # the kept dimensions go first, so that the reshape does not mix them with the spatial ones
+        source_array = source_data.transpose(*kept_dims, ...).data
         if isinstance(source_array, dask.array.Array):
             source_array = dask.array.reshape(source_array, kept_shape + [-1])
         else:

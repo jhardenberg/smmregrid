@@ -81,3 +81,12 @@ def test_no_gridtype_raise():
     weights = CdoGenerate(os.path.join(INDIR, '2t-era5.nc'), 'r180x90').weights(method='bil')
     with pytest.raises(ValueError, match="Cannot find any horizontal dimension"):
         Regridder(weights=weights).regrid(xfield['2t'])
+
+
+def test_zonal_mean_with_mask_dim():
+    """A zonal mean with a mask dimension is not a grid, and Regridder explains it"""
+    xfield = xarray.open_dataset(os.path.join(INDIR, 'so3d-nemo.nc'))['so'].mean('i')
+    assert GridInspector(xfield).get_gridtype() == []
+    weights = CdoGenerate(os.path.join(INDIR, '2t-era5.nc'), 'r180x90').weights(method='bil')
+    with pytest.raises(ValueError, match="Cannot find any horizontal dimension"):
+        Regridder(weights=weights).regrid(xfield)
