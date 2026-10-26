@@ -5,7 +5,8 @@ import copy
 # horizontal dimensions grouped by grid, from the most to the least reliable: a variable is on
 # the first family whose dimensions it has all; a partial match (e.g. a zonal mean) is not a grid
 HORIZONTAL_FAMILIES = (
-    ('lon', 'lat'), ('longitude', 'latitude'), ('nav_lon', 'nav_lat'),  # regular, gaussian, NEMO
+    ('lon', 'lat'), ('longitude', 'latitude'), #standard CF, CMIP6, ERA5, etc.
+    ('nav_lon', 'nav_lat'),  # NEMO
     ('rlon', 'rlat'),  # rotated pole (e.g. CORDEX)
     ('nlon', 'nlat'), ('ni', 'nj'),  # CESM/POP, CICE
     ('xh', 'yh'), ('xq', 'yh'), ('xh', 'yq'), ('xq', 'yq'),  # GFDL/MOM6 C-grid: tracer, u, v and corner points
@@ -18,7 +19,7 @@ HORIZONTAL_FAMILIES = (
 # default spatial dimensions and vertical coordinates
 DEFAULT_DIMS = {
     'horizontal': [dim for family in HORIZONTAL_FAMILIES for dim in family],
-    'mask': ['lev', 'nz1', 'nz', 'depth', 'depth_full', 'depth_half'],
+    'mask': ['lev', 'nz1', 'nz', 'depth', 'depthu', 'depthv', 'deptht', 'depth_full', 'depth_half'],
     'time': ['time', 'time_counter', 'valid_time', 'forecast_time'],
 }
 
@@ -183,9 +184,9 @@ class GridType:
         """
         Keep only the horizontal dimensions of a single grid, following HORIZONTAL_FAMILIES.
 
-        Dimensions declared in extra_dims come first and are used as found. Otherwise, the first
-        family of HORIZONTAL_FAMILIES whose dimensions are all in the data is used. With override,
-        only the declared dimensions are used.
+        With override, only the declared dimensions are looked for, so they are used as found.
+        Otherwise, dimensions declared in extra_dims come first and are used as found, then the
+        first family of HORIZONTAL_FAMILIES whose dimensions are all in the data is used.
 
         Args:
             horizontal_dims (list): The horizontal dimensions identified in the data.
@@ -195,15 +196,15 @@ class GridType:
         Returns:
             list: The horizontal dimensions of the selected family, None if there are none.
         """
-        if not horizontal_dims:
-            return None
+        if not horizontal_dims or override:
+            return horizontal_dims
 
         declared = [dim for dim in horizontal_dims if dim in ((extra_dims or {}).get('horizontal') or [])]
-        if declared or override:
-            return declared or None
+        if declared:
+            return declared
 
         for family in HORIZONTAL_FAMILIES:
-            if all(dim in horizontal_dims for dim in family):
+            if set(family) <= set(horizontal_dims):
                 return [dim for dim in horizontal_dims if dim in family]
         return None
 
