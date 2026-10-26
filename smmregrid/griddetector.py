@@ -4,11 +4,7 @@ Possible matches are: Regular, GaussianRegular, GaussianReduced, Curvilinear, HE
 """
 import numpy as np
 import xarray as xr
-from .util import find_coord
-
-# Define coordinate names for latitude and longitude
-LAT_COORDS = ["lat", "latitude", "nav_lat"]
-LON_COORDS = ["lon", "longitude", "nav_lon"]
+from .gridcoordinates import GridCoordinates, LAT_COORDS, LON_COORDS  # noqa: F401
 
 
 class GridDetector:
@@ -16,14 +12,16 @@ class GridDetector:
     Class to detect the grid type of a given xarray dataset or dataarray.
     
     Args:
-        lon (str): The name of the longitude coordinate. Default is "lon". Expand the list of possible names from LON_COORDS.
-        lat (str): The name of the latitude coordinate. Default is "lat". Expand the list of possible names from LAT_COORDS.
+        lon (str): The name of the longitude coordinate, preferred over the detection done by GridCoordinates
+                   (CF attributes, then the names in LON_COORDS).
+        lat (str): The name of the latitude coordinate, preferred over the detection done by GridCoordinates
+                   (CF attributes, then the names in LAT_COORDS).
     """
 
-    def __init__(self, lon="lon", lat="lat"):
+    def __init__(self, lon=None, lat=None):
 
-        self.lon_coords = set(LON_COORDS + [lon])
-        self.lat_coords = set(LAT_COORDS + [lat])
+        self.lon = lon
+        self.lat = lat
 
     def detect_grid(self, data):
         """
@@ -47,8 +45,8 @@ class GridDetector:
             return "HEALPix"
 
         # Find latitude and longitude coordinates
-        lat = find_coord(data, self.lat_coords)
-        lon = find_coord(data, self.lon_coords)
+        coords = GridCoordinates(data.coords, lat=self.lat, lon=self.lon)
+        lat, lon = coords.lat, coords.lon
 
         if not lat or not lon:
             return "Unknown"
