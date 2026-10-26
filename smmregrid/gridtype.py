@@ -6,7 +6,8 @@ import copy
 # matches more than one family, the first complete one is used (the first partial one otherwise)
 HORIZONTAL_FAMILIES = (
     ('lon', 'lat'), ('longitude', 'latitude'), ('nav_lon', 'nav_lat'),  # regular, gaussian, NEMO
-    ('nlon', 'nlat'), ('ni', 'nj'), ('xh', 'yh', 'xq', 'yq'),  # CESM/POP, CICE, GFDL/MOM6
+    ('nlon', 'nlat'), ('ni', 'nj'),  # CESM/POP, CICE
+    ('xh', 'yh'), ('xq', 'yh'), ('xh', 'yq'), ('xq', 'yq'),  # GFDL/MOM6 C-grid: tracer, u, v and corner points
     ('i', 'j'), ('x', 'y'),  # generic curvilinear
     ('ncells',), ('cell',), ('cells',), ('nod2',), ('elem',), ('pix',),  # unstructured, one dimension
     ('rgrid',), ('values',), ('value',),

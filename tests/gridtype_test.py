@@ -14,7 +14,8 @@ from smmregrid import GridType
     (['time', 'lat', 'lon', 'x'], ['lat', 'lon'], ['x']),  # only the first family
     (['lat', 'lon', 'nlat', 'nlon'], ['lat', 'lon'], ['nlat', 'nlon']),
     (['nlat', 'nlon', 'lat'], ['nlat', 'nlon'], ['lat']),  # complete family wins over partial
-    (['time', 'yq', 'xh'], ['yq', 'xh'], []),  # MOM6 staggering
+    (['time', 'yq', 'xh'], ['yq', 'xh'], []),  # MOM6 v points
+    (['yq', 'xq'], ['yq', 'xq'], []),  # MOM6 corner points
     (['ncells', 'values'], ['ncells'], ['values']),  # unstructured: one dimension only
 ])
 def test_gridtype(definition, dims, other):
