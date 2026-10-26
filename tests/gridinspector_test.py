@@ -3,7 +3,7 @@
 import os
 import pytest
 import xarray
-from smmregrid import GridInspector
+from smmregrid import GridInspector, CdoGenerate, Regridder
 
 
 INDIR = 'tests/data'
@@ -15,6 +15,9 @@ INDIR = 'tests/data'
     ("so3d-nemo.nc", 1, ["i", "j", "lev"], ['so'], "Curvilinear"),
     ("ua-so_mix_ecearth.nc", 2, ["lon", "lat"], ['ua'], "GaussianRegular"),
     ("temp3d-fesom.nc", 1, ['nod2', 'nz1'], ['temp'], "Unstructured"),
+    ("sftof-cesm2.nc", 1, ["nlat", "nlon"], ['sftof'], "Curvilinear"),
+    ("areacello-gfdl.nc", 1, ["yh", "xh"], ['areacello'], "Curvilinear"),
+    ("siconc-cesm2.nc", 1, ["nj", "ni"], ['siconc'], "Curvilinear"),
 ])
 def test_basic_gridinspector(file, ngrids, firstdims, variables, kind):
     """test for GridInspector which includes also GridDetector and GridType"""
@@ -67,3 +70,14 @@ def test_get_gridtype_sample(file, variables):
     grids = gridinspect.get_gridtype()
     sample = gridinspect.get_gridtype_sample_variable(grids)
     assert sample == variables
+
+
+def test_no_gridtype_raise():
+    """GridInspector finds no grid on unknown horizontal dimensions, and CdoGenerate explains it"""
+    xfield = xarray.open_dataset(os.path.join(INDIR, '2t-era5.nc')).rename({'lon': 'foo', 'lat': 'bar'})
+    assert GridInspector(xfield).get_gridtype() == []
+    with pytest.raises(ValueError, match="no known horizontal dimension"):
+        CdoGenerate(xfield, 'r180x90').weights(method='bil')
+    weights = CdoGenerate(os.path.join(INDIR, '2t-era5.nc'), 'r180x90').weights(method='bil')
+    with pytest.raises(ValueError, match="Cannot find any horizontal dimension"):
+        Regridder(weights=weights).regrid(xfield['2t'])

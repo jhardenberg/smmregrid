@@ -169,7 +169,8 @@ class Regridder(object):
 
             len_grids = len(self.grids)
             if len_grids == 0:
-                raise ValueError('Cannot find any gridtype in your data, aborting!')
+                raise ValueError(f'Cannot find any gridtype in your data with dimensions {list(source_grid_array.dims)}: '
+                                 'no known horizontal dimension found, use extra_dims to declare them')
             if len_grids == 1:
                 self.loggy.info('One gridtype found! Standard procedure')
             else:
@@ -301,6 +302,11 @@ class Regridder(object):
             return out.drop_vars(degen_vars)
 
         if isinstance(source_data, xarray.DataArray):
+            # a single array must have a grid: the silent fallback of regrid_array() is for the
+            # variables of a Dataset without horizontal dimensions (bounds, scalars)
+            if not GridInspector(source_data, extra_dims=self.extra_dims, loglevel=self.loglevel).get_gridtype():
+                raise ValueError(f'Cannot find any horizontal dimension in the data with dimensions {list(source_data.dims)}: '
+                                 'use extra_dims or horizontal_dims to declare them')
             return self.regrid_array(source_data)
 
         raise TypeError('The object provided is not a Xarray object!')
