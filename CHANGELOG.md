@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## Unreleased
 
-- Python >= 3.10 is required: support for Python 3.8 and 3.9 is dropped (#PR)
+- Python >= 3.10 is required: support for Python 3.8 and 3.9 is dropped (#82)
 
 ## [v0.2.0]
 
