@@ -644,8 +644,9 @@ class Regridder(object):
 
         # use the frac area of the destination to further mask the data
         if self.remap_area_min > 0.0:
-            area_min = dask.array.broadcast_to(dst_frac_area, target_dask.shape)
-            target_dask = dask.array.where(area_min < self.remap_area_min, numpy.nan, target_dask)
+            mask_shape = [1 for _ in kept_shape] + [-1]
+            frac_mask = dst_frac_area.data.reshape(mask_shape) < self.remap_area_min
+            target_dask = dask.array.where(frac_mask, numpy.nan, target_dask)
 
         # reshape the target DataArray
         target_dask = dask.array.reshape(
