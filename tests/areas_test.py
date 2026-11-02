@@ -1,7 +1,9 @@
 """Set of basic tests for smmregrid"""
 
 import os
+import tempfile
 import pytest
+import xarray
 from smmregrid import CdoGenerate
 
 
@@ -53,3 +55,13 @@ def test_nosource_areas_target():
     earth_surface = area.cell_area.values.sum() / 1e6
     assert area.cell_area.shape == (91, 180)
     assert earth_surface == pytest.approx(EARTH_SURFACE, abs=TOLERANCE)
+
+
+@pytest.mark.parametrize("method", ["areas", "weights"])
+def test_tmp_grid_files_removed(method, tmp_path, monkeypatch):
+    """Temporary grid files written for xarray grids do not outlive the call"""
+    monkeypatch.setattr(tempfile, 'tempdir', str(tmp_path))
+    grid = xarray.open_dataset(tfile)
+    generator = CdoGenerate(grid, 'r180x90')
+    getattr(generator, method)()
+    assert list(tmp_path.iterdir()) == []

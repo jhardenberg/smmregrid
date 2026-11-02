@@ -71,6 +71,8 @@ class CdoGenerate():
         # define grid filenames
         self.source_grid_filename = None
         self.target_grid_filename = None
+        # temporary grid files written by _prepare_grid, removed once CDO is done with them
+        self._tmp_grid_files = []
 
         # assign cdo bin file and get envrinment file
         self.cdo = resolve_cdo(cdo)
@@ -127,6 +129,8 @@ class CdoGenerate():
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
             grid = self._first_time_step(grid).load()
             grid_file = tempfile.NamedTemporaryFile(delete=False)
+            grid_file.close()
+            self._tmp_grid_files.append(grid_file.name)
             grid.to_netcdf(grid_file.name)
             self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
             return grid_file.name
@@ -190,15 +194,18 @@ class CdoGenerate():
         # verify that method and normalization are suitable
         self._safe_check(method, remap_norm)
 
-        # prepare grid
-        self.source_grid_filename = self._prepare_grid(self.source_grid)
-        self.target_grid_filename = self._prepare_grid(self.target_grid, target=True)
+        try:
+            # prepare grid
+            self.source_grid_filename = self._prepare_grid(self.source_grid)
+            self.target_grid_filename = self._prepare_grid(self.target_grid, target=True)
 
-        # Generate weights for 2D or 3D grid based on mask_dim presence
-        if not mask_dim:
-            return self._weights_2d(method, extrapolate, remap_norm)
-        return self._weights_3d(method, extrapolate, remap_norm,
-                                nproc, mask_dim)
+            # Generate weights for 2D or 3D grid based on mask_dim presence
+            if not mask_dim:
+                return self._weights_2d(method, extrapolate, remap_norm)
+            return self._weights_3d(method, extrapolate, remap_norm,
+                                    nproc, mask_dim)
+        finally:
+            self._remove_tmp_grids()
 
     def _weights_2d(self, method, extrapolate, remap_norm):
         """Generate 2D weights using CDO."""
@@ -337,10 +344,15 @@ class CdoGenerate():
         finally:
             weight_file.close()
 
-    # def _remove_tmpfile(self, tmpfile):
-    #     """Helper function to clean the tempfile grid (file or dataset)."""
-    #     if not isinstance(tmpfile, str):
-    #         os.remove(tmpfile.name)
+    def _remove_tmp_grids(self):
+        """Remove the temporary grid files written by _prepare_grid."""
+        for tmpfile in self._tmp_grid_files:
+            self.loggy.debug("Removing temporary grid file %s", tmpfile)
+            try:
+                os.remove(tmpfile)
+            except FileNotFoundError:
+                pass
+        self._tmp_grid_files = []
 
     def weightslist_to_3d(self, weights_list, method='ycon', mask_coord=xarray.DataArray):
         """Combine a list of 2D CDO weights into a 3D one.
@@ -380,19 +392,22 @@ class CdoGenerate():
     def areas(self, target=False):
         """Generate source areas or target areas"""
 
-        if not target:
-            self.loggy.info('Generating areas for source grid!')
-            # if not self.source_grid:
-            #    raise TypeError('Source grid is not specified, cannot provide any area')
-            return self._areas(self.source_grid, cdo_extra=self.cdo_extra,
-                               cdo_options=self.cdo_options)
+        try:
+            if not target:
+                self.loggy.info('Generating areas for source grid!')
+                # if not self.source_grid:
+                #    raise TypeError('Source grid is not specified, cannot provide any area')
+                return self._areas(self.source_grid, cdo_extra=self.cdo_extra,
+                                   cdo_options=self.cdo_options)
 
-        if self.target_grid:
+            if self.target_grid:
 
-            self.loggy.info('Generating areas for target grid!')
-            return self._areas(self.target_grid)
+                self.loggy.info('Generating areas for target grid!')
+                return self._areas(self.target_grid)
 
-        raise TypeError('Target grid is not specified, cannot provide any area')
+            raise TypeError('Target grid is not specified, cannot provide any area')
+        finally:
+            self._remove_tmp_grids()
 
     def _areas(self, filename, cdo_extra=None, cdo_options=None):
         """Generate areas in a similar way of what done for weights"""
