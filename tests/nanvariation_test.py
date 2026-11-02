@@ -208,7 +208,7 @@ def test_na_thres_auto_resolved_per_method():
 
 @pytest.mark.parametrize("filein, expected", [('tests/data/so3d-nemo.nc', True), ('tests/data/onlytos-ipsl.nc', False)])
 def test_skipna_vertical_dim_warning(filein, expected):
-    """skipna warns if the source grid has a vertical dimension, and only then."""
+    """skipna warns if the source grid has a mask dimension, and only then."""
 
     records = []
 
@@ -223,4 +223,4 @@ def test_skipna_vertical_dim_warning(filein, expected):
         CdoGenerate(xr.open_dataset(filein), 'r180x90', skipna=True).weights(method='con')
     finally:
         logger.removeHandler(handler)
-    assert any('vertical dimension' in r.getMessage() for r in records) == expected
+    assert any('mask dimension' in r.getMessage() for r in records) == expected
