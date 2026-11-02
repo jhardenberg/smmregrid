@@ -90,7 +90,11 @@ class CdoGenerate():
 
     def _first_time_step(self, grid):
         """Select the first time step of a Dataset/DataArray, keeping the time dimension(s)."""
-        time_dims = GridInspector(grid, loglevel=self.loglevel).get_gridtype()[0].time_dims or []
+        grids = GridInspector(grid, loglevel=self.loglevel).get_gridtype()
+        if not grids:
+            raise ValueError(f'Cannot find any gridtype in the grid with dimensions {list(grid.dims)}: '
+                             'no known horizontal dimension found, use extra_dims to declare them')
+        time_dims = grids[0].time_dims or []
         return grid.isel({dim: slice(0, 1) for dim in time_dims})
 
     def _prepare_grid(self, grid, target=False):
