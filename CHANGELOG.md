@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-- Warn when `skipna=True` is used with a source grid that has a mask dimension (e.g. a vertical one) with more than one level: it is ignored, as the weights are generated from the first level only and applied to all levels (#78, #86)
+- Warn when `skipna=True` is used with a source grid that has a mask dimension (e.g. a vertical one) with more than one level: it is ignored, as the weights are generated from the first level only and applied to all levels (#86)
 - The source grid used to generate the weights is sliced to the first element along all the non-horizontal dimensions (time and any other), not only time; with `skipna` the mask dimension is sliced too, since the weights are 2D. The grid to be filled and written is smaller and faster (#86)
 - Target areas from `CdoGenerate.areas()` have lat/lon rounded to the same number of decimals (`COORD_DECIMALS`) as the regridded data, so that their coordinates are aligned exactly (#89)
 - Per-level regridding messages (`Interpolating from CDO ...`, `Regridding from ...`, `Assuming gridtype ...`) moved from `info` to `debug`, and 3D regridding logs a single `info` line per variable instead (#88)
