@@ -107,6 +107,14 @@ class CdoGenerate():
             dims = dims + [gridtype.mask_dim]
         return grid.isel({dim: slice(0, 1) for dim in dims})
 
+    def _write_grid(self, grid):
+        """Save a grid (already sliced and loaded in memory) to a temporary file and return its name.
+        Loading before writing avoids a threaded dask write of the whole dataset under the netCDF/HDF5 lock."""
+        grid_file = tempfile.NamedTemporaryFile(delete=False)
+        grid.to_netcdf(grid_file.name)
+        self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
+        return grid_file.name
+
     def _prepare_grid(self, grid, target=False, mask_dim=None):
         """Helper function to prepare grid (file or dataset)."""
 
@@ -122,7 +130,7 @@ class CdoGenerate():
                 self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
                 grid = xarray.open_dataset(grid)
             # the grid needs one slice only: do not copy (and fill) the whole dataset
-            grid = self._first_slice(grid, mask_dim, slice_mask_dim=True)
+            grid = self._first_slice(grid, mask_dim, slice_mask_dim=True).load()
             # Fill NaNs with zeros for area/weights generation. In a Dataset, fill only
             # floating point variables, since fillna(0) fails on datetime ones (e.g. time_bnds)
             if isinstance(grid, xarray.Dataset):
@@ -130,16 +138,11 @@ class CdoGenerate():
                                 keep_attrs=True)
             else:
                 grid = grid.fillna(0)
+            return self._write_grid(grid)
 
         # if grid is a Dataset or DataArray, save it to a temporary file
-        # Only one time step is needed, loaded in memory before writing: this avoids a
-        # threaded dask write of the whole dataset under the netCDF/HDF5 lock
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
-            grid = self._first_slice(grid, mask_dim, slice_mask_dim=self.skipna and not target).load()
-            grid_file = tempfile.NamedTemporaryFile(delete=False)
-            grid.to_netcdf(grid_file.name)
-            self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
-            return grid_file.name
+            return self._write_grid(self._first_slice(grid, mask_dim).load())
 
         # if grid is a string, assume it's a file path
         if isinstance(grid, str):
