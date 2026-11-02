@@ -35,7 +35,7 @@
 - Logging: `self.loggy = setup_logger(level=loglevel, name='smmregrid.<Class>')`; pass `loglevel` through every constructor; %-style logger args; no `print()`.
 - Keep results lazy for Dask-backed inputs and preserve xarray coordinates and attributes. Do not call `.compute()`/`.values` or use Dask reductions as Python conditions (`if array.all()`) in the regridding path.
 - Respect the normalization recorded in CDO weights: `fracarea` normalizes by covered source area; `destarea` by full destination area and may sum to < 1. Do not renormalize `destarea` results when handling missing values.
-- `remap_area_min` (0–1) masks target cells with insufficient source coverage in conservative remapping.
+- `remap_area_min` (0–1) masks target cells with insufficient source coverage in conservative remapping. The coverage is that of the valid source points: `dst_grid_frac` without `skipna`, `denominator / total_weights * dst_grid_frac` computed at each call with `skipna` (whose weights come from an unmasked grid).
 
 ## Testing
 

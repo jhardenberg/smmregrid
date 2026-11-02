@@ -108,7 +108,9 @@ Constructor Parameters
 
 * **remap_area_min** (*float*, default: 0.5): Minimum fractional area for conservative remapping.
   Grid cells with area fraction below this threshold are masked as NaN. Range: 0.0-1.0.
-  It has no effect on non-conservative methods.
+  It has no effect on non-conservative methods. The area fraction is the part of the target cell covered
+  by valid (non-NaN) source points, as in CDO: with ``skipna=True`` it is computed at each call from the
+  valid source points, so that the result is the same with and without ``skipna``.
 
 * **transpose** (*bool*, default: True): If True, transposes the output of 3D regridding (with ``mask_dim``)
   so that the mask dimension appears just before the spatial coordinates, e.g. ``(time, lev, lat, lon)``

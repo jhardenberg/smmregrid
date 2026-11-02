@@ -81,7 +81,8 @@ class Regridder(object):
                                     interpolate (default: None).
             method (str): Interpolation method to use (default: 'con').
             remap_area_min (float): Minimum area for remapping in conservative remapping.
-                                    Larger values avoid mask erosion.
+                                    Larger values avoid mask erosion. It is the fraction of the target
+                                    cell covered by valid source points, also with skipna.
             transpose (bool): If True, transpose the output such that
                               the masked coordinate is placed just before the
                               other spatial coordinates (default: True).
@@ -637,13 +638,19 @@ class Regridder(object):
             source_array = numpy.reshape(source_array, kept_shape + [-1])
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
+        normalization = weights.attrs.get('normalization')
+        # with skipna and conservative weights the covered fraction depends on the valid source points
+        # of each call: remap_area_min is applied in tensordot, and not with the static dst_grid_frac
+        area_min_in_tensordot = skipna and normalization in ('fracarea', 'destarea')
+
         target_dask = self.tensordot(
             source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres,
-            total_weights=total_weights, normalization=weights.attrs.get('normalization')
+            total_weights=total_weights, normalization=normalization,
+            dst_frac_area=dst_frac_area, remap_area_min=self.remap_area_min
         )
 
         # use the frac area of the destination to further mask the data
-        if self.remap_area_min > 0.0:
+        if self.remap_area_min > 0.0 and not area_min_in_tensordot:
             mask_shape = [1 for _ in kept_shape] + [-1]
             frac_mask = dst_frac_area.data.reshape(mask_shape) < self.remap_area_min
             target_dask = dask.array.where(frac_mask, numpy.nan, target_dask)
@@ -682,7 +689,7 @@ class Regridder(object):
         return target_da
     
     def tensordot(self, source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres,
-                  total_weights=None, normalization=None):
+                  total_weights=None, normalization=None, dst_frac_area=None, remap_area_min=0.0):
         """
         Apply the sparse weights matrix to the flattened source array, handling NaNs.
 
@@ -747,6 +754,13 @@ class Regridder(object):
             anywhere in the source changed the values of all the partially covered target cells
             (e.g. coasts, or the boundaries of a regional grid), even very far from it.
 
+            ``remap_area_min`` is the fraction of the target cell covered by valid source points. Without
+            skipna it is the ``dst_grid_frac`` of the weights, generated with the mask of the data. With
+            skipna ``dst_grid_frac`` is purely geometric (``G_j``), so the covered fraction is computed here
+            as ``denominator_j / total_j * G_j`` (for ``fracarea`` ``total_j = 1``; for ``destarea``
+            ``total_j = G_j`` and it is ``denominator_j``). It is applied only to the conservative methods,
+            as in CDO, since ``dst_grid_frac`` is 0 or 1 for the others.
+
             In all cases target cells with no valid source point (``denominator_j == 0``) are NaN,
             and not zero, and ``1 - denominator_j / total_j`` is the fraction of missing weights
             used for the ``na_thres`` check.
@@ -800,7 +814,15 @@ class Regridder(object):
         if total_weights is None:
             total_weights = compute_total_weights(weights_matrix)
         missing_fraction = 1.0 - denominator / total_weights
-        return dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
+        target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
+
+        # remap_area_min: the fraction of the destination cell covered by the valid source points is
+        # (denominator / total_weights) * dst_grid_frac, with dst_grid_frac the geometric one of the
+        # weights generated without mask. This is what CDO computes with the actual mask of the data
+        if remap_area_min > 0.0 and normalization in ('fracarea', 'destarea'):
+            covered_fraction = denominator / total_weights * dst_frac_area.data
+            target_dask = dask.array.where(covered_fraction < remap_area_min, numpy.nan, target_dask)
+        return target_dask
 
     def _check_nan_variation(self, source_grid, gridtype):
         """
