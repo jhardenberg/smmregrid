@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 - Preserve Dask chunking along extra dimensions (e.g. time) in `remap_area_min` masking by broadcasting lazily instead of using `dask.array.broadcast_to`, preventing large memory allocations (#80)
-- `remap_area_min` with `skipna` and conservative remapping now masks the target cells by the area covered by the valid source points, computed at each call, as CDO and as the same regridding without `skipna` do. Previously the geometric coverage of the grid was used and the coastal and masked cells were never masked, e.g. 14778 more valid cells than CDO on a NEMO 3D field with the default `remap_area_min=0.5`. Behaviour change for `skipna=True` users with the default `remap_area_min` (#PR)
+- `remap_area_min` with `skipna` and conservative remapping now masks the target cells by the area covered by the valid source points, computed at each call, as CDO and as the same regridding without `skipna` do. Previously the geometric coverage of the grid was used and the coastal and masked cells were never masked, e.g. 14778 more valid cells than CDO on a NEMO 3D field with the default `remap_area_min=0.5`. Behaviour change for `skipna=True` users with the default `remap_area_min` (#85)
 - Python >= 3.10 is required: support for Python 3.8 and 3.9 is dropped (#82)
 
 
