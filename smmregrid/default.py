@@ -14,3 +14,6 @@ CDO_MAP_METHODS = {
 
 # maximum time (s) for a CDO weights generation, to avoid hanging forever
 CDO_TIMEOUT = 600
+
+# decimals of lat/lon coordinates, shared by regridded data and target areas to keep them aligned
+COORD_DECIMALS = 10
