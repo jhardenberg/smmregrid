@@ -88,12 +88,17 @@ class CdoGenerate():
         if remap_norm not in SUPPORTED_NORM:
             raise ValueError('The remap normalization provided is not supported!')
 
-    def _first_time_step(self, grid):
-        """Select the first time step of a Dataset/DataArray, keeping the time dimension(s)."""
+    def _first_time_step(self, grid, warn_mask_dim=False):
+        """Select the first time step of a Dataset/DataArray, keeping the time dimension(s).
+        With warn_mask_dim, warn if the grid has a vertical (mask) dimension."""
         grids = GridInspector(grid, loglevel=self.loglevel).get_gridtype()
         if not grids:
             raise ValueError(f'Cannot find any gridtype in the grid with dimensions {list(grid.dims)}: '
                              'no known horizontal dimension found, use extra_dims to declare them')
+        if warn_mask_dim and grids[0].mask_dim:
+            self.loggy.warning('skipna is True: the source grid has a vertical dimension %s, which is ignored. '
+                               'The weights are generated from a 2D source grid and applied to all levels, '
+                               'so the source grid is expected to be 2D', grids[0].mask_dim)
         time_dims = grids[0].time_dims or []
         return grid.isel({dim: slice(0, 1) for dim in time_dims})
 
@@ -112,7 +117,7 @@ class CdoGenerate():
                 self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
                 grid = xarray.open_dataset(grid)
             # the grid needs one time step only: do not copy (and fill) the whole dataset
-            grid = self._first_time_step(grid)
+            grid = self._first_time_step(grid, warn_mask_dim=True)
             # Fill NaNs with zeros for area/weights generation. In a Dataset, fill only
             # floating point variables, since fillna(0) fails on datetime ones (e.g. time_bnds)
             if isinstance(grid, xarray.Dataset):
