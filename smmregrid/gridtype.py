@@ -11,6 +11,7 @@ HORIZONTAL_FAMILIES = (
     ('nlon', 'nlat'), ('ni', 'nj'),  # CESM/POP, CICE
     ('xh', 'yh'), ('xq', 'yh'), ('xh', 'yq'), ('xq', 'yq'),  # GFDL/MOM6 C-grid: tracer, u, v and corner points
     ('i', 'j'), ('x', 'y'),  # generic curvilinear
+    ('xc', 'yc'), #osi-saf dataset
     ('ncells',), ('cell',), ('cells',), ('ncol',), ('nod2',), ('elem',), ('pix',),  # unstructured, one dimension
     ('rgrid',), ('values',), ('value',),
     ('i',), ('x',),  # a lone i or x is an unstructured index (e.g. ICON in CMIP6, HEALPix)
