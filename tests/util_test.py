@@ -12,10 +12,10 @@ from smmregrid.gridinspector import GridInspector
 def mock_exists(path):
     return path == "/valid/file/path.nc"
 
-# Patch os.path.exists to use the mock function
+# Patch os.path.exists to use the mock function (only for test_check_gridfile: the other tests open real files)
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def mock_os_path_exists(monkeypatch):
     monkeypatch.setattr(os.path, "exists", mock_exists)
 
@@ -30,7 +30,7 @@ def mock_os_path_exists(monkeypatch):
     ("/invalid/file/path.nc", None, FileNotFoundError),  # Invalid file path
     (123, None, TypeError),                              # Invalid type (not supported)
 ])
-def test_check_gridfile(filename, expected, raises):
+def test_check_gridfile(mock_os_path_exists, filename, expected, raises):
     """simple test for check grid file"""
     if raises:
         with pytest.raises(raises):

@@ -43,4 +43,3 @@ def test_print_repr():
     grid = CdoGrid("global_1.0")
     expected_repr = "CDOGrid(grid_str='global_1.0', grid_kind='global_regular')"
     assert repr(grid) == expected_repr
-    assert grid.grid_kind == 'global_regular'

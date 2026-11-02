@@ -1,4 +1,4 @@
-"""Tests for smmregrid to verify level selection"""
+"""Tests for smmregrid to verify remap_area_min"""
 
 import os
 import pytest
@@ -14,19 +14,19 @@ tfile = os.path.join(INDIR, 'r360x180.nc')
 RANGE = 10
 
 
-@pytest.mark.parametrize("fraction,nan", [
+@pytest.mark.parametrize("fraction,valid", [
     ("0.0", 11607),
     (0.5, 10731),
     ("0.9", 9866),
 ])
-def test_remap_area_min(fraction, nan):
-    """test and assert with CDO multigrids"""
+def test_remap_area_min(fraction, valid):
+    """Number of valid target points, as the minimum covered fraction of the target cell increases"""
 
     regridder = Regridder(ifile, 'r180x90', remap_area_min=fraction, loglevel='debug')
     data = xr.open_dataset(ifile)
     regrid = regridder.regrid(data['tos'].isel(time=0))
-    nanfound = (~np.isnan(regrid)).sum().values
-    assert pytest.approx(nanfound, abs=RANGE) == nan
+    nvalid = (~np.isnan(regrid)).sum().values
+    assert pytest.approx(nvalid, abs=RANGE) == valid
 
 
 def test_remap_area_min_dask_chunks():
