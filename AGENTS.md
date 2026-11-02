@@ -28,7 +28,7 @@
 - Support Python >= 3.10. CI tests Python 3.10, 3.14 and 3.15 on Linux and macOS, on PRs to `main` and weekly. Breakage in versions between them can still surface late (see v0.1.5). Avoid syntax newer than 3.10.
 - Public API is `__all__` in `smmregrid/__init__.py`; `__version__` lives there too.
 - New parameters need defaults. Renamed parameters go through `util.deprecated_argument` (see `vertical_dim` → `mask_dim`).
-- Every user-visible change gets a `CHANGELOG.md` entry under `## Unreleased` (Keep a Changelog), ending with `(#PR)`.
+- Every user-visible change gets a `CHANGELOG.md` entry under `## [Unreleased]` (Keep a Changelog), ending with `(#PR)`. Cite only the pull request in the changelog, not the issue.
 
 ## Code conventions
 
