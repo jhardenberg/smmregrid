@@ -15,7 +15,7 @@ from .cdogrid import CdoGrid
 from .gridinspector import GridInspector
 from .util import tolist, resolve_na_thres
 from .cdobinary import resolve_cdo, check_cdo_version
-from .default import DEFAULT_NA_THRES, SUPPORTED_METHODS, SUPPORTED_NORM, CDO_TIMEOUT
+from .default import DEFAULT_NA_THRES, SUPPORTED_METHODS, SUPPORTED_NORM, CDO_TIMEOUT, COORD_DECIMALS
 
 
 class CdoGenerate():
@@ -423,6 +423,10 @@ class CdoGenerate():
             subprocess.check_output(command, stderr=subprocess.STDOUT, env=self.env)
 
             areas = xarray.open_dataset(areas_file.name, engine="netcdf4")
+            # same rounding of lat/lon as the regridded data, so that coordinates are aligned
+            for coord in ['lat', 'lon']:
+                if coord in areas.coords:
+                    areas[coord] = areas[coord].round(COORD_DECIMALS)
             areas.cell_area.attrs['units'] = 'm2'
             areas.cell_area.attrs['standard_name'] = 'area'
             areas.cell_area.attrs['long_name'] = 'area of grid cell'

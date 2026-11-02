@@ -45,7 +45,7 @@ from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weig
 from .log import setup_logger
 from .gridinspector import GridInspector
 from .util import detect_nan_variation_dims, tolist, resolve_na_thres
-from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES, CDO_MAP_METHODS
+from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES, CDO_MAP_METHODS, COORD_DECIMALS
 
 # default minimum area for conservative remapping
 
@@ -545,7 +545,7 @@ class Regridder(object):
             # Clean up coordinates
             da = remove_degenerate_axes(xarray.DataArray(values, dims=tgt_dims))
             # Convert to degrees if needed, rounding to avoid numerical errors
-            da = numpy.round(da * axis_scale, 10)
+            da = numpy.round(da * axis_scale, COORD_DECIMALS)
             da.attrs = attrs[coord]
             coords[coord] = da
 
