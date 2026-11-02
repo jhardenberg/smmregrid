@@ -39,10 +39,10 @@ def test_gaussian_regular(method):
     assert fff is True
 
 
-@pytest.mark.parametrize("remap_area_min", ['0.0', '0.5', '0.75'])
-def test_gaussian_area_min(remap_area_min):
-    xfield = xr.open_dataset(os.path.join(INDIR, 'tas-ecearth.nc'))
-    fff = check_cdo_regrid(xfield, tfile,
+# the land mask makes coastal target cells partially covered, so remap_area_min changes the output
+@pytest.mark.parametrize("remap_area_min", ['0.0', '0.5', '0.9'])
+def test_curvilinear_area_min(remap_area_min):
+    fff = check_cdo_regrid(os.path.join(INDIR, 'onlytos-ipsl.nc'), tfile,
                            remap_method='con', remap_area_min=remap_area_min)
     assert fff is True
 

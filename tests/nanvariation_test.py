@@ -171,7 +171,8 @@ def test_skipna_3d_as_2d(init):
     """With skipna the weights do not depend on the level, so 3D data are regridded as 2D:
     a single weights matrix and no mask dimension, whatever the initialization (also when
     mask_dim is given, which is ignored, and from 2D weights, which used to fail on 3D data).
-    The output must be the same in all cases, with the vertical dimension before the horizontal ones."""
+    The output must be the same in all cases, and the same as the regridding without skipna
+    (per-level weights), with the vertical dimension before the horizontal ones."""
 
     filein = 'tests/data/so3d-nemo.nc'
     data = xr.open_dataset(filein)
@@ -188,7 +189,8 @@ def test_skipna_3d_as_2d(init):
     out = regridder.regrid(data)['so']
     assert out.dims == ('time', 'lev', 'lat', 'lon')
 
-    reference = Regridder(source_grid=filein, target_grid='r180x90', skipna=True,
+    # without skipna the weights are per level (mask_dim): for a mask constant in time the result is the same
+    reference = Regridder(source_grid=filein, target_grid='r180x90', skipna=False,
                           loglevel='warning').regrid(data)['so']
     xr.testing.assert_allclose(out.compute(), reference.compute())
 
