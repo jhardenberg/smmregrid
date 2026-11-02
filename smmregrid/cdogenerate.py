@@ -88,16 +88,26 @@ class CdoGenerate():
         if remap_norm not in SUPPORTED_NORM:
             raise ValueError('The remap normalization provided is not supported!')
 
-    def _first_time_step(self, grid):
-        """Select the first time step of a Dataset/DataArray, keeping the time dimension(s)."""
-        grids = GridInspector(grid, loglevel=self.loglevel).get_gridtype()
+    def _first_slice(self, grid, mask_dim=None, slice_mask_dim=False):
+        """Select the first element along all the non-horizontal dimensions (time and others), keeping them.
+        The mask dimension is kept, unless slice_mask_dim (skipna source grid) where it is sliced too,
+        since the weights are 2D: a warning is raised if it has more than one level, as the other
+        levels are ignored."""
+        grids = GridInspector(grid, extra_dims={'mask': [mask_dim] if mask_dim else None}, loglevel=self.loglevel).get_gridtype()
         if not grids:
             raise ValueError(f'Cannot find any gridtype in the grid with dimensions {list(grid.dims)}: '
                              'no known horizontal dimension found, use extra_dims to declare them')
-        time_dims = grids[0].time_dims or []
-        return grid.isel({dim: slice(0, 1) for dim in time_dims})
+        gridtype = grids[0]
+        dims = (gridtype.time_dims or []) + gridtype.other_dims
+        if slice_mask_dim and gridtype.mask_dim:
+            if grid.sizes[gridtype.mask_dim] > 1:
+                self.loggy.warning('skipna is True: the source grid has a mask dimension %s, which is ignored. '
+                                   'The weights are generated from the first level only and applied to all '
+                                   'levels, so the source grid is expected to be 2D', gridtype.mask_dim)
+            dims = dims + [gridtype.mask_dim]
+        return grid.isel({dim: slice(0, 1) for dim in dims})
 
-    def _prepare_grid(self, grid, target=False):
+    def _prepare_grid(self, grid, target=False, mask_dim=None):
         """Helper function to prepare grid (file or dataset)."""
 
         # prepare grid: if source_grid is a CDO grid, use it as is, otherwise prepare the file
@@ -111,8 +121,8 @@ class CdoGenerate():
             if not isinstance(grid, (xarray.Dataset, xarray.DataArray)):
                 self.loggy.debug("Grid is not an xarray Dataset/DataArray, attempting to open as a file.")
                 grid = xarray.open_dataset(grid)
-            # the grid needs one time step only: do not copy (and fill) the whole dataset
-            grid = self._first_time_step(grid)
+            # the grid needs one slice only: do not copy (and fill) the whole dataset
+            grid = self._first_slice(grid, mask_dim, slice_mask_dim=True)
             # Fill NaNs with zeros for area/weights generation. In a Dataset, fill only
             # floating point variables, since fillna(0) fails on datetime ones (e.g. time_bnds)
             if isinstance(grid, xarray.Dataset):
@@ -125,7 +135,7 @@ class CdoGenerate():
         # Only one time step is needed, loaded in memory before writing: this avoids a
         # threaded dask write of the whole dataset under the netCDF/HDF5 lock
         if isinstance(grid, (xarray.Dataset, xarray.DataArray)):
-            grid = self._first_time_step(grid).load()
+            grid = self._first_slice(grid, mask_dim, slice_mask_dim=self.skipna and not target).load()
             grid_file = tempfile.NamedTemporaryFile(delete=False)
             grid.to_netcdf(grid_file.name)
             self.loggy.debug("Xarray source, temporary grid file created for areas/weights generation: %s", grid_file.name)
@@ -191,7 +201,7 @@ class CdoGenerate():
         self._safe_check(method, remap_norm)
 
         # prepare grid
-        self.source_grid_filename = self._prepare_grid(self.source_grid)
+        self.source_grid_filename = self._prepare_grid(self.source_grid, mask_dim=mask_dim)
         self.target_grid_filename = self._prepare_grid(self.target_grid, target=True)
 
         # Generate weights for 2D or 3D grid based on mask_dim presence
