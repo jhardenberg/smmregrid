@@ -648,22 +648,11 @@ class Regridder(object):
             source_array = numpy.reshape(source_array, kept_shape + [-1])
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
-        normalization = weights.attrs.get('normalization')
-        # with skipna and conservative weights the covered fraction depends on the valid source points
-        # of each call: remap_area_min is applied in tensordot, and not with the static dst_grid_frac
-        area_min_in_tensordot = skipna and normalization in ('fracarea', 'destarea')
-
         target_dask = self.tensordot(
             source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres,
-            total_weights=total_weights, normalization=normalization,
+            total_weights=total_weights, normalization=weights.attrs.get('normalization'),
             dst_frac_area=dst_frac_area, remap_area_min=self.remap_area_min
         )
-
-        # use the frac area of the destination to further mask the data
-        if self.remap_area_min > 0.0 and not area_min_in_tensordot:
-            mask_shape = [1 for _ in kept_shape] + [-1]
-            frac_mask = dst_frac_area.data.reshape(mask_shape) < self.remap_area_min
-            target_dask = dask.array.where(frac_mask, numpy.nan, target_dask)
 
         # reshape the target DataArray
         target_dask = dask.array.reshape(
@@ -793,44 +782,48 @@ class Regridder(object):
         self.loggy.debug('Tensordot!')
         numerator = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
+        # remap_area_min: the destination cell is masked when the fraction of it covered by valid source
+        # points is too small. This is the dst_grid_frac of the weights, which is static (generated with
+        # the mask of the data) unless skipna is used: see the Notes in the docstring
+        mask_shape = [1 for _ in kept_shape] + [-1]
+        covered_fraction = dst_frac_area.data.reshape(mask_shape) if remap_area_min > 0.0 else None
+
         # default case: no skipna
         if not skipna:
+            target_dask = numerator
             if masked:
                 # if mask is precomputed, use it to mask the output
-                mask_shape = [1 for d in kept_shape] + [-1]
-                denominator = dst_grid_mask.data.reshape(mask_shape).astype(bool)
-                return dask.array.where(denominator, numerator, numpy.nan)
-            # this is not masked, so numerator is the final output
-            return numerator
-
-        # skipna is True: sum of the weights of the valid source points (see Notes in the docstring)
-        self.loggy.debug('Tensordot with skipna, normalization is %s', normalization)
-        denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
-
-        # no valid source point contributes: set to NaN to avoid division by zero,
-        # so that these target cells will be NaN, and not zero, in the output
-        denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
-
-        if normalization == 'destarea':
-            # destarea weights must not be renormalized: missing source points contribute zero.
-            # Check "!= 'destarea'" rather than "== 'fracarea'", since interpolation methods
-            # have normalization 'none' and need renormalization too
-            target_dask = dask.array.where(dask.array.isfinite(denominator), numerator, numpy.nan)
+                target_dask = dask.array.where(dst_grid_mask.data.reshape(mask_shape).astype(bool), numerator, numpy.nan)
         else:
-            target_dask = numerator / denominator
+            # skipna is True: sum of the weights of the valid source points (see Notes in the docstring)
+            self.loggy.debug('Tensordot with skipna, normalization is %s', normalization)
+            denominator = dask.array.tensordot(valid_data.astype(weights_matrix.dtype), weights_matrix, axes=1)
 
-        # na_thres logic, safety check in init.
-        # total_weights is NaN where a target cell receives no weights at all
-        if total_weights is None:
-            total_weights = compute_total_weights(weights_matrix)
-        missing_fraction = 1.0 - denominator / total_weights
-        target_dask = dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
+            # no valid source point contributes: set to NaN to avoid division by zero,
+            # so that these target cells will be NaN, and not zero, in the output
+            denominator = dask.array.where(denominator > 0, denominator, numpy.nan)
 
-        # remap_area_min: the fraction of the destination cell covered by the valid source points is
-        # (denominator / total_weights) * dst_grid_frac, with dst_grid_frac the geometric one of the
-        # weights generated without mask. This is what CDO computes with the actual mask of the data
-        if remap_area_min > 0.0 and normalization in ('fracarea', 'destarea'):
-            covered_fraction = denominator / total_weights * dst_frac_area.data
+            if normalization == 'destarea':
+                # destarea weights must not be renormalized: missing source points contribute zero.
+                # Check "!= 'destarea'" rather than "== 'fracarea'", since interpolation methods
+                # have normalization 'none' and need renormalization too
+                target_dask = dask.array.where(dask.array.isfinite(denominator), numerator, numpy.nan)
+            else:
+                target_dask = numerator / denominator
+
+            # na_thres logic, safety check in init.
+            # total_weights is NaN where a target cell receives no weights at all
+            if total_weights is None:
+                total_weights = compute_total_weights(weights_matrix)
+            valid_fraction = denominator / total_weights
+            target_dask = dask.array.where(1.0 - valid_fraction > na_thres, numpy.nan, target_dask)
+
+            # dst_grid_frac is purely geometric here: scale it by the valid fraction of the weights.
+            # This is what CDO computes with the actual mask of the data
+            if remap_area_min > 0.0 and normalization in ('fracarea', 'destarea'):
+                covered_fraction = valid_fraction * covered_fraction
+
+        if remap_area_min > 0.0:
             target_dask = dask.array.where(covered_fraction < remap_area_min, numpy.nan, target_dask)
         return target_dask
 
