@@ -45,7 +45,7 @@ from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weig
 from .log import setup_logger
 from .gridinspector import GridInspector
 from .util import detect_nan_variation_dims, tolist, resolve_na_thres
-from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES, CDO_MAP_METHODS
+from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES, CDO_MAP_METHODS, COORD_DECIMALS
 
 # default minimum area for conservative remapping
 
@@ -367,7 +367,7 @@ class Regridder(object):
         # special case for CDO weights without any dimensional information
         # we derived this from the regridded data and we use it as it is
         if self.init_mode == 'weights':
-            self.loggy.info('Assuming gridtype from data to be the same from weights')
+            self.loggy.debug('Assuming gridtype from data to be the same from weights')
             self.grids[0].dims = datagridtype.dims
             self.grids[0].horizontal_dims = datagridtype.horizontal_dims
             self.grids[0].other_dims = datagridtype.other_dims
@@ -421,6 +421,9 @@ class Regridder(object):
         # be treated in a smarter way
         if ("bnds" in source_data.name or "bounds" in source_data.name):
             return source_data
+
+        self.loggy.info('Regridding 3D variable %s (%s levels along %s)',
+                        source_data.name, source_data.sizes[mask_dim], mask_dim)
 
         data3d_list = []
         # create pandas object for fast level index retrieval
@@ -545,7 +548,7 @@ class Regridder(object):
             # Clean up coordinates
             da = remove_degenerate_axes(xarray.DataArray(values, dims=tgt_dims))
             # Convert to degrees if needed, rounding to avoid numerical errors
-            da = numpy.round(da * axis_scale, 10)
+            da = numpy.round(da * axis_scale, COORD_DECIMALS)
             da.attrs = attrs[coord]
             coords[coord] = da
 
@@ -601,7 +604,7 @@ class Regridder(object):
         # info on grids
         src_cdo_grid = weights.attrs['source_grid']
         dst_cdo_grid = weights.attrs['dest_grid']
-        self.loggy.info('Interpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
+        self.loggy.debug('Interpolating from CDO %s to CDO %s', src_cdo_grid, dst_cdo_grid)
 
         # src grid properties
         src_grid_shape = weights.src_grid_dims.values
@@ -624,7 +627,7 @@ class Regridder(object):
             self.loggy.error('smmregrid can identify only %s', source_data.dims)
             raise KeyError('Dimensions mismatch')
 
-        self.loggy.info('Regridding from %s to %s', src_grid_shape, dst_grid_shape)
+        self.loggy.debug('Regridding from %s to %s', src_grid_shape, dst_grid_shape)
 
         # Find dimensions to keep
         kept_dims = [dim for dim in source_data.dims if dim not in horizontal_dims]
