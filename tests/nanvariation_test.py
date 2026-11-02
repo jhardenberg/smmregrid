@@ -97,39 +97,20 @@ def test_cdo_regrid_skipna_bil(init_method):
                             init_method=init_method, skipna=True)
 
 
+# berkley.nc is given as a file, the others as datasets: the grid for CDO is prepared in different ways
+@pytest.mark.parametrize("filein,as_dataset", [
+    ('berkley.nc', False),      # 2D, NaN not constant in time
+    ('onlytos-ipsl.nc', True),  # 2D, land mask
+    ('so3d-nemo.nc', True),     # 3D
+    ('2t-era5.nc', True),       # 2D, no NaN
+])
 @pytest.mark.parametrize("method", ['nn', 'con'])
-def test_cdo_regrid_skipna_2d(method):
-    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
+def test_cdo_regrid_skipna(filein, as_dataset, method):
+    """Test regridding against CDO output with skipna enabled."""
 
-    filein = os.path.join('tests/data/berkley.nc')
-    assert check_cdo_regrid(filein, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "Berkeley.nc failed with skipna"
-    filein = os.path.join('tests/data/onlytos-ipsl.nc')
-    field = xr.open_mfdataset(filein)
-    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True), "Onlytos-ipsl.nc failed with skipna"
-
-@pytest.mark.parametrize("method", ['nn', 'con'])
-def test_cdo_regrid_skipna_3d(method):
-    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
-
-    filein = os.path.join('tests/data/so3d-nemo.nc')
-    field = xr.open_mfdataset(filein)
-    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "So3d-nemo.nc failed with skipna"
-
-@pytest.mark.parametrize("method", ['nn', 'con'])
-def test_cdo_regrid_skipna_full(method):
-    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
-
-    filein = os.path.join('tests/data/2t-era5.nc')
-    field = xr.open_mfdataset(filein)
-    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "2t-era5.nc failed with skipna"
-
-@pytest.mark.parametrize("method", ['nn', 'con'])
-def test_cdo_regrid_skipna_2dmask(method):
-    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
-
-    filein = os.path.join('tests/data/onlytos-ipsl.nc')
-    field = xr.open_mfdataset(filein)
-    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "Onlytos-ipsl.nc failed with skipna"
+    filein = os.path.join('tests/data', filein)
+    field = xr.open_mfdataset(filein) if as_dataset else filein
+    assert check_cdo_regrid(field, 'r180x90', skipna=True, remap_method=method), f"{filein} failed with skipna"
 
 
 @pytest.mark.parametrize("filein", ['tests/data/regional.nc', 'tests/data/onlytos-ipsl.nc'])

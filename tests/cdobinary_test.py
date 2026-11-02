@@ -39,7 +39,7 @@ def test_parse_version():
 
 def test_installed_cdo_is_supported():
     """The CDO used for testing must satisfy the minimum version"""
-    assert check_cdo_version() == cdo_version()
+    assert parse_version(check_cdo_version()) >= parse_version(CDO_MIN_VERSION)
 
 
 def test_fake_cdo_version(tmp_path):
