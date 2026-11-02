@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-- Temporary grid files written by `CdoGenerate` for xarray source/target grids are removed once weights or areas are generated, instead of being left in the temp directory (#9)
+- Temporary grid files written by `CdoGenerate` for xarray source/target grids are removed once weights or areas are generated, instead of being left in the temp directory (#90)
 - Horizontal dimensions are grouped by grid in `HORIZONTAL_FAMILIES`, in order of priority: a variable is on the first family whose dimensions it has all, and the other dimensions are left in `other_dims` (e.g. `x` in `(lat, lon, x)`). A partial match is no longer a grid: e.g. a zonal mean `(time, lat)` has no horizontal dimensions (CDO cannot regrid it). A lone `i` or `x` is an unstructured index (ICON in CMIP6, HEALPix), and `ncol` (CESM spectral element) is added. Dimensions declared with `extra_dims`/`horizontal_dims` come first and are used as found. Horizontal dimensions now follow the order of the data (#81)
 - `rlon`/`rlat` (rotated pole, e.g. CORDEX) added to the horizontal dimensions. The CMIP6 bounds `vertices_*`/`*_vertices` are recognized as bounds, and no longer taken as a separate grid. `GridInspector` works on a DataArray without a name (#81)
 - `nlat`/`nlon` (CESM/POP), `ni`/`nj` (CICE) and `xh`/`yh`/`xq`/`yq` (GFDL/MOM6) added to the default horizontal dimensions, so CMIP6 CESM2 and GFDL-CM4 ocean and sea-ice grids are detected; `CdoGenerate` and `Regridder` raise a clear `ValueError` naming the dimensions found when no horizontal dimension is detected, instead of an `IndexError` or `TypeError` (#81)
