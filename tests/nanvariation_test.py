@@ -1,3 +1,4 @@
+import logging
 import xarray as xr
 import numpy as np
 import os
@@ -186,3 +187,23 @@ def test_na_thres_auto_resolved_per_method():
     reused = generator.weights(method='con')
     fresh = CdoGenerate(filein, 'r180x90', skipna=True, loglevel='warning').weights(method='con')
     xr.testing.assert_equal(reused['dst_grid_imask'], fresh['dst_grid_imask'])
+
+
+@pytest.mark.parametrize("filein, expected", [('tests/data/so3d-nemo.nc', True), ('tests/data/onlytos-ipsl.nc', False)])
+def test_skipna_vertical_dim_warning(filein, expected):
+    """skipna warns if the source grid has a mask dimension, and only then."""
+
+    records = []
+
+    class Collect(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    handler = Collect(level=logging.WARNING)
+    logger = logging.getLogger('smmregrid.CdoGenerate')
+    logger.addHandler(handler)
+    try:
+        CdoGenerate(xr.open_dataset(filein), 'r180x90', skipna=True).weights(method='con')
+    finally:
+        logger.removeHandler(handler)
+    assert any('mask dimension' in r.getMessage() for r in records) == expected

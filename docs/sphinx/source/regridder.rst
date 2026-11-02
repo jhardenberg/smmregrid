@@ -135,6 +135,8 @@ Constructor Parameters
   If ``na_thes``(see below) is set to "auto", it tries to replicate CDO behaviour for conservative and nearest neighbour, but it is not guaranteed to be exactly the same for other methods.
   Can be faster than using ``mask_dim``, but it is not guaranteed to be exactly the same as CDO for all methods.
   When initializing from grids, ``mask_dim`` and ``check_nan`` are ignored: the same weights apply to all levels.
+  The weights are generated from the first element of the source grid along all the non-horizontal dimensions,
+  so the source grid is expected to be 2D: if it has a mask dimension with more than one level, a warning is logged and only the first level is used.
 
 * **na_thres** (*float* or *str*, default: "auto"): Maximum fraction of missing weights before a target cell
   is set to NaN (with ``skipna``) or masked (without ``skipna``, in the destination mask computed from the weights).
