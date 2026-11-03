@@ -108,7 +108,10 @@ Constructor Parameters
 
 * **remap_area_min** (*float*, default: 0.5): Minimum fractional area for conservative remapping.
   Grid cells with area fraction below this threshold are masked as NaN. Range: 0.0-1.0.
-  It has no effect on non-conservative methods.
+  It has no effect on non-conservative methods. The area fraction is the part of the target cell covered
+  by valid (non-NaN) source points, as in CDO: with ``skipna=True`` it is computed at each call from the
+  valid source points, so that the result is the same with and without ``skipna``. With the default ``fracarea`` normalization it is the same check as ``na_thres = 1 - remap_area_min``,
+  which also works for the other methods: see :doc:`concepts`.
 
 * **transpose** (*bool*, default: True): If True, transposes the output of 3D regridding (with ``mask_dim``)
   so that the mask dimension appears just before the spatial coordinates, e.g. ``(time, lev, lat, lon)``
@@ -137,9 +140,11 @@ Constructor Parameters
   so the source grid is expected to be 2D: if it has a mask dimension with more than one level, a warning is logged and only the first level is used.
 
 * **na_thres** (*float* or *str*, default: "auto"): Maximum fraction of missing weights before a target cell
-  is set to NaN (with ``skipna``) or masked (without ``skipna``, in the destination mask computed from the weights).
+  is set to NaN (with ``skipna``) or masked (without ``skipna``, in the destination mask computed from the weights, where only
+  ``1.0`` makes a difference: see :doc:`concepts`).
   Range: 0.0-1.0. "auto" gives 0.5 without ``skipna``; with ``skipna`` it gives 1e-6 for 'bil' and 'bic'
   (NaN as soon as a neighbour is missing, as CDO) and 1.0 for the other methods.
+  See :doc:`concepts` for the difference with ``remap_area_min``.
 
 **CDO Configuration:**
 
@@ -221,6 +226,21 @@ Choosing how to handle missing values
 * Mask changing in time (e.g. sea ice), or a large number of levels: use ``skipna=True``. A single set of weights
   is used and the missing values are handled at each call, which gives a much smaller Dask graph.
   It matches CDO for conservative and nearest neighbour.
+
+**What** ``mask_dim`` **does.** CDO sees the mask of the data when it computes the weights. With ``mask_dim``, the name of a
+dimension along which the mask changes (typically the levels of an ocean model), one set of weights is generated per level,
+each with the mask of that level. The missing source cells have no weight, and the covered area of each target cell comes
+from CDO for each level, so ``remap_area_min`` is applied to it. ``na_thres`` is not a real threshold here: every target cell
+with weights is made of valid cells only, so any value below 1 masks just the cells without any valid source cell. A mask
+that changes in time is not followed.
+
+**What** ``skipna`` **does.** The weights are computed once, on a source grid without the mask of the data, so every source cell
+has its weight, land included. At each call the missing source cells are skipped: the weights of the valid cells are kept and
+renormalized by their sum, so that the target value is the average over the valid part of the cell only. A target cell always
+gets a value, even if it has very few valid source cells, and ``na_thres`` and ``remap_area_min`` are evaluated at each call to
+decide when it is not trustworthy and has to be set to NaN. For ``remap_area_min`` the masks are the same as with ``mask_dim``;
+``na_thres`` is a real threshold only here.
+``mask_dim`` is ignored when ``skipna`` is used. See :doc:`concepts` for ``na_thres`` and ``remap_area_min``.
 
 Without ``skipna``, NaNs that are not in the first time step propagate to the target cells they contribute to.
 

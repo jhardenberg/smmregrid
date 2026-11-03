@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - `nlat`/`nlon` (CESM/POP), `ni`/`nj` (CICE) and `xh`/`yh`/`xq`/`yq` (GFDL/MOM6) added to the default horizontal dimensions, so CMIP6 CESM2 and GFDL-CM4 ocean and sea-ice grids are detected; `CdoGenerate` and `Regridder` raise a clear `ValueError` naming the dimensions found when no horizontal dimension is detected, instead of an `IndexError` or `TypeError` (#81)
 - Fix regridding of data with dimensions after the horizontal ones (e.g. `(lat, lon, time)`), which were mixed with the horizontal ones in the output (#81)
 - Preserve Dask chunking along extra dimensions (e.g. time) in `remap_area_min` masking by broadcasting lazily instead of using `dask.array.broadcast_to`, preventing large memory allocations (#80)
+- `remap_area_min` with `skipna` and conservative remapping now masks the target cells by the area covered by the valid source points, computed at each call, as CDO and as the same regridding without `skipna` do. Previously the geometric coverage of the grid was used and the coastal and masked cells were never masked, e.g. 14778 more valid cells than CDO on a NEMO 3D field with the default `remap_area_min=0.5`. Behaviour change for `skipna=True` users with the default `remap_area_min`. New documentation page on `na_thres` and `remap_area_min` (equivalent for conservative remapping with `fracarea`), with the two masks as functions in `weights.py` (#85)
 - Python >= 3.10 is required: support for Python 3.8 and 3.9 is dropped (#82)
 
 

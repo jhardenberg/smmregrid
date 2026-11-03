@@ -5,6 +5,7 @@ import pytest
 import xarray
 import numpy
 from smmregrid import Regridder, CdoGenerate, cdo_generate_weights
+from checker import check_cdo_regrid, _cdo_remap
 
 
 INDIR = 'tests/data'
@@ -23,10 +24,15 @@ def test_healpix_extra(method):
                          cdo_extra=f'-setgrid,{hpgrid}',
                          cdo_options=options,
                          loglevel='debug').weights(method=method)
-    interpolator = Regridder(weights=wfield, loglevel='debug')
+    interpolator = Regridder(weights=wfield, remap_area_min=0.0, loglevel='debug')
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'healpix_0.nc'))
     rfield = interpolator.regrid(xfield)
     assert rfield['tas'].shape == (2, 180, 360)
+
+    # same remapping done directly by CDO
+    cdofield = _cdo_remap(method, tfile, f'-setgrid,{hpgrid} ' + os.path.join(INDIR, 'healpix_0.nc'),
+                          remap_area_min=0.0, cdo_options='--force')
+    assert numpy.allclose(cdofield['tas'].squeeze(), rfield['tas'].squeeze(), equal_nan=True)
 
 
 @pytest.mark.parametrize("method", ['con', 'nn', 'bic'])
@@ -54,19 +60,32 @@ def test_datarray(method):
     assert interp['tas'].shape == (12, 180, 360)
     assert hasattr(interp['tas'], 'test_attr')
 
-    # DataArray
-    interp = interpolator.regrid(source_data=xfield['tas'])
-    assert interp.shape == (12, 180, 360)
-    assert hasattr(interp, 'test_attr')
+    # DataArray, same values as the Dataset
+    interp_da = interpolator.regrid(source_data=xfield['tas'])
+    assert interp_da.shape == (12, 180, 360)
+    assert hasattr(interp_da, 'test_attr')
+    xarray.testing.assert_allclose(interp_da, interp['tas'])
+
+    # values as in CDO
+    assert check_cdo_regrid(xfield, tfile, remap_method=method)
 
 @pytest.mark.parametrize("method", ['dis', 'con'])
 def test_horizontal_dims(method):
     """"Minimal test to verify regridding with horizontal_dims coords"""
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     interpolator = Regridder(source_grid=xfield, target_grid=tfile, loglevel='debug',
-                             method=method, horizontal_dims=['lon', 'lat'])
+                             method=method, horizontal_dims=['lon', 'lat'], remap_area_min=0.0)
     interp = interpolator.regrid(source_data=xfield.isel(time=0))
     assert interp['tas'].shape == (180, 360)
+
+    # explicit horizontal_dims must give the same result as the detected ones
+    detected = Regridder(source_grid=xfield, target_grid=tfile, loglevel='debug', method=method,
+                         remap_area_min=0.0)
+    xarray.testing.assert_allclose(interp, detected.regrid(source_data=xfield.isel(time=0)))
+
+    # values as in CDO
+    cdofield = _cdo_remap(method, tfile, os.path.join(INDIR, 'tas-ecearth.nc'), remap_area_min=0.0)
+    assert numpy.allclose(cdofield['tas'].isel(time=0), interp['tas'], equal_nan=True)
 
 
 @pytest.mark.parametrize("skipna", [False, True])
@@ -88,6 +107,9 @@ def test_toward_healpix(method):
                              method=method, cdo_options='--force')
     interp = interpolator.regrid(source_data=xfield)
     assert interp['tas'].shape == (12, 3072)
+
+    # values as in CDO
+    assert check_cdo_regrid(xfield, 'hp16_nested', remap_method=method, cdo_options='--force')
 
 
 @pytest.mark.parametrize("source_grid,target_grid,src_grid_size,dst_grid_size", [
