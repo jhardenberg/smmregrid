@@ -70,13 +70,51 @@ def compute_total_weights(weights_matrix):
     return numpy.where(total_weights > 0, total_weights, numpy.nan)
 
 
+def mask_na_thres(target, valid_fraction, na_thres, fill_value=numpy.nan):
+    """
+    Mask the target cells with too many missing weights (``na_thres``).
+
+    Args:
+        target: Data (or mask) to be masked.
+        valid_fraction: Share of the weights of each target cell that comes from valid source points,
+                        from 0 (all missing) to 1 (none missing). It is relative to the weights of the cell.
+        na_thres (float): Maximum fraction of missing weights, between 0 and 1.
+        fill_value: Value set where more than ``na_thres`` of the weights are missing (default: NaN).
+
+    Returns:
+        ``target`` with ``fill_value`` where the fraction of missing weights is larger than ``na_thres``.
+    """
+    return dask.array.where(1.0 - valid_fraction > na_thres, fill_value, target)
+
+
+def mask_area_min(target, covered_fraction, remap_area_min, fill_value=numpy.nan):
+    """
+    Mask the target cells with too little area covered by valid source points (``remap_area_min``).
+
+    Args:
+        target: Data to be masked.
+        covered_fraction: Fraction of each target cell covered by valid source points, from 0 to 1, as computed
+                          by CDO for conservative remapping. With fracarea it is relative to the part of the target
+                          cell covered by the source grid (one minus the missing weights); with destarea it is
+                          absolute. It can be None if ``remap_area_min`` is 0.
+        remap_area_min (float): Minimum covered fraction, between 0 and 1. With 0 nothing is masked.
+        fill_value: Value set where the covered fraction is below ``remap_area_min`` (default: NaN).
+
+    Returns:
+        ``target`` with ``fill_value`` where the covered fraction is smaller than ``remap_area_min``.
+    """
+    if remap_area_min <= 0.0:
+        return target
+    return dask.array.where(covered_fraction < remap_area_min, fill_value, target)
+
+
 def mask_tensordot(src_mask, weights_matrix, na_thres=0.5):
     """Apply the weights to the source mask to return the destination mask (1 valid, 0 masked).
     As for skipna, and as in xESMF, na_thres is the maximum fraction of missing weights: a target cell
     is masked when the fraction of its weights from masked source points exceeds it (valid < 1 - na_thres)"""
 
     valid_fraction = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-    return dask.array.where(valid_fraction < 1.0 - na_thres, 0, 1)
+    return mask_na_thres(1, valid_fraction, na_thres, fill_value=0)
 
 
 def mask_weights(weights, weights_matrix, mask_dim=None, na_thres=0.5):
