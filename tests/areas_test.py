@@ -1,8 +1,10 @@
 """Set of basic tests for smmregrid"""
 
 import os
+import numpy as np
 import pytest
-from smmregrid import CdoGenerate
+import xarray as xr
+from smmregrid import CdoGenerate, Regridder
 
 
 INDIR = 'tests/data'
@@ -53,3 +55,14 @@ def test_nosource_areas_target():
     earth_surface = area.cell_area.values.sum() / 1e6
     assert area.cell_area.shape == (91, 180)
     assert earth_surface == pytest.approx(EARTH_SURFACE, abs=TOLERANCE)
+
+
+@pytest.mark.parametrize("target", ['F32', 'F128', 'r180x91'])
+def test_areas_coords_aligned_with_regrid(target):
+    """Lat/lon of target areas and of regridded data are identical (#51)"""
+    generator = CdoGenerate(tfile, target, loglevel='debug')
+    weights = generator.weights(method='bil')
+    area = generator.areas(target=True)
+    out = Regridder(weights=weights).regrid(xr.open_dataset(tfile))
+    for coord in ['lat', 'lon']:
+        assert np.array_equal(out[coord].values, area[coord].values)

@@ -69,6 +69,17 @@ def test_horizontal_dims(method):
     assert interp['tas'].shape == (180, 360)
 
 
+@pytest.mark.parametrize("skipna", [False, True])
+def test_trailing_dim(skipna):
+    """A dimension after the horizontal ones is kept apart from them, as when it comes first"""
+    xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))['tas']
+    interpolator = Regridder(source_grid=xfield, target_grid='r90x45', method='con', skipna=skipna)
+    reference = interpolator.regrid(xfield)
+    interp = interpolator.regrid(xfield.transpose('lat', 'lon', 'time'))
+    assert interp.dims == reference.dims
+    xarray.testing.assert_allclose(interp, reference)
+
+
 @pytest.mark.parametrize("method", ['bil', 'con'])
 def test_toward_healpix(method):
     """"Testing toward healpix string-defined-grid grid"""
