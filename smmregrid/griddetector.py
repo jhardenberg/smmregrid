@@ -50,11 +50,8 @@ class GridDetector:
         if self._find_healpix_dim(data) is not None:
             return "HEALPix"
 
-        # Find latitude and longitude coordinates
-        lat = find_coord(data, self.lat_coords)
-        lon = find_coord(data, self.lon_coords)
-
-        if not lat or not lon:
+        lat, lon = self._find_latlon(data)
+        if not lat:
             return "Unknown"
 
         # 2D coord-dim dependency
@@ -124,11 +121,18 @@ class GridDetector:
             return None
         return grid_str
 
-    def _latlon(self, data):
-        """Latitude and longitude values as float64 arrays, or (None, None)"""
+    def _find_latlon(self, data):
+        """Names of the latitude and longitude coordinates, or (None, None) if either is missing"""
         lat = find_coord(data, self.lat_coords)
         lon = find_coord(data, self.lon_coords)
         if not lat or not lon:
+            return None, None
+        return lat, lon
+
+    def _latlon(self, data):
+        """Latitude and longitude values as float64 arrays, or (None, None)"""
+        lat, lon = self._find_latlon(data)
+        if not lat:
             return None, None
         return data[lat].values.astype(np.float64), data[lon].values.astype(np.float64)
 
@@ -195,21 +199,46 @@ class GridDetector:
         """hpN_nested / hpN_ring: nside from the size of the HEALPix dimension, order from the
         metadata (CDO 'indexing_scheme', or 'healpix_order') or else from the latitudes, which
         never increase with the ring ordering. No order information returns None."""
-        dim = self._find_healpix_dim(data)
+        dim = self._find_healpix_dim(data, by_size=True)
         if dim is None:
-            # detected from the attributes: take the only dimension with a HEALPix size
-            dims = [d for d, size in data.sizes.items() if self._healpix_nside(size)]
-            if len(dims) != 1:
-                return None
-            dim = dims[0]
-        nside = self._healpix_nside(data.sizes[dim])
+            return None
         order = self._healpix_order(data)
         if order is None:
-            lat = find_coord(data, self.lat_coords)
+            lat, _ = self._find_latlon(data)
             if lat is None or data[lat].dims != (dim,):
                 return None
             order = "ring" if np.all(np.diff(data[lat].values) <= 0) else "nested"
-        return f"hp{nside}_{order}"
+        return f"hp{self._healpix_nside(data.sizes[dim])}_{order}"
+
+    @staticmethod
+    def _healpix_mapping(data):
+        """Attributes of the HEALPix grid mapping variable (grid_mapping_name 'healpix'), else None"""
+        variables = data.variables.values() if isinstance(data, xr.Dataset) else data.coords.values()
+        return next((var.attrs for var in variables if var.attrs.get("grid_mapping_name") == "healpix"), None)
+
+    @classmethod
+    def _healpix_order(cls, data):
+        """'nested' or 'ring' from the grid mapping variable (CDO 'indexing_scheme' or 'healpix_order'), else None"""
+        attrs = cls._healpix_mapping(data) or {}
+        order = str(attrs.get("indexing_scheme", attrs.get("healpix_order", ""))).lower()
+        return {"nested": "nested", "nest": "nested", "ring": "ring"}.get(order)
+
+    @classmethod
+    def is_healpix_from_attribute(cls, data):
+        """
+        Determine if the given xarray Dataset or DataArray uses a HEALPix grid.
+
+        Returns:
+            bool: True if HEALPix grid detected, False otherwise.
+        """
+        if isinstance(data, xr.Dataset):
+            if "healpix" in data.variables:
+                return True
+            if any(data[var].attrs.get('grid_mapping') == 'healpix' for var in data.data_vars):
+                return True
+        elif data.attrs.get('grid_mapping') == 'healpix':
+            return True
+        return cls._healpix_mapping(data) is not None
 
     @staticmethod
     def _healpix_nside(size):
@@ -221,58 +250,20 @@ class GridDetector:
             return nside
         return None
 
-    @staticmethod
-    def _healpix_order(data):
-        """'nested' or 'ring' from the grid mapping variable, else None"""
-        variables = list(data.variables.values()) if isinstance(data, xr.Dataset) else [data] + list(data.coords.values())
-        for var in variables:
-            if var.attrs.get("grid_mapping_name") != "healpix":
-                continue
-            order = str(var.attrs.get("indexing_scheme", var.attrs.get("healpix_order", ""))).lower()
-            if order in ("nested", "nest"):
-                return "nested"
-            if order == "ring":
-                return "ring"
-        return None
-
-    @staticmethod
-    def is_healpix_from_attribute(data):
+    @classmethod
+    def _find_healpix_dim(cls, data, by_size=False):
         """
-        Determine if the given xarray Dataset or DataArray uses a HEALPix grid.
-
-        Returns:
-            bool: True if HEALPix grid detected, False otherwise.
-        """
-
-        # Attribute-based checks
-        if isinstance(data, xr.Dataset):
-            if "healpix" in data.variables:
-                return True
-            for var in data.data_vars:
-                if data[var].attrs.get('grid_mapping') == 'healpix':
-                    return True
-        elif isinstance(data, xr.DataArray):
-            if data.attrs.get('grid_mapping') == 'healpix':
-                return True
-
-        return False
-
-    @staticmethod
-    def _find_healpix_dim(data):
-        """
-        Look for a dimension whose size matches 12 * nside**2 for some
-        power-of-two nside, checking dimension names/sizes directly rather
-        than relying on lat/lon coordinates being present.
+        Look for a dimension of size 12 * nside**2 with nside a power of two, named as a HEALPix
+        cell index or the only dimension, rather than relying on lat/lon coordinates being present.
+        With by_size (grid already known to be HEALPix) also any name, if only one dimension has such size.
         """
         # Common names used for the HEALPix cell-index dimension
         candidate_names = {"cell", "cells", "pix", "pixel", "healpix", "ncells"}
 
-        dimsdict = data.sizes
-
-        for dim_name, size in dimsdict.items():
-            n = size // 12
-            is_pow2 = size % 12 == 0 and n > 0 and (n & (n - 1)) == 0
-            if is_pow2 and (dim_name.lower() in candidate_names or len(dimsdict) == 1):
-                return dim_name
-
+        dims = [dim for dim, size in data.sizes.items() if cls._healpix_nside(size)]
+        named = [dim for dim in dims if dim.lower() in candidate_names or len(data.sizes) == 1]
+        if named:
+            return named[0]
+        if by_size and len(dims) == 1:
+            return dims[0]
         return None
