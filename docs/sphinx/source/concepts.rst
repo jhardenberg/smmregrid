@@ -55,7 +55,12 @@ Method                 ``skipna=False``                              ``skipna=Tr
                        no effect, a warning is logged if a value is   the cell as soon as a neighbour is missing, as
                        given.                                         CDO; larger values keep it, renormalized on the
                                                                       valid neighbours.
-``nn``, others         one weight: the cell is valid or not.          one weight: ``na_thres`` has no effect.
+``dis``                CDO keeps the valid ones of the nearest       share of the weights on the valid neighbours:
+                       neighbours (4) and renormalizes on them:      ``na_thres`` effective. 1.0 (``'auto'``) keeps
+                       the cell is valid as soon as one neighbour    the cell as soon as a neighbour is valid, as
+                       is. ``na_thres`` has no effect, a warning     CDO; lower values mask the cells with too much
+                       is logged if a value is given.                weight on missing neighbours.
+``nn``, others         one weight: the cell is valid or not.         one weight: ``na_thres`` has no effect.
                        ``na_thres`` has no effect.
 =====================  ============================================  =================================================
 
@@ -72,17 +77,20 @@ a distance-weighted average of the valid neighbours (the same renormalization as
 
 Instead of a number, ``na_thres`` can be ``'auto'`` (the default) or ``'cdo'``:
 
-========================  =========  =================  ==============
-``na_thres``              ``con``    ``bil``, ``bic``   ``nn``, others
-========================  =========  =================  ==============
+========================  =========  =================  =======================
+``na_thres``              ``con``    ``bil``, ``bic``   ``dis``, ``nn``, others
+========================  =========  =================  =======================
 ``'auto'`` (smmregrid)    0.5        1e-6               1.0
 ``'cdo'``                 1.0        1e-6               1.0
-========================  =========  =================  ==============
+========================  =========  =================  =======================
 
 ``'cdo'`` replicates CDO, where ``REMAP_AREA_MIN`` is 0 by default: for conservative remapping only the target cells without
 any valid source cell are masked. ``'auto'`` is the smmregrid default, and it additionally masks the conservative target
 cells covered by less than half of valid source cells (``na_thres=0.5``), to avoid the erosion of coasts by cells made of
 a thin sliver of ocean. For bilinear and bicubic both mask the target cell as soon as a neighbour is missing, as CDO.
+For distance-weighted both keep the target cell as soon as one of its neighbours is valid, as CDO, which renormalizes
+on the valid neighbours when it generates the weights with the mask: ``skipna`` with ``na_thres=1.0`` gives the same
+result.
 
 ``remap_area_min``
 ------------------

@@ -81,11 +81,11 @@ def test_na_thres_auto_con(skipna):
     assert auto.isnull().sum() > _regrid('so3d-nemo.nc', 'so', 'con', skipna=skipna, na_thres='cdo').isnull().sum()
 
 
-@pytest.mark.parametrize("method", ['nn', 'bil'])
+@pytest.mark.parametrize("method", ['nn', 'bil', 'dis'])
 def test_na_thres_no_effect_without_skipna(method, caplog):
     """Without skipna CDO decides which target cells are mapped when it generates the weights (any missing
-    neighbour drops the cell for bil), and the weights hold no partial information: na_thres has no effect
-    for the non-conservative methods, and a warning is logged"""
+    neighbour drops the cell for bil, dis renormalizes on the valid neighbours), and the weights hold no
+    partial information: na_thres has no effect for the non-conservative methods, and a warning is logged"""
     reference = _regrid('onlytos-ipsl.nc', 'tos', method, skipna=False)
     logger = logging.getLogger('smmregrid.Regrid')
     logger.addHandler(caplog.handler)
@@ -98,16 +98,26 @@ def test_na_thres_no_effect_without_skipna(method, caplog):
     assert 'na_thres=0.3 has no effect' in caplog.text
 
 
-@pytest.mark.parametrize("method", ['nn', 'bil'])
+@pytest.mark.parametrize("method", ['nn', 'bil', 'dis'])
 def test_na_thres_not_conservative(method):
-    """With nn the share of valid weights is 0 or 1, and na_thres does not change the result. With bil it
-    is a fraction: na_thres masks the cells with missing neighbours, as in CDO only with the default"""
+    """With nn the share of valid weights is 0 or 1, and na_thres does not change the result. With bil and
+    dis it is a fraction: na_thres masks the cells with too much weight on missing neighbours (as in CDO
+    only with the default for bil)"""
     unmasked = _regrid('onlytos-ipsl.nc', 'tos', method, skipna=True, na_thres=1.0)
     by_na_thres = _regrid('onlytos-ipsl.nc', 'tos', method, skipna=True, na_thres=0.2)
     if method == 'nn':
         xr.testing.assert_equal(by_na_thres, unmasked)
     else:
         assert by_na_thres.isnull().sum() > unmasked.isnull().sum()
+
+
+def test_dis_without_skipna_same_as_skipna_auto():
+    """With dis CDO keeps the valid ones of the nearest neighbours and renormalizes on them when it generates
+    the weights with the mask: the same as skipna with na_thres=1.0, the 'auto' value for dis"""
+    cdo_mask = _regrid('onlytos-ipsl.nc', 'tos', 'dis', skipna=False)
+    renormalized = _regrid('onlytos-ipsl.nc', 'tos', 'dis', skipna=True, na_thres=1.0)
+    xr.testing.assert_allclose(renormalized, cdo_mask)
+    assert renormalized.isnull().sum() > 0
 
 
 @pytest.mark.parametrize("skipna", [False, True])
