@@ -70,60 +70,56 @@ def compute_total_weights(weights_matrix):
     return numpy.where(total_weights > 0, total_weights, numpy.nan)
 
 
-def mask_na_thres(target, valid_fraction, na_thres, fill_value=numpy.nan):
+def mask_na_thres(target, covered_fraction, na_thres, fill_value=numpy.nan):
     """
-    Mask the target cells with too many missing weights (``na_thres``).
+    Mask the target cells covered by too few valid source points.
 
-    The share of valid weights of a target cell is the same number as the fraction of the target cell covered
-    by valid source points that CDO computes for conservative remapping (``remap_area_min`` in CDO), because the
-    weights are overlap areas: ``na_thres = 1 - remap_area_min``.
+    ``na_thres`` is the maximum fraction of missing weights of a target cell, so the cell is masked when its
+    covered fraction is below ``1 - na_thres`` (as CDO, where ``dst_grid_frac < REMAP_AREA_MIN``). The cells
+    without any valid source point are always masked, whatever ``na_thres``.
 
     Args:
         target: Data (or mask) to be masked.
-        valid_fraction: Fraction of each target cell covered by valid source points, from 0 (all missing) to 1
-                        (none missing): the share of its weights on valid source points, which with ``fracarea`` is
-                        relative to the part of the cell covered by the source grid and with ``destarea`` is scaled
-                        by the area covered (see ``Regridder.tensordot``).
+        covered_fraction: Fraction of each target cell covered by valid source points, from 0 to 1: the
+                          ``dst_grid_frac`` of the weights, or the sum of the valid weights with ``skipna``
+                          (see ``Regridder.tensordot``).
         na_thres (float): Maximum fraction of missing weights, between 0 and 1.
         fill_value: Value set where the target cell is masked (default: NaN).
 
     Returns:
-        ``target`` with ``fill_value`` where the fraction of missing weights is larger than ``na_thres``,
-        and where no valid source point contributes at all, whatever ``na_thres``.
+        ``target`` with ``fill_value`` where ``covered_fraction < 1 - na_thres`` or ``covered_fraction <= 0``.
     """
-    # written as covered fraction < 1 - na_thres, as in CDO (covered fraction < remap_area_min)
-    masked = (valid_fraction < 1.0 - na_thres) | (valid_fraction <= 0.0)
+    masked = (covered_fraction < 1.0 - na_thres) | (covered_fraction <= 0.0)
     return dask.array.where(masked, fill_value, target)
 
 
-def mask_tensordot(src_mask, weights_matrix, na_thres=0.5):
-    """Apply the weights to the source mask to return the destination mask (1 valid, 0 masked).
-    As for skipna, and as in xESMF, na_thres is the maximum fraction of missing weights: a target cell
-    is masked when the fraction of its weights from masked source points exceeds it (valid < 1 - na_thres)"""
+def mask_tensordot(src_mask, weights_matrix):
+    """Apply the weights to the source mask to return the destination mask: 1 where the target cell receives
+    at least one link from a valid source point, 0 where it receives none. No threshold is applied here:
+    na_thres acts on the dst_grid_frac of the weights, in Regridder.tensordot"""
 
-    valid_fraction = dask.array.tensordot(src_mask, weights_matrix, axes=1)
-    return mask_na_thres(1, valid_fraction, na_thres, fill_value=0)
+    valid_weights = dask.array.tensordot(src_mask, weights_matrix, axes=1)
+    return dask.array.where(valid_weights > 0, 1, 0)
 
 
-def mask_weights(weights, weights_matrix, mask_dim=None, na_thres=0.5):
-    """This functions precompute the mask for the target interpolation
-    Takes as input the weights from CDO and the precomputed weights matrix
-    Return the target mask: handle the 3d case.
-    
-    Claude-based solution with full lazy evaluation and no in-place modification.
-    
+def mask_weights(weights, weights_matrix, mask_dim=None):
+    """Precompute the target mask of the CDO weights, as the dst_grid_imask variable: 1 where the target
+    cell has at least one link from a valid source point (src_grid_imask), 0 otherwise.
+    Takes as input the weights from CDO and the precomputed weights matrix. Handles the 3D case.
+
+    Lazy evaluation and no in-place modification.
+
     Args:
         weights: xarray Dataset containing the weights and source mask.
         weights_matrix: Precomputed weights matrix (sparse arrays).
         mask_dim: Name of the mask dimension if 3D regridding is used.
-        na_thres: Maximum fraction of missing weights before a target cell is masked.
     """
 
     src_mask = weights.src_grid_imask
     if mask_dim is not None:
         # Create list of masked arrays lazily
         masked_levels = [
-            mask_tensordot(src_mask.isel({mask_dim: i}).data, weights_matrix[i], na_thres=na_thres)
+            mask_tensordot(src_mask.isel({mask_dim: i}).data, weights_matrix[i])
             for i in range(weights.sizes[mask_dim])
         ]
         # Stack all levels at once (lazy operation)
@@ -132,10 +128,11 @@ def mask_weights(weights, weights_matrix, mask_dim=None, na_thres=0.5):
         weights = weights.assign(dst_grid_imask=([mask_dim] + list(weights['dst_grid_imask'].dims[1:]), dst_mask))
     else:
         mask = src_mask.data
-        dst_mask = mask_tensordot(mask, weights_matrix, na_thres=na_thres).compute()  # Compute the result to avoid lazy evaluation issues
+        dst_mask = mask_tensordot(mask, weights_matrix).compute()  # Compute the result to avoid lazy evaluation issues
         weights = weights.assign(dst_grid_imask=(weights['dst_grid_imask'].dims, dst_mask))
 
     return weights
+
 
 def check_mask(weights, mask_dim=None):
     """

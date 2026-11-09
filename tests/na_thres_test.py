@@ -7,13 +7,14 @@ data, and that fraction is the dst_grid_frac of the weights; with skipna the wei
 mask, and the fraction is computed at each call from the valid source points.
 """
 
+import logging
 import dask.array
 import numpy
 import pytest
 import xarray as xr
 from smmregrid import Regridder
 from smmregrid.util import resolve_na_thres
-from smmregrid.weights import mask_na_thres
+from smmregrid.weights import mask_na_thres, mask_tensordot
 from checker import check_cdo_regrid
 
 INDIR = 'tests/data'
@@ -21,9 +22,9 @@ INDIR = 'tests/data'
 
 def _regrid(filein, var, method, **kwargs):
     """Regrid the first time step of a variable from the grid of the same file"""
+    kwargs.setdefault('loglevel', 'ERROR')
     data = xr.open_dataset(f'{INDIR}/{filein}')[var].isel(time=0)
-    regridder = Regridder(source_grid=f'{INDIR}/{filein}', target_grid='r180x90', method=method,
-                          loglevel='ERROR', **kwargs)
+    regridder = Regridder(source_grid=f'{INDIR}/{filein}', target_grid='r180x90', method=method, **kwargs)
     return regridder.regrid(data)
 
 
@@ -78,6 +79,23 @@ def test_na_thres_auto_con(skipna):
     auto = _regrid('so3d-nemo.nc', 'so', 'con', skipna=skipna)
     xr.testing.assert_equal(auto, _regrid('so3d-nemo.nc', 'so', 'con', skipna=skipna, na_thres=0.5))
     assert auto.isnull().sum() > _regrid('so3d-nemo.nc', 'so', 'con', skipna=skipna, na_thres='cdo').isnull().sum()
+
+
+@pytest.mark.parametrize("method", ['nn', 'bil'])
+def test_na_thres_no_effect_without_skipna(method, caplog):
+    """Without skipna CDO decides which target cells are mapped when it generates the weights (any missing
+    neighbour drops the cell for bil), and the weights hold no partial information: na_thres has no effect
+    for the non-conservative methods, and a warning is logged"""
+    reference = _regrid('onlytos-ipsl.nc', 'tos', method, skipna=False)
+    logger = logging.getLogger('smmregrid.Regrid')
+    logger.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.WARNING, logger='smmregrid.Regrid'):
+            out = _regrid('onlytos-ipsl.nc', 'tos', method, skipna=False, na_thres=0.3, loglevel='WARNING')
+    finally:
+        logger.removeHandler(caplog.handler)
+    xr.testing.assert_equal(out, reference)
+    assert 'na_thres=0.3 has no effect' in caplog.text
 
 
 @pytest.mark.parametrize("method", ['nn', 'bil'])
@@ -140,5 +158,13 @@ def test_mask_na_thres():
     assert numpy.array_equal(numpy.isnan(out), [False, False, True, True, True])
     out = mask_na_thres(target, valid, 1.0).compute()
     assert numpy.array_equal(numpy.isnan(out), [False, False, False, False, True])
-    # as a 0/1 mask, as used for the target mask without skipna
+    # as a 0/1 mask
     assert mask_na_thres(1, valid, 0.4, fill_value=0).compute().tolist() == [1, 1, 0, 0, 0]
+
+
+def test_mask_tensordot():
+    """The target mask of the weights marks the cells with at least one link from a valid source point,
+    without any threshold: the second target cell is linked only to the masked source point"""
+    src_mask = numpy.array([1, 0, 1])
+    weights_matrix = numpy.array([[0.5, 0.0, 0.0], [0.5, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    assert mask_tensordot(src_mask, weights_matrix).compute().tolist() == [1, 0, 1]

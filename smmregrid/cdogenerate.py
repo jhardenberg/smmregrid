@@ -39,9 +39,11 @@ class CdoGenerate():
                                       'error', and 'critical'.
             skipna (bool, optional): If True, NaN values in the source grid will
                                      be treated as zeros during weight generation. Default is False.
-            na_thres (float or str, optional): Maximum fraction of missing weights before a target cell
-                                               is masked in the destination mask. 'auto' (default) is
-                                               resolved at each weights() call from skipna and the method.
+            na_thres (float or str, optional): Accepted for symmetry with Regridder and validated, but the
+                                               weights do not depend on it: the destination mask stored in
+                                               the weights (dst_grid_imask) marks the target cells with at
+                                               least one valid source link, and the threshold is applied
+                                               by Regridder. Default 'auto'.
             cdo_extra (list, optional): Additional CDO command-line options.
                                                Defaults to None.
             cdo_options (list, optional): Options for CDO commands. Defaults to None.
@@ -216,7 +218,7 @@ class CdoGenerate():
         weights = self._cdo_generate_weights(method, extrapolate,
                                              remap_norm)
         weights_matrix = compute_weights_matrix(weights)
-        weights = mask_weights(weights, weights_matrix, na_thres=self.na_thres)
+        weights = mask_weights(weights, weights_matrix)
         masked = int(check_mask(weights))
         masked_xa = xarray.DataArray(masked, name="dst_grid_masked")
         return xarray.merge([weights, masked_xa])
@@ -264,7 +266,7 @@ class CdoGenerate():
 
         weights = self.weightslist_to_3d(wlist, method, sgrid[mask_dim])
         weights_matrix = compute_weights_matrix3d(weights, mask_dim)
-        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim, na_thres=self.na_thres)
+        weights = mask_weights(weights, weights_matrix, mask_dim=mask_dim)
         masked = check_mask(weights, mask_dim)
         masked_xa = xarray.DataArray(masked,
                                      coords={mask_dim: weights[mask_dim]},

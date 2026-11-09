@@ -137,12 +137,14 @@ Constructor Parameters
   so the source grid is expected to be 2D: if it has a mask dimension with more than one level, a warning is logged and only the first level is used.
 
 * **na_thres** (*float* or *str*, default: "auto"): Maximum fraction of missing weights of a target cell
-  before it is set to NaN. For the conservative methods it is one minus the fraction of the target cell covered by
-  valid source points, which CDO calls ``remap_area_min``. Range: 0.0-1.0. "auto" is the smmregrid default of the
-  method: 0.5 for the conservative methods, 1e-6 for 'bil' and 'bic' (NaN as soon as a neighbour is missing, as CDO)
-  and 1.0 for the others. "cdo" replicates CDO: the same, but 1.0 for the conservative methods
-  (the default of ``remap_area_min`` in CDO is 0). It is applied with and without ``skipna``.
-  See :doc:`concepts`.
+  before it is set to NaN: the cell is masked when the fraction of it covered by valid source points is below
+  ``1 - na_thres``, which for the conservative methods is the ``remap_area_min`` of CDO. Range: 0.0-1.0. "auto" is
+  the smmregrid default of the method: 0.5 for the conservative methods, 1e-6 for 'bil' and 'bic' (NaN as soon as a
+  neighbour is missing, as CDO) and 1.0 for the others. "cdo" replicates CDO: the same, but 1.0 for the conservative
+  methods (the default of ``remap_area_min`` in CDO is 0). With ``skipna`` the covered fraction is computed at each
+  call from the data; without ``skipna`` it is the ``dst_grid_frac`` of the weights, which is a fraction only for the
+  conservative methods: for the others CDO has already decided which target cells are mapped, ``na_thres`` has no
+  effect and a warning is logged if a value is given. See :doc:`concepts`.
 
 **CDO Configuration:**
 
@@ -227,15 +229,15 @@ Choosing how to handle missing values
 
 **What** ``mask_dim`` **does.** CDO sees the mask of the data when it computes the weights. With ``mask_dim``, the name of a
 dimension along which the mask changes (typically the levels of an ocean model), one set of weights is generated per level,
-each with the mask of that level. The missing source cells have no weight, and the covered area of each target cell comes
-from CDO for each level, so ``na_thres`` is applied to it. A mask that changes in time is not followed.
+each with the mask of that level. The missing source cells have no weight, and the covered fraction of each target cell comes
+from CDO for each level (``dst_grid_frac``), so ``na_thres`` is applied to it. A mask that changes in time is not followed.
 
 **What** ``skipna`` **does.** The weights are computed once, on a source grid without the mask of the data, so every source cell
 has its weight, land included. At each call the missing source cells are skipped: the weights of the valid cells are kept and
 renormalized by their sum, so that the target value is the average over the valid part of the cell only. A target cell always
-gets a value, even if it has very few valid source cells, and ``na_thres`` is evaluated at each call to decide when it is
-not trustworthy and has to be set to NaN. The masks are the same as with ``mask_dim``. ``mask_dim`` is ignored when ``skipna``
-is used. See :doc:`concepts` for ``na_thres``.
+gets a value, even if it has very few valid source cells, and the covered fraction of the cell (from the share of the valid
+weights) is compared with ``na_thres`` at each call to decide when it is not trustworthy and has to be set to NaN. The masks are the
+same as with ``mask_dim``. ``mask_dim`` is ignored when ``skipna`` is used. See :doc:`concepts` for ``na_thres``.
 
 Without ``skipna``, NaNs that are not in the first time step propagate to the target cells they contribute to.
 
