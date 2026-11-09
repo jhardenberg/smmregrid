@@ -84,15 +84,6 @@ any valid source cell are masked. ``'auto'`` is the smmregrid default, and it ad
 cells covered by less than half of valid source cells (``na_thres=0.5``), to avoid the erosion of coasts by cells made of
 a thin sliver of ocean. For bilinear and bicubic both mask the target cell as soon as a neighbour is missing, as CDO.
 
-The figure shows a real case: an ocean model on a curvilinear grid (IPSL, blue and grey, the cells are tilted along the coast
-of Norway) regridded to a regular 3-degree grid (black squares) with ``skipna=True``. The left panel gives, for each target
-cell, the fraction of missing weights and the covered fraction: they sum to 1. The other two panels apply ``na_thres=0.2``
-and the CDO ``remap_area_min=0.8``: the same cells are masked (red).
-
-.. image:: _static/masking_thresholds.png
-   :alt: Curvilinear source grid over a regular target grid on a coast, with the missing weights and covered area of each target cell, and the cells set to NaN by na_thres 0.2 and by remap_area_min 0.8
-   :width: 100%
-
 ``remap_area_min``
 ------------------
 

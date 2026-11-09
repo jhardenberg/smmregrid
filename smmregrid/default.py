@@ -1,5 +1,3 @@
-# deprecated: remap_area_min is now na_thres = 1 - remap_area_min (kept for code importing it)
-DEFAULT_AREA_MIN = 0.5
 # default na_thres: 'auto' is the smmregrid default of each method, 'cdo' replicates CDO (see resolve_na_thres)
 DEFAULT_NA_THRES = "auto"
 # methods for which the covered area of a target cell is a fraction between 0 and 1
