@@ -1,10 +1,28 @@
 """Module for cdo-smmregrid comparison"""
 
+import re
 import numpy as np
 import xarray as xr
+import cdo as cdo_package
 from cdo import Cdo
+from packaging.version import InvalidVersion, Version
 from smmregrid import Regridder, CdoGenerate
 
+
+def _cdo_version_parsable(path2cdo, verbose=False):
+    """python-cdo parses the CDO version with packaging, which fails on the revision suffix of the Homebrew
+    bottles (e.g. '2.6.6_1'). Strip the suffix, only when the version cannot be parsed as it is"""
+    version = _get_cdo_version(path2cdo, verbose)
+    if not verbose:
+        try:
+            Version(version)
+        except InvalidVersion:
+            version = re.sub(r'_\d+$', '', version)
+    return version
+
+
+_get_cdo_version = cdo_package.cdo.getCdoVersion
+cdo_package.cdo.getCdoVersion = _cdo_version_parsable
 cdo = Cdo()
 
 
