@@ -50,9 +50,9 @@ class GridType:
             variables (dict): A dictionary holding identified variables and their coordinates.
             bounds (list): A list of bounds variables identified in the dataset.
             masked (any): Placeholder for masked data (to be defined later).
+            target_mask (xarray.DataArray): Placeholder for the target mask applied without skipna (to be defined later).
             weights (any): The weights associated with the grid, if provided.
             weights_matrix (any): Placeholder for a weights matrix (to be defined later).
-            total_weights (any): Placeholder for the sum of weights per target cell (to be defined later).
             target_coords (dict): Placeholder for the target grid shape, dims and lat/lon (to be defined later).
         """
 
@@ -77,9 +77,9 @@ class GridType:
 
         # used by Regrid class
         self.masked = None
+        self.target_mask = None
         self.weights = weights
         self.weights_matrix = None
-        self.total_weights = None
         self.target_coords = None
 
     def _handle_default_dimensions(self, extra_dims, override=False):

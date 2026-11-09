@@ -38,17 +38,17 @@ def test_time_varying_nan():
     
     # Regrid without skipna (default behavior)
     regridder_default = Regridder(source_grid=src_ds, target_grid=tgt, method='bil', 
-                                  skipna=False, remap_area_min=0.0)
+                                  skipna=False, na_thres='cdo')
     out_default = regridder_default.regrid(src_ds)
     
     # Regrid with skipna=True (na_thres=1.0)
     regridder_skipna_1 = Regridder(source_grid=src_ds, target_grid=tgt, method='bil', 
-                                   skipna=True, na_thres=1.0, remap_area_min=0.0)
+                                   skipna=True, na_thres=1.0)
     out_skipna_1 = regridder_skipna_1.regrid(src_ds)
 
     # Regrid with skipna=True and na_thres=0.1
     regridder_skipna_01 = Regridder(source_grid=src_ds, target_grid=tgt, method='bil', 
-                                    skipna=True, na_thres=0.1, remap_area_min=0.0)
+                                    skipna=True, na_thres=0.1)
     out_skipna_01 = regridder_skipna_01.regrid(src_ds)
 
     non_nan_default = out_default['tas'].isel(time=1).notnull().sum().compute().item()
@@ -98,39 +98,20 @@ def test_cdo_regrid_skipna_bil(init_method):
                             init_method=init_method, skipna=True)
 
 
+# berkley.nc is given as a file, the others as datasets: the grid for CDO is prepared in different ways
+@pytest.mark.parametrize("filein,as_dataset", [
+    ('berkley.nc', False),      # 2D, NaN not constant in time
+    ('onlytos-ipsl.nc', True),  # 2D, land mask
+    ('so3d-nemo.nc', True),     # 3D
+    ('2t-era5.nc', True),       # 2D, no NaN
+])
 @pytest.mark.parametrize("method", ['nn', 'con'])
-def test_cdo_regrid_skipna_2d(method):
-    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
+def test_cdo_regrid_skipna(filein, as_dataset, method):
+    """Test regridding against CDO output with skipna enabled."""
 
-    filein = os.path.join('tests/data/berkley.nc')
-    assert check_cdo_regrid(filein, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "Berkeley.nc failed with skipna"
-    filein = os.path.join('tests/data/onlytos-ipsl.nc')
-    field = xr.open_mfdataset(filein)
-    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True), "Onlytos-ipsl.nc failed with skipna"
-
-@pytest.mark.parametrize("method", ['nn', 'con'])
-def test_cdo_regrid_skipna_3d(method):
-    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
-
-    filein = os.path.join('tests/data/so3d-nemo.nc')
-    field = xr.open_mfdataset(filein)
-    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "So3d-nemo.nc failed with skipna"
-
-@pytest.mark.parametrize("method", ['nn', 'con'])
-def test_cdo_regrid_skipna_full(method):
-    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
-
-    filein = os.path.join('tests/data/2t-era5.nc')
-    field = xr.open_mfdataset(filein)
-    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "2t-era5.nc failed with skipna"
-
-@pytest.mark.parametrize("method", ['nn', 'con'])
-def test_cdo_regrid_skipna_2dmask(method):
-    """Test regridding of the Berkeley dataset against CDO output with skipna enabled."""
-
-    filein = os.path.join('tests/data/onlytos-ipsl.nc')
-    field = xr.open_mfdataset(filein)
-    assert check_cdo_regrid(field, 'r180x90', loglevel='debug', skipna=True, remap_method=method), "Onlytos-ipsl.nc failed with skipna"
+    filein = os.path.join('tests/data', filein)
+    field = xr.open_mfdataset(filein) if as_dataset else filein
+    assert check_cdo_regrid(field, 'r180x90', skipna=True, remap_method=method), f"{filein} failed with skipna"
 
 
 @pytest.mark.parametrize("filein", ['tests/data/regional.nc', 'tests/data/onlytos-ipsl.nc'])
@@ -152,7 +133,7 @@ def test_skipna_destarea_locality():
     src = xr.open_dataset('tests/data/regional.nc')[['pr']].load()
     weights = CdoGenerate(src, 'r100x50', skipna=True, loglevel='warning').weights(
         method='con', remap_norm='destarea')
-    regridder = Regridder(weights=weights, skipna=True, remap_area_min=0.0, loglevel='warning')
+    regridder = Regridder(weights=weights, skipna=True, na_thres=1.0, loglevel='warning')
 
     # put a single NaN in the north-east corner of the regional grid
     src_nan = src.copy(deep=True)
@@ -172,7 +153,8 @@ def test_skipna_3d_as_2d(init):
     """With skipna the weights do not depend on the level, so 3D data are regridded as 2D:
     a single weights matrix and no mask dimension, whatever the initialization (also when
     mask_dim is given, which is ignored, and from 2D weights, which used to fail on 3D data).
-    The output must be the same in all cases, with the vertical dimension before the horizontal ones."""
+    The output must be the same in all cases, and the same as the regridding without skipna
+    (per-level weights), with the vertical dimension before the horizontal ones."""
 
     filein = 'tests/data/so3d-nemo.nc'
     data = xr.open_dataset(filein)
@@ -189,7 +171,8 @@ def test_skipna_3d_as_2d(init):
     out = regridder.regrid(data)['so']
     assert out.dims == ('time', 'lev', 'lat', 'lon')
 
-    reference = Regridder(source_grid=filein, target_grid='r180x90', skipna=True,
+    # without skipna the weights are per level (mask_dim): for a mask constant in time the result is the same
+    reference = Regridder(source_grid=filein, target_grid='r180x90', skipna=False,
                           loglevel='warning').regrid(data)['so']
     xr.testing.assert_allclose(out.compute(), reference.compute())
 

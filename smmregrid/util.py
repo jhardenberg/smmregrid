@@ -4,6 +4,7 @@ import os
 import warnings
 import xarray
 from .cdogrid import CdoGrid
+from .default import CONSERVATIVE_METHODS
 from .log import setup_logger
 
 
@@ -85,19 +86,24 @@ def detect_nan_variation_dims(field, time_dim, check_dims):
 
     return dims_with_variation
 
-def resolve_na_thres(skipna, na_thres, method, loglevel='warning'):
-    """Resolve the na_thres value to use for NaN-aware regridding.
+def resolve_na_thres(na_thres, method, loglevel='warning'):
+    """Resolve the na_thres value to use for the masking of the target cells.
 
-    If na_thres is 'auto', pick a sensible default based on whether
-    skipna is enabled and which remapping method is used. Otherwise,
-    validate that the provided value is within [0.0, 1.0].
+    na_thres is the maximum fraction of missing weights of a target cell. If it is a string,
+    pick the default of the method:
+
+    * 'auto' is the smmregrid default: 0.5 for the conservative methods (the target cells
+      covered by less than 50% of valid source points are masked), 1e-6 for bilinear and
+      bicubic (NaN as soon as a neighbour is missing, as CDO) and 1.0 otherwise.
+    * 'cdo' replicates CDO, where remap_area_min is 0 by default: as 'auto', but 1.0
+      for the conservative methods, i.e. only the cells without any valid source point are masked.
+
+    Otherwise, validate that the provided value is within [0.0, 1.0].
 
     Parameters
     ----------
-    skipna : bool
-        Whether NaN-skipping is enabled.
     na_thres : float or str
-        The requested na_thres value, or 'auto' to derive it.
+        The requested na_thres value, or 'auto' or 'cdo' to derive it from the method.
     method : str
         The remapping method (e.g. 'bil', 'bic', 'con', 'nn').
     loglevel : str
@@ -109,33 +115,64 @@ def resolve_na_thres(skipna, na_thres, method, loglevel='warning'):
         The resolved na_thres value.
     """
     loggy = setup_logger(level=loglevel, name='smmregrid.resolve_na_thres')
-    if na_thres == "auto":
-        if skipna:
-            loggy.info(
-                'skipna is enabled with na_thres=auto. na_thres will be set '
-                'to 1e-6 for bilinear and bicubic, and 1.0 for conservative '
-                'and nearest neighbor'
-            )
-            na_thres = 1e-6 if method in ('bil', 'bic') else 1.0
+    if isinstance(na_thres, str) and na_thres in ('auto', 'cdo'):
+        if method in ('bil', 'bic'):
+            value = 1e-6
+        elif method in CONSERVATIVE_METHODS and na_thres == 'auto':
+            value = 0.5
         else:
-            loggy.info(
-                'skipna is disabled with na_thres=auto. na_thres will be set to 0.5'
-            )
-            na_thres = 0.5
+            value = 1.0
+        loggy.info('na_thres=%s with method %s: na_thres will be set to %s', na_thres, method, value)
+        na_thres = value
 
     na_thres = float(na_thres)
     if na_thres < 0.0 or na_thres > 1.0:
         raise ValueError('The na_thres provided must be between 0.0 and 1.0')
 
-    if skipna:
-        loggy.warning(
-            'skipna is enabled with na_thres=%s. This will affect the regridding behavior.',
-            na_thres
-        )
-    else:
-        loggy.info(
-            'skipna is disabled with na_thres=%s. This will affect the regridding behavior.',
-            na_thres
-        )
+    loggy.info('na_thres is %s: target cells with more than this fraction of missing weights are masked', na_thres)
 
     return na_thres
+
+
+def deprecated_remap_area_min(remap_area_min, na_thres, method):
+    """Translate the deprecated remap_area_min argument into na_thres.
+
+    With the conservative methods the fraction of a target cell covered by valid source points is one minus
+    the fraction of missing weights, so remap_area_min is na_thres = 1 - remap_area_min. For the other methods
+    remap_area_min has no effect, as in CDO.
+
+    Parameters
+    ----------
+    remap_area_min : float or None
+        The deprecated argument, None if it was not provided.
+    na_thres : float or str
+        The na_thres provided by the user.
+    method : str
+        The remapping method.
+
+    Returns
+    -------
+    float or str
+        The na_thres to resolve.
+    """
+    if remap_area_min is None:
+        return na_thres
+
+    warnings.warn(
+        "remap_area_min is deprecated and will be removed in future versions. "
+        "Please use na_thres = 1 - remap_area_min instead (na_thres='cdo' replicates CDO, "
+        "which does not mask by area by default).",
+        DeprecationWarning, stacklevel=3
+    )
+    remap_area_min = float(remap_area_min)
+    if remap_area_min < 0.0 or remap_area_min > 1.0:
+        raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
+    if method not in CONSERVATIVE_METHODS:
+        return na_thres
+
+    mapped = round(1.0 - remap_area_min, 12)
+    if not (isinstance(na_thres, str) and na_thres == 'auto') and \
+            not (not isinstance(na_thres, str) and abs(float(na_thres) - mapped) < 1e-9):
+        raise ValueError(f'remap_area_min={remap_area_min} and na_thres={na_thres} are in conflict: '
+                         f'remap_area_min is na_thres = 1 - remap_area_min, use only na_thres')
+    return mapped

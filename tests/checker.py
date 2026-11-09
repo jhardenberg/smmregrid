@@ -1,10 +1,28 @@
 """Module for cdo-smmregrid comparison"""
 
+import re
 import numpy as np
 import xarray as xr
+import cdo as cdo_package
 from cdo import Cdo
+from packaging.version import InvalidVersion, Version
 from smmregrid import Regridder, CdoGenerate
 
+
+def _cdo_version_parsable(path2cdo, verbose=False):
+    """python-cdo parses the CDO version with packaging, which fails on the revision suffix of the Homebrew
+    bottles (e.g. '2.6.6_1'). Strip the suffix, only when the version cannot be parsed as it is"""
+    version = _get_cdo_version(path2cdo, verbose)
+    if not verbose:
+        try:
+            Version(version)
+        except InvalidVersion:
+            version = re.sub(r'_\d+$', '', version)
+    return version
+
+
+_get_cdo_version = cdo_package.cdo.getCdoVersion
+cdo_package.cdo.getCdoVersion = _cdo_version_parsable
 cdo = Cdo()
 
 
@@ -23,42 +41,57 @@ def find_var(xfield):
 
 
 def _cdo_remap(remap_method, ftarget, finput, extrapolate=True, remap_area_min=None,
-               remap_norm='fracarea'):
+               remap_norm='fracarea', cdo_options=None):
     """Run the reference CDO remapping, returning an xarray Dataset.
 
     remap_area_min is only passed to CDO's environment when explicitly
     given, since it is not supported by every CDO version.
     remap_norm sets the normalization of conservative remapping (CDO_REMAP_NORM).
+    cdo_options are extra CDO command line options (e.g. '--force').
     """
     cdo_interpolator = getattr(cdo, 'remap' + remap_method)
     env = {'REMAP_EXTRAPOLATE': 'on' if extrapolate else 'off',
            'CDO_REMAP_NORM': remap_norm}
     if remap_area_min is not None:
         env['REMAP_AREA_MIN'] = str(remap_area_min)
-    return cdo_interpolator(ftarget, input=finput, returnXDataset=True, env=env)
+    kwargs = {'options': cdo_options} if cdo_options else {}
+    return cdo_interpolator(ftarget, input=finput, returnXDataset=True, env=env, **kwargs)
+
+
+def _smmregrid_na_thres(remap_method, na_thres, remap_area_min):
+    """na_thres of smmregrid equivalent to the remap_area_min given to CDO, for the conservative method.
+
+    With na_thres='auto' the covered area of the target cell must be at least remap_area_min,
+    as in CDO: na_thres = 1 - remap_area_min. Other values of na_thres, and other methods, are not changed."""
+
+    if isinstance(na_thres, str) and na_thres == 'auto' and remap_method == 'con' and remap_area_min is not None:
+        return round(1.0 - float(remap_area_min), 12)
+    return na_thres
 
 
 def _build_interpolator(finput, ftarget, remap_method, init_method, mask_dim,
-                        remap_area_min, skipna, loglevel, na_thres, remap_norm='fracarea'):
+                        remap_area_min, skipna, loglevel, na_thres, remap_norm='fracarea',
+                        cdo_options=None):
     """Build a smmregrid Regridder either from grids or from pre-computed weights.
 
+    remap_area_min is the CDO option: for the conservative method it is given to smmregrid as na_thres.
     A non-default remap_norm can be set only via pre-computed weights,
     since Regridder does not expose it when initialized from grids.
     """
 
+    na_thres = _smmregrid_na_thres(remap_method, na_thres, remap_area_min)
+
     if init_method == 'grids':
         if remap_norm != 'fracarea':
             raise ValueError("remap_norm other than 'fracarea' requires init_method='weights'")
-        return Regridder(source_grid=finput, target_grid=ftarget,
-                         remap_area_min=remap_area_min, method=remap_method,
+        return Regridder(source_grid=finput, target_grid=ftarget, method=remap_method,
                          mask_dim=mask_dim, skipna=skipna, loglevel=loglevel,
-                         na_thres=na_thres)
+                         na_thres=na_thres, cdo_options=cdo_options)
     if init_method == 'weights':
         wfield = CdoGenerate(finput, ftarget, loglevel=loglevel, skipna=skipna,
-                             na_thres=na_thres).weights(method=remap_method, mask_dim=mask_dim,
+                             na_thres=na_thres, cdo_options=cdo_options).weights(method=remap_method, mask_dim=mask_dim,
                                                        remap_norm=remap_norm)
-        return Regridder(weights=wfield, loglevel=loglevel,
-                         remap_area_min=remap_area_min, skipna=skipna, na_thres=na_thres)
+        return Regridder(weights=wfield, loglevel=loglevel, skipna=skipna, na_thres=na_thres)
 
     raise KeyError('Unsupported init method')
 
@@ -102,10 +135,11 @@ def _compare(xfield, cdofield, interpolator, access='Dataset'):
 def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
                      init_method='grids', mask_dim=None, extrapolate=True,
                      remap_area_min=0.0, # this is set to 0 since tests were developed like this
-                     loglevel='INFO', skipna=False, na_thres="auto", remap_norm='fracarea'):
+                     loglevel='INFO', skipna=False, na_thres="auto", remap_norm='fracarea', cdo_options=None):
     """Given a file to be interpolated finput over the ftarget grid,
     check if the output of the last variable is the same as produced
     by CDO remap command. This function is used for tests.
+    cdo_options are passed to both CDO and smmregrid (e.g. '--force').
     remap_norm ('fracarea' or 'destarea') requires init_method='weights' if not default."""
 
     # define files and open input file
@@ -113,12 +147,13 @@ def check_cdo_regrid(finput, ftarget, remap_method='con', access='Dataset',
 
     # interpolation with pure CDO, with the same minimum area fraction as smmregrid
     cdofield = _cdo_remap(remap_method, ftarget, finput, extrapolate=extrapolate,
-                          remap_area_min=remap_area_min, remap_norm=remap_norm)
+                          remap_area_min=remap_area_min, remap_norm=remap_norm,
+                          cdo_options=cdo_options)
 
     # method with automatic creation of weights (or pre-computed weights)
     interpolator = _build_interpolator(finput, ftarget, remap_method, init_method,
                                        mask_dim, remap_area_min, skipna, loglevel, na_thres,
-                                       remap_norm=remap_norm)
+                                       remap_norm=remap_norm, cdo_options=cdo_options)
 
     return _compare(xfield, cdofield, interpolator, access=access)
 

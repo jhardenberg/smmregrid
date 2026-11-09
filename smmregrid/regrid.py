@@ -41,11 +41,12 @@ import numpy
 import dask.array
 from .dimension import remove_degenerate_axes
 from .cdogenerate import CdoGenerate
-from .weights import compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask, compute_total_weights
+from .weights import (compute_weights_matrix3d, compute_weights_matrix, mask_weights, check_mask,
+                      compute_target_mask, mask_na_thres)
 from .log import setup_logger
 from .gridinspector import GridInspector
-from .util import detect_nan_variation_dims, tolist, resolve_na_thres
-from .default import DEFAULT_AREA_MIN, DEFAULT_NA_THRES, CDO_MAP_METHODS, COORD_DECIMALS
+from .util import detect_nan_variation_dims, tolist, resolve_na_thres, deprecated_remap_area_min
+from .default import DEFAULT_NA_THRES, CDO_MAP_METHODS, COORD_DECIMALS, CONSERVATIVE_METHODS
 
 # default minimum area for conservative remapping
 
@@ -55,7 +56,7 @@ class Regridder(object):
     """Main smmregrid regridding class"""
 
     def __init__(self, source_grid=None, target_grid=None, weights=None,
-                 method='con', remap_area_min=DEFAULT_AREA_MIN, transpose=True, mask_dim=None,
+                 method='con', remap_area_min=None, transpose=True, mask_dim=None,
                  horizontal_dims=None, cdo_extra=None, cdo_options=None,
                  check_nan=False, skipna=False, na_thres=DEFAULT_NA_THRES,
                  cdo=None, loglevel='WARNING'):
@@ -80,8 +81,8 @@ class Regridder(object):
             horizontal_dims (list): List of spatial dimensions to
                                     interpolate (default: None).
             method (str): Interpolation method to use (default: 'con').
-            remap_area_min (float): Minimum area for remapping in conservative remapping.
-                                    Larger values avoid mask erosion.
+            remap_area_min (float): Deprecated: use na_thres = 1 - remap_area_min. Minimum fraction of the
+                                    target cell covered by valid source points, for the conservative methods.
             transpose (bool): If True, transpose the output such that
                               the masked coordinate is placed just before the
                               other spatial coordinates (default: True).
@@ -91,10 +92,12 @@ class Regridder(object):
                            contribute and the result is renormalized by the valid weights, so that
                            masks varying in time (or along any dimension) are supported. The weights
                            are then the same for all levels, and mask_dim is ignored (default: False).
-            na_thres (float or str): Maximum fraction of missing weights before a target cell is set
-                                     to NaN (with skipna) or masked (without skipna, in the destination
-                                     mask computed from the weights). 'auto' (default) gives 0.5
-                                     without skipna, and with skipna 1e-6 for bil/bic and 1.0 otherwise.
+            na_thres (float or str): Maximum fraction of missing weights of a target cell, before it is set to NaN.
+                                     For the conservative methods it is one minus the fraction of the target cell
+                                     covered by valid source points (the CDO remap_area_min). 'auto' (default)
+                                     is the smmregrid default of the method: 0.5 for the conservative methods,
+                                     1e-6 for bil/bic and 1.0 otherwise. 'cdo' replicates CDO: as 'auto',
+                                     but 1.0 for the conservative methods (default of CDO remap_area_min is 0).
             cdo (str): Path to the CDO executable (default: CDO env variable, or 'cdo').
             cdo_extra (str): Extra command to be passed to CDO
             cdo_options(str): Extra options to be passed to CDO
@@ -123,12 +126,6 @@ class Regridder(object):
             self.loggy.info('Forcing horizontal_dim from input: expecting a single-gridtype dataset')
         self.extra_dims = {'mask': mask_dim, 'horizontal': horizontal_dims}
 
-        # TODO: this might be overridden at regrid level
-        self.loggy.debug("Minimum remap area: %s", remap_area_min)
-        self.remap_area_min = float(remap_area_min)
-        if self.remap_area_min < 0.0 or self.remap_area_min > 1.0:
-            raise ValueError('The remap_area_min provided must be between 0.0 and 1.0')
-
         # set up skipna option as ESMF
         self.skipna = skipna
         self.method = method
@@ -152,10 +149,14 @@ class Regridder(object):
             self.grids = self._gridtype_from_weights(weights)
             # the method the weights were generated with, not the default one, sets na_thres 'auto'
             self.method = CDO_MAP_METHODS.get(self.grids[0].weights.attrs.get('map_method'), method)
-            self.na_thres = resolve_na_thres(self.skipna, na_thres, self.method, loglevel)
+            self.na_thres = resolve_na_thres(deprecated_remap_area_min(remap_area_min, na_thres, self.method),
+                                             self.method, loglevel)
+            self._warn_na_thres_without_effect(na_thres, skipna)
         else:
             self.loggy.info('Init from grids selected!')
-            self.na_thres = resolve_na_thres(self.skipna, na_thres, method, loglevel)
+            self.na_thres = resolve_na_thres(deprecated_remap_area_min(remap_area_min, na_thres, method),
+                                             method, loglevel)
+            self._warn_na_thres_without_effect(na_thres, skipna)
             self.init_mode = 'grids'
             if isinstance(source_grid, str):
                 if os.path.isfile(source_grid):
@@ -221,18 +222,28 @@ class Regridder(object):
             else:
                 gridtype.weights_matrix = compute_weights_matrix(gridtype.weights)
 
-            # this section is used to create a target mask initializing the CDO weights (both 2d and 3d)
-            # has a destination mask been precomputed?
-            if "dst_grid_masked" in gridtype.weights.variables:
-                gridtype.masked = gridtype.weights.dst_grid_masked.data
-            else:
-                # compute the destination mask now
-                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim, na_thres=self.na_thres)
-                gridtype.masked = check_mask(gridtype.weights, gridtype.mask_dim)
+            # dst_grid_imask, the target cells with at least one valid link: precomputed by CdoGenerate (3D) or now
+            if "dst_grid_masked" not in gridtype.weights.variables:
+                gridtype.weights = mask_weights(gridtype.weights, gridtype.weights_matrix, gridtype.mask_dim)
+
+            # target mask applied at each call without skipna: dst_grid_imask and, for the conservative methods,
+            # na_thres on the dst_grid_frac of the weights. Both depend only on the weights, so computed once here
+            gridtype.target_mask = compute_target_mask(gridtype.weights, self.na_thres)
+            gridtype.masked = check_mask(gridtype.target_mask, gridtype.mask_dim)
 
             # precompute quantities which depend only on the weights, to avoid repeating them at each call
-            gridtype.total_weights = compute_total_weights(gridtype.weights_matrix)
             gridtype.target_coords = self._target_coords(gridtype.weights, gridtype.mask_dim)
+
+    def _warn_na_thres_without_effect(self, na_thres, skipna):
+        """
+        na_thres acts on the fraction of the target cell covered by valid source points. Without skipna this
+        fraction is known only for the conservative methods (dst_grid_frac of the weights): for the others CDO
+        has already decided which target cells are mapped when generating the weights, and na_thres has no effect.
+        """
+        if not skipna and self.method not in CONSERVATIVE_METHODS and not isinstance(na_thres, str):
+            self.loggy.warning('na_thres=%s has no effect with method %s without skipna: the target cells with a '
+                               'missing source point were already masked by CDO when generating the weights. '
+                               'Use skipna=True to apply na_thres at each call', na_thres, self.method)
 
     def _gridtype_from_weights(self, weights):
         """
@@ -451,8 +462,8 @@ class Regridder(object):
                 xa, wa, weights_matrix=wm,
                 masked=mm, horizontal_dims=horizontal_dims,
                 skipna=self.skipna, na_thres=self.na_thres,
-                total_weights=gridtype.total_weights[widx],
-                target_coords=gridtype.target_coords)
+                target_coords=gridtype.target_coords,
+                target_mask=gridtype.target_mask.isel(**{mask_dim: widx}))
             )
         data3d = xarray.concat(data3d_list, dim=mask_dim, coords='different', compat='equals')
 
@@ -503,8 +514,8 @@ class Regridder(object):
             horizontal_dims=gridtype.horizontal_dims,
             skipna=self.skipna,
             na_thres=self.na_thres,
-            total_weights=gridtype.total_weights,
-            target_coords=gridtype.target_coords)
+            target_coords=gridtype.target_coords,
+            target_mask=gridtype.target_mask)
 
     def _target_coords(self, weights, mask_dim=None):
         """
@@ -556,7 +567,7 @@ class Regridder(object):
 
     def apply_weights(self, source_data, weights, weights_matrix=None,
                       masked=True, horizontal_dims=None, skipna=False, na_thres=DEFAULT_NA_THRES,
-                      total_weights=None, target_coords=None):
+                      target_coords=None, target_mask=None):
         """
         Apply CDO weights to the source data, performing the regridding operation.
 
@@ -572,8 +583,10 @@ class Regridder(object):
             skipna (bool): Whether to renormalize the output based on valid source points (default: False).
             na_thres (float or str): Maximum fraction of missing weights of a target cell (default: 'auto',
                                      resolved from skipna and the method of the Regridder).
-            total_weights (numpy.ndarray, optional): Pre-computed sum of weights per target cell (default: None).
             target_coords (dict, optional): Pre-computed target grid shape, dims and lat/lon (default: None).
+            target_mask (xarray.DataArray, optional): Pre-computed target mask for the case without ``skipna``
+                                                      (``compute_target_mask``), computed from the weights
+                                                      and ``na_thres`` if not provided (default: None).
 
         Returns:
             xarray.DataArray: The regridded version of the source dataset.
@@ -612,7 +625,6 @@ class Regridder(object):
         # destination grid properties
         dst_grid_shape = weights.dst_grid_dims.values
         dst_frac_area = weights.dst_grid_frac
-        dst_grid_mask = weights.dst_grid_imask
 
         # target grid shape, dims and lat/lon: use the precomputed ones if available
         if target_coords is None:
@@ -635,8 +647,10 @@ class Regridder(object):
         self.loggy.debug('Dimension to be ignored: %s', kept_dims)
         if weights_matrix is None:
             weights_matrix = compute_weights_matrix(weights)
-        if na_thres == 'auto':
-            na_thres = resolve_na_thres(skipna, na_thres, self.method, self.loglevel)
+        if isinstance(na_thres, str):
+            na_thres = resolve_na_thres(na_thres, self.method, self.loglevel)
+        if target_mask is None and not skipna:
+            target_mask = compute_target_mask(weights, na_thres)
 
         # Remove the spatial axes, apply the weights, add the spatial axes back:
         # the kept dimensions go first, so that the reshape does not mix them with the spatial ones
@@ -648,15 +662,10 @@ class Regridder(object):
         self.loggy.debug('Source array after reshape is: %s', source_array.shape)
 
         target_dask = self.tensordot(
-            source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres,
-            total_weights=total_weights, normalization=weights.attrs.get('normalization')
+            source_array, weights_matrix, masked, skipna, kept_shape, target_mask, na_thres,
+            normalization=weights.attrs.get('normalization'),
+            dst_frac_area=dst_frac_area
         )
-
-        # use the frac area of the destination to further mask the data
-        if self.remap_area_min > 0.0:
-            mask_shape = [1 for _ in kept_shape] + [-1]
-            frac_mask = dst_frac_area.data.reshape(mask_shape) < self.remap_area_min
-            target_dask = dask.array.where(frac_mask, numpy.nan, target_dask)
 
         # reshape the target DataArray
         target_dask = dask.array.reshape(
@@ -690,38 +699,51 @@ class Regridder(object):
         target_da.attrs.pop('CDI_grid_type', None)
 
         return target_da
-    
-    def tensordot(self, source_array, weights_matrix, masked, skipna, kept_shape, dst_grid_mask, na_thres,
-                  total_weights=None, normalization=None):
+
+    def tensordot(self, source_array, weights_matrix, masked, skipna, kept_shape, target_mask, na_thres,
+                  normalization=None, dst_frac_area=None):
         """
         Apply the sparse weights matrix to the flattened source array, handling NaNs.
 
-        Three cases are possible:
+        The regridded value is ``numerator = source @ weights``. With ``skipna`` the NaNs of the source are
+        set to zero first and, unless the weights use the ``destarea`` normalization, the result is divided by
+        ``denominator``, the sum of the weights of the valid source points (see Notes).
 
-        - ``skipna=False`` and ``masked=False``: plain ``source @ weights``.
-        - ``skipna=False`` and ``masked=True``: the target cells outside the precomputed destination
-          mask are set to NaN. NaNs in the source which are not in the mask of the weights propagate
-          to the target cells they contribute to.
-        - ``skipna=True``: NaNs in the source are set to zero and, unless the weights use the
-          ``destarea`` normalization, the result is renormalized by the sum of the valid weights
-          (see Notes). Target cells with no valid source point, or whose fraction of missing
-          weights exceeds ``na_thres``, are set to NaN.
+        The target cells are then masked with one rule (``mask_na_thres`` in ``weights.py``): a target cell is
+        NaN when the fraction of it covered by valid source points is below ``1 - na_thres``, and always when
+        no valid source point contributes to it. The covered fraction is:
+
+        - without ``skipna``: the ``dst_grid_frac`` of the weights, computed by CDO with the mask of the data
+          (one per level with ``mask_dim``). It is a fraction only for the conservative methods: for the others
+          CDO decides which target cells are mapped, ``na_thres`` has no effect and only the cells with at least
+          one valid link (``dst_grid_imask``) are kept. Both depend only on the weights, so the mask is computed
+          once at init (``target_mask``, by ``compute_target_mask`` in ``weights.py``) and applied here when
+          ``masked``. NaNs of the source which were not in the mask of the weights propagate to the target cells
+          they contribute to.
+        - with ``skipna``: computed at each call from the valid points of the data, so that masks varying in
+          time (or along any dimension) are followed: the sum of the weights of the target cell on valid source
+          points, ``denominator``, times, with ``fracarea``, the ``dst_grid_frac`` of the weights (the coverage of
+          the cell by the unmasked source grid). With ``destarea`` the weights are the overlap areas over the whole
+          target cell, and ``denominator`` alone is the covered fraction; for the interpolation methods the weights
+          sum to 1, and it is the share of the weights on valid points. For the conservative methods this is the
+          same number as the ``dst_grid_frac`` CDO writes with that mask, to machine precision: with ``fracarea``
+          the factor carries the rounding of the areas computed by CDO, so that the cells covered by exactly
+          ``1 - na_thres`` are decided as CDO does (see the comment in the code).
 
         Args:
             source_array (numpy.ndarray or dask.array.Array): Source data, with the horizontal
                 dimensions flattened into the last axis (shape ``kept_shape + [n_src]``).
             weights_matrix (sparse matrix or dask.array.Array): Weights of shape ``(n_src, n_dst)``.
-            masked (bool): Whether the source data contain a mask (i.e. NaNs) to be handled.
+            masked (bool): Whether ``target_mask`` has cells to mask (not ``skipna``).
             skipna (bool): Whether to handle NaNs dynamically, based on the valid source points.
             kept_shape (list): Shape of the non-horizontal dimensions of the source array.
-            dst_grid_mask (xarray.DataArray): Destination mask, used only when ``masked`` and not ``skipna``.
+            target_mask (xarray.DataArray): Target mask from ``compute_target_mask`` (True where the cell is kept),
+                used only when ``masked`` and not ``skipna``.
             na_thres (float): Maximum fraction of missing weights tolerated before setting
-                a target cell to NaN, used only when ``skipna``.
-            total_weights (numpy.ndarray, optional): Pre-computed sum of the weights for each target cell
-                (NaN where no weights). Computed from ``weights_matrix`` if not provided.
+                a target cell to NaN.
             normalization (str, optional): The ``normalization`` attribute of the CDO weights
-                (``'fracarea'``, ``'destarea'`` or ``'none'`` for non-conservative methods).
-                Only ``'destarea'`` changes the behaviour, used only when ``skipna``.
+                (``'fracarea'`` or ``'destarea'`` for the conservative methods, ``'none'`` for the others).
+            dst_frac_area (xarray.DataArray, optional): ``dst_grid_frac`` of the weights, used with ``skipna``.
 
         Returns:
             dask.array.Array: Regridded data, with shape ``kept_shape + [n_dst]``.
@@ -731,13 +753,11 @@ class Regridder(object):
             https://github.com/jhardenberg/smmregrid/pull/70).
 
             With skipna, weights are generated by CDO from a source grid where NaNs are filled
-            with zeros, i.e. as if all source points were valid. NaNs are then handled here, at each
-            call, so that masks varying in time (or along any other dimension) are supported.
-            For a target cell ``j``, with weights ``w_ij`` and valid-source indicator ``v_i``:
+            with zeros, i.e. as if all source points were valid. For a target cell ``j``, with weights
+            ``w_ij`` and valid-source indicator ``v_i``:
 
             - ``numerator_j   = sum_i v_i * w_ij * x_i``
             - ``denominator_j = sum_i v_i * w_ij``   (sum of the valid weights)
-            - ``total_j       = sum_i w_ij``         (sum of all the weights, i.e. ``total_weights``)
 
             The goal is to reproduce what CDO would return if the weights were computed with
             the actual mask of the data, where a NaN source cell is treated as not existing:
@@ -757,10 +777,6 @@ class Regridder(object):
             anywhere in the source changed the values of all the partially covered target cells
             (e.g. coasts, or the boundaries of a regional grid), even very far from it.
 
-            In all cases target cells with no valid source point (``denominator_j == 0``) are NaN,
-            and not zero, and ``1 - denominator_j / total_j`` is the fraction of missing weights
-            used for the ``na_thres`` check.
-
             The computation is always done, even if the source has no NaNs: checking it in advance
             (e.g. with ``valid_data.all()``) would force dask to compute the whole source array,
             breaking laziness.
@@ -779,14 +795,13 @@ class Regridder(object):
         self.loggy.debug('Tensordot!')
         numerator = dask.array.tensordot(source_array, weights_matrix, axes=1)
 
-        # default case: no skipna
+        mask_shape = [1 for _ in kept_shape] + [-1]
+
+        # default case: no skipna. The target mask (cells without any valid link, and na_thres on the dst_grid_frac
+        # of the weights for the conservative methods) depends only on the weights: computed once at init
         if not skipna:
             if masked:
-                # if mask is precomputed, use it to mask the output
-                mask_shape = [1 for d in kept_shape] + [-1]
-                denominator = dst_grid_mask.data.reshape(mask_shape).astype(bool)
-                return dask.array.where(denominator, numerator, numpy.nan)
-            # this is not masked, so numerator is the final output
+                numerator = dask.array.where(target_mask.data.reshape(mask_shape).astype(bool), numerator, numpy.nan)
             return numerator
 
         # skipna is True: sum of the weights of the valid source points (see Notes in the docstring)
@@ -805,12 +820,20 @@ class Regridder(object):
         else:
             target_dask = numerator / denominator
 
-        # na_thres logic, safety check in init.
-        # total_weights is NaN where a target cell receives no weights at all
-        if total_weights is None:
-            total_weights = compute_total_weights(weights_matrix)
-        missing_fraction = 1.0 - denominator / total_weights
-        return dask.array.where(missing_fraction > na_thres, numpy.nan, target_dask)
+        # covered fraction of the target cell: the sum of the valid weights. With destarea the weights are
+        # the overlap areas over the whole target cell, so this is already the dst_grid_frac that CDO writes
+        # with the mask of the data. For the interpolation methods the weights sum to 1, so it is the share
+        # of the weights on valid points
+        covered_fraction = denominator
+        if normalization == 'fracarea' and dst_frac_area is not None:
+            # with fracarea the weights are normalized by the part of the cell covered by the source grid:
+            # times that coverage, as written by CDO in the (unmasked) weights. It is the geometric coverage at
+            # the edge of a regional grid, and 1 +- 1e-13 inside a global grid, since it carries the rounding of
+            # the areas computed by CDO: the product reproduces the dst_grid_frac that CDO writes with the mask
+            # to 1e-16, so that the cells covered by exactly 1 - na_thres are decided as CDO does.
+            # Verified: without the factor, cells covered by exactly 50% flip with respect to CDO (NEMO, r180x90)
+            covered_fraction = covered_fraction * dst_frac_area.data.reshape(mask_shape)
+        return mask_na_thres(target_dask, covered_fraction, na_thres)
 
     def _check_nan_variation(self, source_grid, gridtype):
         """

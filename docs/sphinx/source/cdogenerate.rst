@@ -90,9 +90,10 @@ Generate interpolation weights for regridding.
 
 * **nproc** (*int*, default: 1): Number of processes for parallel 3D weight generation.
 
-* **na_thres** (*float* or *str*, default: "auto"): Maximum fraction of missing weights before a target cell
-  is masked. Range: 0.0-1.0. "auto" gives 0.5 without ``skipna`` (and set only at weights generation phase); with ``skipna`` it gives 1e-6 for 'bil'
-  and 'bic' and 1.0 for the other methods. 
+* **na_thres** (*float* or *str*, default: "auto"): Accepted for symmetry with :class:`Regridder` and validated,
+  but the weights do not depend on it: the destination mask stored in the weights (``dst_grid_imask``) marks the
+  target cells with at least one valid source point, and the threshold is applied by :class:`Regridder`.
+  See :doc:`concepts`.
 
 **Returns:** *xarray.Dataset* containing the regridding weights and mask information.
 

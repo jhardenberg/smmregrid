@@ -1,7 +1,7 @@
-# default minimum area for conservative remapping
-DEFAULT_AREA_MIN = 0.5 
-# default threshold for skipna option: 1 is conserivative but seems to replicate CDO behavior
-DEFAULT_NA_THRES = "auto"  
+# default na_thres: 'auto' is the smmregrid default of each method, 'cdo' replicates CDO (see resolve_na_thres)
+DEFAULT_NA_THRES = "auto"
+# methods for which the covered area of a target cell is a fraction between 0 and 1
+CONSERVATIVE_METHODS = ["con", "con2", "ycon"]
 
 # Cdo generate supported methods and norms
 SUPPORTED_METHODS = ["bic", "bil", "con", "con2", "dis", "laf", "nn", "ycon"]
