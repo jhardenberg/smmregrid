@@ -24,14 +24,15 @@ The rule is the same with and without ``skipna``. What changes is where the cove
 * **without** ``skipna`` CDO generates the weights with the mask of the data (one set per level with ``mask_dim``),
   and writes the covered fraction of each target cell in the weights (``dst_grid_frac``). smmregrid reads it.
 * **with** ``skipna`` CDO generates the weights from a grid without mask, so the weights know nothing about the
-  missing values. At each call smmregrid computes the covered fraction from the data: the share of the weights of
-  the target cell on valid source cells, times (for conservative remapping) the coverage of the cell by the unmasked
-  source grid written by CDO in the weights (``dst_grid_frac``: 1 inside a global grid with ``fracarea``, the
-  geometric coverage at the edge of a regional grid and with ``destarea``). For conservative remapping the weights
-  are overlap areas, so this is the same number that CDO would write as ``dst_grid_frac`` with that mask, to
-  machine precision and for both normalizations: the second factor carries the rounding of the areas computed by
-  CDO, so that the cells covered by exactly ``1 - na_thres`` (half of the cell, a common case) are decided as CDO
-  does. Without it a few of these cells flip.
+  missing values. At each call smmregrid computes the covered fraction from the data: the sum of the weights of
+  the target cell on valid source cells. With ``destarea`` the weights are the overlap areas over the whole target
+  cell, so this sum is already the covered fraction. With ``fracarea`` they are normalized by the part of the cell
+  covered by the source grid, so the sum is multiplied by that coverage, written by CDO in the unmasked weights
+  (``dst_grid_frac``: 1 inside a global grid, the geometric coverage at the edge of a regional grid). For
+  conservative remapping this is the same number that CDO would write as ``dst_grid_frac`` with that mask, to
+  machine precision and for both normalizations: with ``fracarea`` the factor carries the rounding of the areas
+  computed by CDO (1 ± 1e-13), so that the cells covered by exactly ``1 - na_thres`` (half of the cell, a common
+  case) are decided as CDO does. Without it a few of these cells flip.
 
 Per method
 ----------
@@ -46,9 +47,9 @@ Method                 ``skipna=False``                              ``skipna=Tr
 ``con`` (fracarea)     ``dst_grid_frac`` of the weights, relative    share of the valid weights times ``dst_grid_frac``
                        to the part of the cell covered by the        of the unmasked weights: the same number.
                        source grid. ``na_thres`` effective.          ``na_thres`` effective.
-``con`` (destarea)     ``dst_grid_frac``, absolute (relative to      share of the valid weights times ``dst_grid_frac``
-                       the whole target cell). ``na_thres``          (the geometric coverage): the same number,
-                       effective.                                    absolute. ``na_thres`` effective.
+``con`` (destarea)     ``dst_grid_frac``, absolute (relative to      sum of the valid weights (areas over the whole
+                       the whole target cell). ``na_thres``          target cell): the same number, absolute.
+                       effective.                                    ``na_thres`` effective.
 ``bil``, ``bic``       CDO drops a target cell as soon as one of      share of the weights on valid neighbours (quarters
                        its neighbours is missing: ``na_thres`` has    for ``bil``). ``na_thres`` effective: 1e-6 masks
                        no effect, a warning is logged if a value is   the cell as soon as a neighbour is missing, as
@@ -117,7 +118,8 @@ Examples
     # bilinear: set to NaN the target cells with more than 30% of the weights on missing source cells
     regridder = Regridder(source_grid, target_grid, method='bil', skipna=True, na_thres=0.3)
 
-In the code the rule is one function of ``smmregrid.weights``, ``mask_na_thres``, applied by ``Regridder.tensordot`` to the
-``dst_grid_frac`` of the weights (without ``skipna``) or to the covered fraction computed from the data (with ``skipna``). The target mask
-stored in the weights (``dst_grid_imask``, built by ``mask_weights``) only marks the target cells with at least one valid
-source cell.
+In the code the rule is one function of ``smmregrid.weights``, ``mask_na_thres``, applied to the ``dst_grid_frac`` of the
+weights (without ``skipna``) or to the covered fraction computed from the data at each call by ``Regridder.tensordot`` (with
+``skipna``). The target mask stored in the weights (``dst_grid_imask``, built by ``mask_weights``) only marks the target cells
+with at least one valid source cell, and does not depend on ``na_thres``. Without ``skipna`` both depend only on the weights,
+so ``Regridder`` combines them once at init in a single target mask (``compute_target_mask``) applied at each call.

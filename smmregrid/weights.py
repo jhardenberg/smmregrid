@@ -54,22 +54,6 @@ def compute_weights_matrix(weights):
     )
 
 
-def compute_total_weights(weights_matrix):
-    """
-    Compute the sum of the weights for each target cell, as a dense numpy array.
-    Target cells without any weight are set to NaN to avoid division by zero.
-    Handles the 3D case, where weights_matrix is a list of matrices.
-    """
-
-    if isinstance(weights_matrix, list):
-        return [compute_total_weights(w) for w in weights_matrix]
-
-    total_weights = weights_matrix.sum(axis=0).compute()
-    if hasattr(total_weights, 'todense'):
-        total_weights = total_weights.todense()
-    return numpy.where(total_weights > 0, total_weights, numpy.nan)
-
-
 def mask_na_thres(target, covered_fraction, na_thres, fill_value=numpy.nan):
     """
     Mask the target cells covered by too few valid source points.
@@ -93,10 +77,31 @@ def mask_na_thres(target, covered_fraction, na_thres, fill_value=numpy.nan):
     return dask.array.where(masked, fill_value, target)
 
 
+def compute_target_mask(weights, na_thres):
+    """
+    Target mask applied without ``skipna``, computed once from the weights: ``dst_grid_imask`` (cells with
+    at least one valid link, see ``mask_weights``) and, for the conservative methods, ``mask_na_thres`` on the
+    ``dst_grid_frac`` of the weights (for the other methods it is not a fraction, see ``Regridder.tensordot``).
+
+    Args:
+        weights (xarray.Dataset): The CDO weights (2D or 3D), with ``dst_grid_imask`` from ``mask_weights``.
+        na_thres (float): Maximum fraction of missing weights, between 0 and 1.
+
+    Returns:
+        xarray.DataArray: Boolean mask with the dims of ``dst_grid_imask``, True where the target cell is kept.
+    """
+    imask = weights['dst_grid_imask']
+    mask = dask.array.asarray(imask.data).astype(bool)
+    conservative = weights.attrs.get('normalization') in ('fracarea', 'destarea')
+    if conservative and 'dst_grid_frac' in weights and na_thres < 1.0:
+        mask = mask_na_thres(mask, dask.array.asarray(weights['dst_grid_frac'].data), na_thres, fill_value=False)
+    return imask.copy(data=mask.compute())
+
+
 def mask_tensordot(src_mask, weights_matrix):
     """Apply the weights to the source mask to return the destination mask: 1 where the target cell receives
     at least one link from a valid source point, 0 where it receives none. No threshold is applied here:
-    na_thres acts on the dst_grid_frac of the weights, in Regridder.tensordot"""
+    na_thres acts on the dst_grid_frac of the weights, in compute_target_mask"""
 
     valid_weights = dask.array.tensordot(src_mask, weights_matrix, axes=1)
     return dask.array.where(valid_weights > 0, 1, 0)
@@ -136,11 +141,11 @@ def mask_weights(weights, weights_matrix, mask_dim=None):
 
 def check_mask(weights, mask_dim=None):
     """
-    Check if the target mask has all values equal to 1.
-    Returns a boolean indicating whether the mask is full.
-    Handles the 3D case efficiently.
+    Check if the target mask has all values equal to 1 (or True).
+    Returns a boolean indicating whether the mask is full (a boolean per level in the 3D case).
+    Takes the weights Dataset (dst_grid_imask) or a mask DataArray (compute_target_mask).
     """
-    wdst = weights['dst_grid_imask']
+    wdst = weights['dst_grid_imask'] if 'dst_grid_imask' in getattr(weights, 'variables', {}) else weights
 
     if mask_dim is not None:
         # Reduce along all dimensions except the vertical dimension
