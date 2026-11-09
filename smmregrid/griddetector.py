@@ -4,7 +4,11 @@ Possible matches are: Regular, GaussianRegular, GaussianReduced, Curvilinear, HE
 """
 import numpy as np
 import xarray as xr
+from .cdogrid import CdoGrid
 from .util import find_coord
+
+# Tolerance (degrees) on the coordinates compared with the CDO grids: float32 coordinates near 360 have ~3e-5 resolution
+COORD_ATOL = 1e-4
 
 # Define coordinate names for latitude and longitude
 LAT_COORDS = ["lat", "latitude", "nav_lat"]
@@ -46,11 +50,8 @@ class GridDetector:
         if self._find_healpix_dim(data) is not None:
             return "HEALPix"
 
-        # Find latitude and longitude coordinates
-        lat = find_coord(data, self.lat_coords)
-        lon = find_coord(data, self.lon_coords)
-
-        if not lat or not lon:
+        lat, lon = self._find_latlon(data)
+        if not lat:
             return "Unknown"
 
         # 2D coord-dim dependency
@@ -89,44 +90,180 @@ class GridDetector:
 
         return "Unknown"
 
+    def detect_cdo_grid(self, data, kind=None):
+        """
+        Return the CDO grid name (e.g. 'r360x180', 'F128', 'O96', 'hp32_nested') matching the data.
+
+        The name is returned only when the coordinates are exactly the ones CDO generates for it,
+        including the order of the points: lon starting at 0 (or at -180 + dlon/2 for 'global_X'),
+        lat south to north for the lonlat grids and north to south for the Gaussian ones.
+        Any other layout (shifted longitudes, flipped latitudes, regional grids) returns None,
+        since weights built from the CDO name would index the wrong points.
+
+        Args:
+            data (xr.Dataset or xr.DataArray): The input dataset.
+            kind (str, optional): The grid type from `detect_grid`. Computed if not given.
+
+        Returns:
+            str or None: The CDO grid name, or None if there is no exact match.
+        """
+        kind = kind or self.detect_grid(data)
+        finder = {
+            "Regular": self._cdo_regular,
+            "GaussianRegular": self._cdo_gaussian_regular,
+            "GaussianReduced": self._cdo_gaussian_reduced,
+            "HEALPix": self._cdo_healpix,
+        }.get(kind)
+        if finder is None:
+            return None
+        grid_str = finder(data)
+        if grid_str is None or CdoGrid(grid_str).grid_kind is None:
+            return None
+        return grid_str
+
+    def _find_latlon(self, data):
+        """Names of the latitude and longitude coordinates, or (None, None) if either is missing"""
+        lat = find_coord(data, self.lat_coords)
+        lon = find_coord(data, self.lon_coords)
+        if not lat or not lon:
+            return None, None
+        return lat, lon
+
+    def _latlon(self, data):
+        """Latitude and longitude values as float64 arrays, or (None, None)"""
+        lat, lon = self._find_latlon(data)
+        if not lat:
+            return None, None
+        return data[lat].values.astype(np.float64), data[lon].values.astype(np.float64)
+
     @staticmethod
-    def is_healpix_from_attribute(data):
+    def _match(values, expected):
+        return values.shape == expected.shape and np.allclose(values, expected, rtol=0, atol=COORD_ATOL)
+
+    @staticmethod
+    def _gaussian_latitudes(nlat):
+        """Gaussian latitudes in degrees, north to south as in CDO"""
+        roots, _ = np.polynomial.legendre.leggauss(nlat)
+        return np.degrees(np.arcsin(roots))[::-1]
+
+    def _cdo_regular(self, data):
+        """rNxM: lon from 0, lat south to north, centred on the cells for even M and with the poles for odd M.
+        global_X: lon from -180 + X/2, lat centred on the cells."""
+        lat, lon = self._latlon(data)
+        if lat is None:
+            return None
+        nlat, nlon = lat.size, lon.size
+        if nlat < 2:
+            return None
+        dlon = 360 / nlon
+        centred_lat = -90 + (np.arange(nlat) + 0.5) * 180 / nlat
+        if self._match(lon, np.arange(nlon) * dlon):
+            exp_lat = centred_lat if nlat % 2 == 0 else -90 + np.arange(nlat) * 180 / (nlat - 1)
+            return f"r{nlon}x{nlat}" if self._match(lat, exp_lat) else None
+        if self._match(lon, -180 + (np.arange(nlon) + 0.5) * dlon) and np.isclose(dlon, 180 / nlat) \
+                and self._match(lat, centred_lat):
+            return f"global_{dlon:g}"
+        return None
+
+    def _cdo_gaussian_regular(self, data):
+        """FN: 2N Gaussian latitudes north to south, 4N longitudes from 0"""
+        lat, lon = self._latlon(data)
+        if lat is None or lat.size % 2 or lon.size != 2 * lat.size:
+            return None
+        if self._match(lat, self._gaussian_latitudes(lat.size)) and \
+                self._match(lon, np.arange(lon.size) * 360 / lon.size):
+            return f"F{lat.size // 2}"
+        return None
+
+    def _cdo_gaussian_reduced(self, data):
+        """ON: 2N Gaussian rings north to south with 20 + 4i points from each pole, longitudes from 0.
+        Classic reduced grids (NN) use ECMWF tables of points per ring and are not mapped."""
+        lat, lon = self._latlon(data)
+        if lat is None or lat.ndim != 1:
+            return None
+        rings, start, counts = np.unique(-lat, return_index=True, return_counts=True)
+        nlat = rings.size
+        if nlat % 2:
+            return None
+        half = 20 + 4 * np.arange(nlat // 2)
+        if not np.array_equal(counts, np.concatenate([half, half[::-1]])):
+            return None
+        if not self._match(-rings, self._gaussian_latitudes(nlat)) or not np.array_equal(start, np.cumsum(counts) - counts):
+            return None
+        exp_lon = np.concatenate([np.arange(n) * 360 / n for n in counts])
+        if self._match(lon, exp_lon):
+            return f"O{nlat // 2}"
+        return None
+
+    def _cdo_healpix(self, data):
+        """hpN_nested / hpN_ring: nside from the size of the HEALPix dimension, order from the
+        metadata (CDO 'indexing_scheme', or 'healpix_order') or else from the latitudes, which
+        never increase with the ring ordering. No order information returns None."""
+        dim = self._find_healpix_dim(data, by_size=True)
+        if dim is None:
+            return None
+        order = self._healpix_order(data)
+        if order is None:
+            lat, _ = self._find_latlon(data)
+            if lat is None or data[lat].dims != (dim,):
+                return None
+            order = "ring" if np.all(np.diff(data[lat].values) <= 0) else "nested"
+        return f"hp{self._healpix_nside(data.sizes[dim])}_{order}"
+
+    @staticmethod
+    def _healpix_mapping(data):
+        """Attributes of the HEALPix grid mapping variable (grid_mapping_name 'healpix'), else None"""
+        variables = data.variables.values() if isinstance(data, xr.Dataset) else data.coords.values()
+        return next((var.attrs for var in variables if var.attrs.get("grid_mapping_name") == "healpix"), None)
+
+    @classmethod
+    def _healpix_order(cls, data):
+        """'nested' or 'ring' from the grid mapping variable (CDO 'indexing_scheme' or 'healpix_order'), else None"""
+        attrs = cls._healpix_mapping(data) or {}
+        order = str(attrs.get("indexing_scheme", attrs.get("healpix_order", ""))).lower()
+        return {"nested": "nested", "nest": "nested", "ring": "ring"}.get(order)
+
+    @classmethod
+    def is_healpix_from_attribute(cls, data):
         """
         Determine if the given xarray Dataset or DataArray uses a HEALPix grid.
 
         Returns:
             bool: True if HEALPix grid detected, False otherwise.
         """
-
-        # Attribute-based checks
         if isinstance(data, xr.Dataset):
             if "healpix" in data.variables:
                 return True
-            for var in data.data_vars:
-                if data[var].attrs.get('grid_mapping') == 'healpix':
-                    return True
-        elif isinstance(data, xr.DataArray):
-            if data.attrs.get('grid_mapping') == 'healpix':
+            if any(data[var].attrs.get('grid_mapping') == 'healpix' for var in data.data_vars):
                 return True
-
-        return False
+        elif data.attrs.get('grid_mapping') == 'healpix':
+            return True
+        return cls._healpix_mapping(data) is not None
 
     @staticmethod
-    def _find_healpix_dim(data):
+    def _healpix_nside(size):
+        """nside for a number of cells 12 * nside**2 with nside a power of two, else None"""
+        if size % 12:
+            return None
+        nside = int(round(np.sqrt(size // 12)))
+        if nside > 0 and nside * nside * 12 == size and not nside & (nside - 1):
+            return nside
+        return None
+
+    @classmethod
+    def _find_healpix_dim(cls, data, by_size=False):
         """
-        Look for a dimension whose size matches 12 * nside**2 for some
-        power-of-two nside, checking dimension names/sizes directly rather
-        than relying on lat/lon coordinates being present.
+        Look for a dimension of size 12 * nside**2 with nside a power of two, named as a HEALPix
+        cell index or the only dimension, rather than relying on lat/lon coordinates being present.
+        With by_size (grid already known to be HEALPix) also any name, if only one dimension has such size.
         """
         # Common names used for the HEALPix cell-index dimension
         candidate_names = {"cell", "cells", "pix", "pixel", "healpix", "ncells"}
 
-        dimsdict = data.sizes
-
-        for dim_name, size in dimsdict.items():
-            n = size // 12
-            is_pow2 = size % 12 == 0 and n > 0 and (n & (n - 1)) == 0
-            if is_pow2 and (dim_name.lower() in candidate_names or len(dimsdict) == 1):
-                return dim_name
-
+        dims = [dim for dim, size in data.sizes.items() if cls._healpix_nside(size)]
+        named = [dim for dim in dims if dim.lower() in candidate_names or len(data.sizes) == 1]
+        if named:
+            return named[0]
+        if by_size and len(dims) == 1:
+            return dims[0]
         return None

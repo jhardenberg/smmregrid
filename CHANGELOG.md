@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+- `GridDetector.detect_cdo_grid()` returns the CDO grid name (`rNxM`, `global_X`, `FN`, `ON`, `hpN_nested`/`hpN_ring`) of the data when its coordinates, including the order of the points, are exactly the ones CDO generates for that name, `None` otherwise (#94)
+- HEALPix detection: a grid mapping variable with `grid_mapping_name: healpix` (e.g. `crs`) marks the data as HEALPix, and a cell dimension needs exactly 12 * nside**2 points with nside a power of two (sizes like 24 were accepted) (#94)
 - Warn when `skipna=True` is used with a source grid that has a mask dimension (e.g. a vertical one) with more than one level: it is ignored, as the weights are generated from the first level only and applied to all levels (#86)
 - The source grid used to generate the weights is sliced to the first element along all the non-horizontal dimensions (time and any other), not only time; with `skipna` the mask dimension is sliced too, since the weights are 2D. The grid to be filled and written is smaller and faster (#86)
 - Target areas from `CdoGenerate.areas()` have lat/lon rounded to the same number of decimals (`COORD_DECIMALS`) as the regridded data, so that their coordinates are aligned exactly (#89)
