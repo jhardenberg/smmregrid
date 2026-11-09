@@ -190,7 +190,7 @@ class CdoGenerate():
             and each level being processed.
         """
 
-        self.na_thres = resolve_na_thres(self.skipna, self.na_thres_option, method, self.loglevel)
+        self.na_thres = resolve_na_thres(self.na_thres_option, method, self.loglevel)
 
         if self.target_grid is None:
             raise TypeError('Target grid is not specified, cannot provide any regridding')

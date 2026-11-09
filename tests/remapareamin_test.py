@@ -1,4 +1,4 @@
-"""Tests for smmregrid to verify remap_area_min"""
+"""Tests for smmregrid to verify na_thres (CDO remap_area_min) without skipna"""
 
 import os
 import pytest
@@ -22,7 +22,7 @@ RANGE = 10
 def test_remap_area_min(fraction, valid):
     """Number of valid target points, as the minimum covered fraction of the target cell increases"""
 
-    regridder = Regridder(ifile, 'r180x90', remap_area_min=fraction, loglevel='debug')
+    regridder = Regridder(ifile, 'r180x90', na_thres=1.0 - float(fraction), loglevel='debug')
     data = xr.open_dataset(ifile)
     regrid = regridder.regrid(data['tos'].isel(time=0))
     nvalid = (~np.isnan(regrid)).sum().values
@@ -35,7 +35,7 @@ def test_remap_area_min_dask_chunks():
     dfile = os.path.join(INDIR, '2t-era5.nc')
     data = xr.open_dataset(dfile, chunks={'time': 1})
 
-    regridder = Regridder(dfile, 'r180x90', method='con', remap_area_min=0.5)
+    regridder = Regridder(dfile, 'r180x90', method='con', na_thres=0.5)
     regridded = regridder.regrid(data['2t'])
 
     # Time chunking must be preserved

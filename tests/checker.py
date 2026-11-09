@@ -40,28 +40,40 @@ def _cdo_remap(remap_method, ftarget, finput, extrapolate=True, remap_area_min=N
     return cdo_interpolator(ftarget, input=finput, returnXDataset=True, env=env, **kwargs)
 
 
+def _smmregrid_na_thres(remap_method, na_thres, remap_area_min):
+    """na_thres of smmregrid equivalent to the remap_area_min given to CDO, for the conservative method.
+
+    With na_thres='auto' the covered area of the target cell must be at least remap_area_min,
+    as in CDO: na_thres = 1 - remap_area_min. Other values of na_thres, and other methods, are not changed."""
+
+    if isinstance(na_thres, str) and na_thres == 'auto' and remap_method == 'con' and remap_area_min is not None:
+        return round(1.0 - float(remap_area_min), 12)
+    return na_thres
+
+
 def _build_interpolator(finput, ftarget, remap_method, init_method, mask_dim,
                         remap_area_min, skipna, loglevel, na_thres, remap_norm='fracarea',
                         cdo_options=None):
     """Build a smmregrid Regridder either from grids or from pre-computed weights.
 
+    remap_area_min is the CDO option: for the conservative method it is given to smmregrid as na_thres.
     A non-default remap_norm can be set only via pre-computed weights,
     since Regridder does not expose it when initialized from grids.
     """
 
+    na_thres = _smmregrid_na_thres(remap_method, na_thres, remap_area_min)
+
     if init_method == 'grids':
         if remap_norm != 'fracarea':
             raise ValueError("remap_norm other than 'fracarea' requires init_method='weights'")
-        return Regridder(source_grid=finput, target_grid=ftarget,
-                         remap_area_min=remap_area_min, method=remap_method,
+        return Regridder(source_grid=finput, target_grid=ftarget, method=remap_method,
                          mask_dim=mask_dim, skipna=skipna, loglevel=loglevel,
                          na_thres=na_thres, cdo_options=cdo_options)
     if init_method == 'weights':
         wfield = CdoGenerate(finput, ftarget, loglevel=loglevel, skipna=skipna,
                              na_thres=na_thres, cdo_options=cdo_options).weights(method=remap_method, mask_dim=mask_dim,
                                                        remap_norm=remap_norm)
-        return Regridder(weights=wfield, loglevel=loglevel,
-                         remap_area_min=remap_area_min, skipna=skipna, na_thres=na_thres)
+        return Regridder(weights=wfield, loglevel=loglevel, skipna=skipna, na_thres=na_thres)
 
     raise KeyError('Unsupported init method')
 

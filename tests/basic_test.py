@@ -24,7 +24,7 @@ def test_healpix_extra(method):
                          cdo_extra=f'-setgrid,{hpgrid}',
                          cdo_options=options,
                          loglevel='debug').weights(method=method)
-    interpolator = Regridder(weights=wfield, remap_area_min=0.0, loglevel='debug')
+    interpolator = Regridder(weights=wfield, na_thres='cdo', loglevel='debug')
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'healpix_0.nc'))
     rfield = interpolator.regrid(xfield)
     assert rfield['tas'].shape == (2, 180, 360)
@@ -74,13 +74,13 @@ def test_horizontal_dims(method):
     """"Minimal test to verify regridding with horizontal_dims coords"""
     xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))
     interpolator = Regridder(source_grid=xfield, target_grid=tfile, loglevel='debug',
-                             method=method, horizontal_dims=['lon', 'lat'], remap_area_min=0.0)
+                             method=method, horizontal_dims=['lon', 'lat'], na_thres='cdo')
     interp = interpolator.regrid(source_data=xfield.isel(time=0))
     assert interp['tas'].shape == (180, 360)
 
     # explicit horizontal_dims must give the same result as the detected ones
     detected = Regridder(source_grid=xfield, target_grid=tfile, loglevel='debug', method=method,
-                         remap_area_min=0.0)
+                         na_thres='cdo')
     xarray.testing.assert_allclose(interp, detected.regrid(source_data=xfield.isel(time=0)))
 
     # values as in CDO

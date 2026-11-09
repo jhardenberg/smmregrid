@@ -1,13 +1,12 @@
-Masking: ``na_thres`` and ``remap_area_min``
-============================================
+Masking: ``na_thres``
+=====================
 
 Regridding is a weighted average: each target cell takes the values of the source cells that overlap it.
 When some of these source cells are missing (NaN, typically land in ocean data) the average rests on fewer
-points, and may stop being representative. smmregrid has two thresholds to set NaN in such target cells,
-``na_thres`` and ``remap_area_min``. For conservative remapping with the default normalization they are the same
-check written in two ways, and ``na_thres`` is the more general of the two. ``remap_area_min`` is a CDO feature, kept
-for compatibility with it. How the missing values enter the weights (``mask_dim``, ``skipna``) is described in
-:doc:`regridder`.
+points, and may stop being representative. smmregrid sets to NaN these target cells with one threshold,
+``na_thres``. For conservative remapping it is the same check as the ``remap_area_min`` of CDO, which is
+deprecated in smmregrid in favour of ``na_thres``. How the missing values enter the weights (``mask_dim``,
+``skipna``) is described in :doc:`regridder`.
 
 The two numbers of a target cell
 --------------------------------
@@ -33,12 +32,8 @@ the target cells, and each target cell overlaps several of them, some with data 
 The left panel gives the two numbers of each target cell. In the open sea nothing is missing and the covered area is 1.
 Where the cell is partly on land they sum to 1: the cell at the top with 0.81 covered has 0.19 of its weights missing.
 The two other panels apply a threshold on each number. ``na_thres=0.2`` masks the cells with more than 20% of the weights
-missing, ``remap_area_min=0.8`` the cells with less than 80% covered: they are the same cells (red). The cell at 0.81 is kept
-by both, just above the threshold, and all the others except the fully valid one are masked.
-
-At the edge of a regional source grid, with ``fracarea`` the part of the target cell outside the source grid is ignored: a
-cell covered by the source only in part, and all valid, has nothing missing and a covered area of 1, and both thresholds keep
-it. With ``destarea`` the covered area would be the covered part of the cell, and only ``remap_area_min`` would mask it.
+missing, and ``remap_area_min=0.8`` (the CDO name) the cells with less than 80% covered: they are the same cells (red). The
+cell at 0.81 is kept by both, just above the threshold, and all the others except the fully valid one are masked.
 
 ``na_thres``
 ------------
@@ -46,76 +41,65 @@ it. With ``destarea`` the covered area would be the covered part of the cell, an
 ``na_thres`` is the *maximum fraction of missing weights*: a target cell is set to NaN when the share of its
 weights coming from missing source cells is larger than ``na_thres``. It is a number between 0 and 1: with 0 a single
 missing source cell is enough to mask the target cell, with 1 a target cell is masked only when no valid source
-cell contributes.
+cell contributes. It is applied with and without ``skipna``, and with ``mask_dim``: without ``skipna`` the weights
+are generated with the mask of the data and the covered fraction of each target cell comes from CDO (per level with
+``mask_dim``), with ``skipna`` it is computed at each call from the valid source cells.
 
-* It is used with all methods.
-* With ``skipna=True`` it is evaluated at each call, on the missing values of the data.
-  The default ``"auto"`` gives ``1e-6`` for ``bil`` and ``bic`` (a missing neighbour makes the target cell NaN, as in CDO)
-  and ``1.0`` for the other methods, i.e. no masking by ``na_thres``.
-* Without ``skipna`` (with a fixed mask or with ``mask_dim``) the weights are generated with the mask of the data, so the
-  missing source cells have no weight and every target cell that has weights is made of valid cells only. ``na_thres`` is
-  then not a threshold: any value below 1 masks the target cells without any valid source cell, and ``1.0`` does not mask them
-  (they get 0). The default ``"auto"`` gives ``0.5``.
+Instead of a number, ``na_thres`` can be ``'auto'`` (the default) or ``'cdo'``:
 
-``remap_area_min``
-------------------
+========================  =========  =================  ==============
+``na_thres``              ``con``    ``bil``, ``bic``   ``nn``, others
+========================  =========  =================  ==============
+``'auto'`` (smmregrid)    0.5        1e-6               1.0
+``'cdo'``                 1.0        1e-6               1.0
+========================  =========  =================  ==============
 
-``remap_area_min`` is the *minimum covered area* of the target cell: a target cell is set to NaN when the
-fraction of it covered by valid source cells is smaller than ``remap_area_min``. The default is ``0.5``.
-It is the CDO option with the same name, and CDO uses it for conservative remapping only: it is the only method for which
-CDO computes a covered fraction different from 0 and 1. For the other methods it has no effect.
+``'cdo'`` replicates CDO, where ``REMAP_AREA_MIN`` is 0 by default: for conservative remapping only the target cells without
+any valid source cell are masked. For bilinear and bicubic a missing neighbour makes the target cell NaN, as in CDO. ``'auto'`` is
+the smmregrid default, and it additionally masks the conservative target cells covered by less than half
+of valid source cells (``na_thres=0.5``), to avoid the erosion of coasts by cells made of a thin sliver of ocean.
 
-With and without ``skipna`` the result is the same, as in CDO (without it the covered area of each target cell comes from CDO,
-with the mask of the data).
-
-Why they are the same for conservative remapping and not for bilinear
-----------------------------------------------------------------------
+Relation with ``remap_area_min`` of CDO
+---------------------------------------
 
 This comes from what CDO computes, not from smmregrid. In conservative remapping the weight of a source cell is the area
 where it overlaps the target cell, so the weights are pieces of the target cell, and "weights on missing source cells" and
 "area of the target cell on missing source cells" are the same quantity seen from the two sides. For example, a target
 cell overlaps four source cells, with 0.4, 0.3, 0.2 and 0.1 of the cell, and the last two are land. The missing weights are
 0.2 + 0.1 = 0.3 (what ``na_thres`` looks at) and the covered area is 0.4 + 0.3 = 0.7 (what ``remap_area_min`` looks at):
-0.7 = 1 - 0.3. So ``na_thres = 1 - remap_area_min`` selects the same cells: it is the same threshold on the same number (the
-figure shows it, ``na_thres=0.2`` and ``remap_area_min=0.8`` mask the same cells).
+0.7 = 1 - 0.3. So ``na_thres = 1 - remap_area_min``: it is the same threshold on the same number (the figure shows it,
+``na_thres=0.2`` and ``remap_area_min=0.8`` mask the same cells).
 
 This holds when the weights sum to the area of the target cell that the source grid covers, as with ``fracarea``. It is a
-convention of CDO: with ``fracarea`` a part of the target cell outside the source grid is ignored, while with ``destarea``
-the covered area is relative to the whole cell, and the two thresholds differ at the edge of the source grid.
+convention of CDO: with ``fracarea`` a part of the target cell outside the source grid is ignored. With ``destarea`` the covered
+area is absolute, and ``na_thres`` is compared with one minus that area, as the ``remap_area_min`` of CDO: a target cell cut
+by the edge of the source grid can be masked even if none of its weights is missing.
 
 For interpolation methods the weights are not areas but coefficients between points, and CDO has no covered area: its
 fraction is 0 or 1. With ``bil`` the weights of a target cell are spread on several source cells and a share of them can be
-missing, which only ``na_thres`` looks at; ``remap_area_min`` does nothing. With ``nn`` there is a single weight, so the
-share is 0 or 1 and neither threshold changes the result.
+missing, which only ``na_thres`` looks at; ``remap_area_min`` does nothing in CDO. With ``nn`` there is a single weight, so the
+share is 0 or 1 and ``na_thres`` does not change the result.
 
-=======================  ==============================================================================
-method                   ``na_thres = 1 - t`` against ``remap_area_min = t``
-=======================  ==============================================================================
-``con``, ``fracarea``    same cells (up to floating-point ties at exactly ``t = 0.5``)
-``con``, ``destarea``    different: absolute covered area against relative share of the weights
-``bil``, ``bic``         only ``na_thres`` masks cells, ``remap_area_min`` has no effect
-``nn``                   neither masks anything: the share of valid weights is 0 or 1
-=======================  ==============================================================================
-
-In practice ``remap_area_min`` could be absorbed by ``na_thres``: for conservative remapping with ``fracarea`` it is
-``na_thres = 1 - remap_area_min``. smmregrid keeps both because ``remap_area_min`` is the name of the CDO option,
-and because its default (0.5) is what masks the coastal cells, while the default of ``na_thres`` for ``con`` does not mask
-anything.
+``remap_area_min`` is still accepted by ``Regridder`` with a ``DeprecationWarning``: for the conservative methods it is
+translated to ``na_thres = 1 - remap_area_min``, and it is ignored for the other methods. It cannot be used together
+with a different ``na_thres``.
 
 Examples
 --------
 
 .. code-block:: python
 
-    # conservative, mask the target cells with less than 80% of their area covered by valid source cells
-    regridder = Regridder(source_grid, target_grid, method='con', skipna=True, remap_area_min=0.8)
+    # the smmregrid default: conservative, mask the target cells with less than half of their area covered by valid source cells
+    regridder = Regridder(source_grid, target_grid, method='con', skipna=True)
 
-    # the same, with na_thres: set to NaN the target cells with more than 20% of the weights on missing source cells
-    regridder = Regridder(source_grid, target_grid, method='con', skipna=True, na_thres=0.2, remap_area_min=0.0)
+    # replicate CDO: no masking by area
+    regridder = Regridder(source_grid, target_grid, method='con', skipna=True, na_thres='cdo')
+
+    # conservative, mask the target cells with less than 80% of their area covered (CDO remap_area_min=0.8)
+    regridder = Regridder(source_grid, target_grid, method='con', skipna=True, na_thres=0.2)
 
     # bilinear: set to NaN the target cells with more than 30% of the weights on missing source cells
     regridder = Regridder(source_grid, target_grid, method='bil', skipna=True, na_thres=0.3)
 
-In the code the two masks are applied by two small functions of ``smmregrid.weights``, ``mask_na_thres`` and
-``mask_area_min``. They are used by ``Regridder.tensordot`` (with ``skipna``, and for ``remap_area_min`` also without it)
-and by ``mask_weights`` to build the target mask when ``skipna`` is not used.
+In the code the mask is a small function of ``smmregrid.weights``, ``mask_na_thres``, used by ``Regridder.tensordot`` and by
+``mask_weights`` to build the target mask.

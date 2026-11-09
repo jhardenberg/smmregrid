@@ -74,38 +74,26 @@ def mask_na_thres(target, valid_fraction, na_thres, fill_value=numpy.nan):
     """
     Mask the target cells with too many missing weights (``na_thres``).
 
+    The share of valid weights of a target cell is the same number as the fraction of the target cell covered
+    by valid source points that CDO computes for conservative remapping (``remap_area_min`` in CDO), because the
+    weights are overlap areas: ``na_thres = 1 - remap_area_min``.
+
     Args:
         target: Data (or mask) to be masked.
-        valid_fraction: Share of the weights of each target cell that comes from valid source points,
-                        from 0 (all missing) to 1 (none missing). It is relative to the weights of the cell.
+        valid_fraction: Fraction of each target cell covered by valid source points, from 0 (all missing) to 1
+                        (none missing): the share of its weights on valid source points, which with ``fracarea`` is
+                        relative to the part of the cell covered by the source grid and with ``destarea`` is scaled
+                        by the area covered (see ``Regridder.tensordot``).
         na_thres (float): Maximum fraction of missing weights, between 0 and 1.
-        fill_value: Value set where more than ``na_thres`` of the weights are missing (default: NaN).
+        fill_value: Value set where the target cell is masked (default: NaN).
 
     Returns:
-        ``target`` with ``fill_value`` where the fraction of missing weights is larger than ``na_thres``.
+        ``target`` with ``fill_value`` where the fraction of missing weights is larger than ``na_thres``,
+        and where no valid source point contributes at all, whatever ``na_thres``.
     """
-    return dask.array.where(1.0 - valid_fraction > na_thres, fill_value, target)
-
-
-def mask_area_min(target, covered_fraction, remap_area_min, fill_value=numpy.nan):
-    """
-    Mask the target cells with too little area covered by valid source points (``remap_area_min``).
-
-    Args:
-        target: Data to be masked.
-        covered_fraction: Fraction of each target cell covered by valid source points, from 0 to 1, as computed
-                          by CDO for conservative remapping. With fracarea it is relative to the part of the target
-                          cell covered by the source grid (one minus the missing weights); with destarea it is
-                          absolute. It can be None if ``remap_area_min`` is 0.
-        remap_area_min (float): Minimum covered fraction, between 0 and 1. With 0 nothing is masked.
-        fill_value: Value set where the covered fraction is below ``remap_area_min`` (default: NaN).
-
-    Returns:
-        ``target`` with ``fill_value`` where the covered fraction is smaller than ``remap_area_min``.
-    """
-    if remap_area_min <= 0.0:
-        return target
-    return dask.array.where(covered_fraction < remap_area_min, fill_value, target)
+    # written as covered fraction < 1 - na_thres, as in CDO (covered fraction < remap_area_min)
+    masked = (valid_fraction < 1.0 - na_thres) | (valid_fraction <= 0.0)
+    return dask.array.where(masked, fill_value, target)
 
 
 def mask_tensordot(src_mask, weights_matrix, na_thres=0.5):

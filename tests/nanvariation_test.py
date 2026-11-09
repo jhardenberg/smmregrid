@@ -38,17 +38,17 @@ def test_time_varying_nan():
     
     # Regrid without skipna (default behavior)
     regridder_default = Regridder(source_grid=src_ds, target_grid=tgt, method='bil', 
-                                  skipna=False, remap_area_min=0.0)
+                                  skipna=False, na_thres='cdo')
     out_default = regridder_default.regrid(src_ds)
     
     # Regrid with skipna=True (na_thres=1.0)
     regridder_skipna_1 = Regridder(source_grid=src_ds, target_grid=tgt, method='bil', 
-                                   skipna=True, na_thres=1.0, remap_area_min=0.0)
+                                   skipna=True, na_thres=1.0)
     out_skipna_1 = regridder_skipna_1.regrid(src_ds)
 
     # Regrid with skipna=True and na_thres=0.1
     regridder_skipna_01 = Regridder(source_grid=src_ds, target_grid=tgt, method='bil', 
-                                    skipna=True, na_thres=0.1, remap_area_min=0.0)
+                                    skipna=True, na_thres=0.1)
     out_skipna_01 = regridder_skipna_01.regrid(src_ds)
 
     non_nan_default = out_default['tas'].isel(time=1).notnull().sum().compute().item()
@@ -133,7 +133,7 @@ def test_skipna_destarea_locality():
     src = xr.open_dataset('tests/data/regional.nc')[['pr']].load()
     weights = CdoGenerate(src, 'r100x50', skipna=True, loglevel='warning').weights(
         method='con', remap_norm='destarea')
-    regridder = Regridder(weights=weights, skipna=True, remap_area_min=0.0, loglevel='warning')
+    regridder = Regridder(weights=weights, skipna=True, na_thres=1.0, loglevel='warning')
 
     # put a single NaN in the north-east corner of the regional grid
     src_nan = src.copy(deep=True)
