@@ -45,6 +45,7 @@ from .weights import (compute_weights_matrix3d, compute_weights_matrix, mask_wei
                       compute_target_mask, mask_na_thres)
 from .log import setup_logger
 from .gridinspector import GridInspector
+from .gridtype import cdo_horizontal_order
 from .util import detect_nan_variation_dims, tolist, resolve_na_thres, deprecated_remap_area_min
 from .default import DEFAULT_NA_THRES, CDO_MAP_METHODS, COORD_DECIMALS, CONSERVATIVE_METHODS
 
@@ -653,8 +654,10 @@ class Regridder(object):
             target_mask = compute_target_mask(weights, na_thres)
 
         # Remove the spatial axes, apply the weights, add the spatial axes back:
-        # the kept dimensions go first, so that the reshape does not mix them with the spatial ones
-        source_array = source_data.transpose(*kept_dims, ...).data
+        # the kept dimensions go first, so that the reshape does not mix them with the spatial ones,
+        # and the horizontal ones follow in the CDO order (y, x), whatever their order in the data
+        source_array = source_data.transpose(
+            *kept_dims, *cdo_horizontal_order(horizontal_dims), ..., missing_dims="ignore").data
         if isinstance(source_array, dask.array.Array):
             source_array = dask.array.reshape(source_array, kept_shape + [-1])
         else:

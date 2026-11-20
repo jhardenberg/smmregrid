@@ -2,6 +2,7 @@
 
 import pytest
 from smmregrid import GridType
+from smmregrid.gridtype import cdo_horizontal_order
 
 
 @pytest.mark.parametrize("definition,dims,other", [
@@ -80,3 +81,16 @@ def test_gridtype_extradims_override():
     assert grid.mask_dim == "ciccio"
     assert set(grid.horizontal_dims) == set(["alfa", "beta"])
     assert grid.time_dims is None
+
+
+@pytest.mark.parametrize("dims,expected", [
+    (['lon', 'lat'], ['lat', 'lon']),
+    (['lat', 'lon'], ['lat', 'lon']),
+    (['i', 'j'], ['j', 'i']),
+    (['xq', 'yh'], ['yh', 'xq']),
+    (['ncells'], ['ncells']),
+    (['alfa', 'beta'], ['alfa', 'beta']),  # not in a family: order of the data
+])
+def test_cdo_horizontal_order(dims, expected):
+    """Two-dimensional families are ordered as CDO flattens them, (y, x)"""
+    assert cdo_horizontal_order(dims) == expected

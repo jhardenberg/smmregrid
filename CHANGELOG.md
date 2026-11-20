@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [Unreleased]
+
+- Fix regridding of data whose horizontal dimensions are stored as (x, y), e.g. `(time, lon, lat)` (legal in CF, e.g. NeuralGCM output): the data were flattened in their stored order while the CDO weights address the source cells with x running fastest, so the output was silently scrambled. The horizontal dimensions of the two-dimensional families of `HORIZONTAL_FAMILIES` are now put in the CDO order (y, x) before applying the weights (#PR)
+
 ## [v0.3.0]
 
 - Without `skipna` the target mask (cells without any valid source point, and `na_thres` on the `dst_grid_frac` of the weights for the conservative methods) is computed once at init (`compute_target_mask` in `weights.py`) instead of at each call, and nothing is applied when no target cell is masked (#93)
