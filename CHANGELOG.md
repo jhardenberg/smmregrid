@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-- Fix regridding of data whose horizontal dimensions are stored as (x, y), e.g. `(time, lon, lat)` (legal in CF, e.g. NeuralGCM output): the data were flattened in their stored order while the CDO weights address the source cells with x running fastest, so the output was silently scrambled. The horizontal dimensions of the two-dimensional families of `HORIZONTAL_FAMILIES` are now put in the CDO order (y, x) before applying the weights (#PR)
+- Fix regridding of data whose horizontal dimensions are stored as (x, y), e.g. `(time, lon, lat)` (legal in CF, e.g. NeuralGCM output): the data were flattened in their stored order while the CDO weights address the source cells with x running fastest, so the output was silently scrambled. The horizontal dimensions of the two-dimensional families of `HORIZONTAL_FAMILIES` are now put in the CDO order (y, x) before applying the weights (#95)
 
 ## [v0.3.0]
 
