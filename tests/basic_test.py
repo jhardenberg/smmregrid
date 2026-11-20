@@ -99,6 +99,33 @@ def test_trailing_dim(skipna):
     xarray.testing.assert_allclose(interp, reference)
 
 
+@pytest.mark.parametrize("method", ['con', 'bil'])
+@pytest.mark.parametrize("skipna", [False, True])
+def test_swapped_horizontal_dims(method, skipna):
+    """Data stored as (time, lon, lat) are regridded as the same data stored as (time, lat, lon):
+    the weights address the source cells with x running fastest, whatever the order in the data"""
+    xfield = xarray.open_mfdataset(os.path.join(INDIR, 'tas-ecearth.nc'))['tas']
+    interpolator = Regridder(source_grid=xfield, target_grid='r90x45', method=method, skipna=skipna)
+    reference = interpolator.regrid(xfield)
+    interp = interpolator.regrid(xfield.transpose('time', 'lon', 'lat'))
+    xarray.testing.assert_allclose(interp, reference)
+
+    # also when the weights are generated from the swapped data
+    swapped = Regridder(source_grid=xfield.transpose('time', 'lon', 'lat'), target_grid='r90x45',
+                        method=method, skipna=skipna)
+    xarray.testing.assert_allclose(swapped.regrid(xfield.transpose('time', 'lon', 'lat')), reference)
+
+
+def test_swapped_horizontal_dims_3d():
+    """Curvilinear 3D data stored as (time, lev, i, j) are regridded as the same data stored as (time, lev, j, i)"""
+    xfield = xarray.open_dataset(os.path.join(INDIR, 'so3d-nemo.nc')).isel(lev=slice(0, 3))
+    interpolator = Regridder(source_grid=xfield, target_grid='r90x45', method='con', mask_dim='lev')
+    reference = interpolator.regrid(xfield['so'])
+    interp = interpolator.regrid(xfield['so'].transpose('time', 'lev', 'i', 'j'))
+    xarray.testing.assert_allclose(interp, reference)
+    xfield.close()
+
+
 @pytest.mark.parametrize("method", ['bil', 'con'])
 def test_toward_healpix(method):
     """"Testing toward healpix string-defined-grid grid"""

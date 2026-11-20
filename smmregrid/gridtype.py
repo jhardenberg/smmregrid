@@ -17,6 +17,29 @@ HORIZONTAL_FAMILIES = (
     ('i',), ('x',),  # a lone i or x is an unstructured index (e.g. ICON in CMIP6, HEALPix)
 )
 
+
+def cdo_horizontal_order(horizontal_dims):
+    """
+    Order the horizontal dimensions as CDO flattens a grid: (y, x), with x running fastest.
+
+    CDO weights address the source cells with x running fastest, whatever the order of the
+    dimensions in the file. HORIZONTAL_FAMILIES lists each two-dimensional family as (x, y), so
+    the reversed family is the CDO order. Unstructured grids and dimensions not in a family
+    are returned as they are.
+
+    Args:
+        horizontal_dims (list): The horizontal dimensions of the data.
+
+    Returns:
+        list: The horizontal dimensions in the order CDO flattens them.
+    """
+    horizontal_dims = list(horizontal_dims)
+    for family in HORIZONTAL_FAMILIES:
+        if len(family) == 2 and set(family) == set(horizontal_dims):
+            return list(family[::-1])
+    return horizontal_dims
+
+
 # default spatial dimensions and vertical coordinates
 DEFAULT_DIMS = {
     'horizontal': [dim for family in HORIZONTAL_FAMILIES for dim in family],
